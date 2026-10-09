@@ -1,7 +1,7 @@
 # S4 — Employee & Employment Period Management (design)
 
-- Status: **Design approved for S4 scope (decisions S4-01 to S4-09, 2026-10-09). Not implemented.**
-- Cancel Planned Period data-model change (§9): **awaiting approval** before implementation.
+- Status: **Design approved (decisions C-21 to C-29 and PV-19, 2026-10-09), including the Cancel Planned Period data model (§9). Not implemented.**
+- Implementation slices (§11): **proposed, awaiting approval.**
 - Decision IDs refer to `docs/decision-register.md`. Nothing here changes Pending Validation / Pending Legal Review items.
 
 ## 1. Scope
@@ -33,9 +33,11 @@
 | **End Employment** | Explicit HR action: end date (inclusive) + structured End Reason (S4-01) + note (mandatory for OTHER). End date ≥ today for HR_EDITOR; past end date requires HR_ADMIN. **Blocked** if any assignment of the period would fall outside the end date (S4-08); HR is told which assignments to correct. The open assignment is closed at end date + 1 | No | Yes |
 | **Rehire** (S4-06) | All existing periods have ended; the person returns. Same Person and Employee Code; new period; same **or** different Employee Type; no minimum gap; never overlapping. Start date ≥ today for HR_EDITOR; past start requires HR_ADMIN. Reason required | Yes | No |
 | **Relationship Change** (S4-07) | Continuous transition to a **different** Employee Type: atomically ends the current period with system reason `RELATIONSHIP_CHANGE` and creates the new period starting **exactly the next calendar day** (inclusive end date). If there is any gap, use End Employment + Rehire instead. Reason required | Yes | Yes |
-| **Cancel Planned Period** (S4-09) | Allowed only before the period's start date. Reason required. The period is kept and visible but has no operational effect (§9) | No | No (never started) |
+| **Cancel Planned Period** (S4-09) | Explicit action (not a generic PATCH). Allowed only when the period is not already cancelled and its start date is **strictly after today** (Asia/Ho_Chi_Minh); `employment.manage`; reason required. Sets `cancelled_at` and writes the `cancel_planned_start` event atomically. **Terminal in S4**: no Uncancel/Restore; a mistakenly cancelled period stays as history and HR creates a new correct planned period. Never deletes (§9) | No | No (never started) |
 
-Normal business events (assignment change, end, rehire, relationship change, cancel) by HR_EDITOR must be effective **today or in the future** ("today" = Asia/Ho_Chi_Minh); a past effective date requires HR_ADMIN. Historical corrections are HR_ADMIN only with no fixed time window; all constraints must still pass (S4-05).
+Normal business events (assignment change, end, rehire, relationship change, cancel) by HR_EDITOR must be effective **today or in the future** ("today" = Asia/Ho_Chi_Minh); a past effective date requires HR_ADMIN (backdated Assignment Change, End Employment, Rehire and Relationship Change are HR_ADMIN). Historical corrections are HR_ADMIN only with no fixed time window; all constraints must still pass (C-25).
+
+**Initial Data Capture exemption (PV-19 resolved):** creating the *first* Employment Period as part of initial profile creation (S3 `createEmployee`) is initial data capture, not a backdated business event, so HR_EDITOR may use a past start date there. The exemption applies only to that initial capture and never extends to later operational events. No day limit.
 
 ## 3. End Reasons (S4-01)
 
@@ -88,13 +90,13 @@ Never stored as raw values: full name, date of birth, gender, mobile phone, pers
 | `employment.correct` (new): Employee Type, period dates, historical assignment corrections, and any past-dated business event | ✓ | **✗** |
 
 ## 7. API (planned)
-`PATCH /employees/{id}`; `GET/POST /employees/{id}/employments` (history, rehire); `PATCH /employments/{id}` (work email, corrections); `POST /employments/{id}/end`; `POST /employments/{id}/relationship-change`; `POST /employments/{id}/cancel`; `GET/POST /employments/{id}/assignments`; `PATCH /assignments/{id}` (correction). All writes: `expected_revision`, single transaction, server-side permission and date checks; create-type actions: `Idempotency-Key`.
+`PATCH /employees/{id}`; `GET/POST /employees/{id}/employments` (history, rehire); `PATCH /employments/{id}` (work email, corrections); `POST /employments/{id}/end`; `POST /employments/{id}/relationship-change`; `POST /employments/{id}/cancel-planned`; `GET/POST /employments/{id}/assignments`; `PATCH /assignments/{id}` (correction). All writes: `expected_revision`, single transaction, server-side permission and date checks; create-type actions: `Idempotency-Key`.
 
 ## 8. Edge cases
 
 | Case | Handling |
 |---|---|
-| Overlapping periods | Rejected by the DB exclusion constraint (409 with the conflicting period). Cancelled periods excluded (§9, pending approval) |
+| Overlapping periods | Rejected by the DB exclusion constraint (409 with the conflicting period). Cancelled periods are excluded from the constraint (§9) |
 | Backdated correction | HR_ADMIN only, reason required, no time window; preview of the effect |
 | Future-dated rehire | Allowed; person is Pre-start until the start date |
 | Incorrect Employee Type | HR_ADMIN correction on the same period; completeness and email rule recomputed |
@@ -105,36 +107,72 @@ Never stored as raw values: full name, date of birth, gender, mobile phone, pers
 | Concurrent edits | `expected_revision` mismatch → 409 |
 | Manager whose period ends | Not blocked; historical references kept |
 
-## 9. Cancel Planned Period — data-model analysis (awaiting approval)
+## 9. Cancel Planned Period — approved data model (C-29)
 
-**Current behavior**
-- `employment` has no cancelled marker. `employment_event.event_type` allows `cancel_planned_start`, but nothing reads it.
-- `employment_no_overlap_ex` covers **all** periods of a person (no `WHERE`), and `employment_work_email_period_ex` covers all periods with a work email.
-- Status, representative period, completeness, list filters and the manager lookup read **all** periods.
+**Why the existing event alone is not sufficient:** `employment_no_overlap_ex` and `employment_work_email_period_ex` cover every period, and exclusion constraints cannot reference `employment_event`; a cancelled future period would keep blocking replacement periods, keep reserving its Work Email, and keep making the person Pre-start unless every query joined events.
 
-**Why the event alone is not sufficient**
-1. A cancelled future period would still be included in the overlap exclusion constraint, so HR could not create a valid replacement period with overlapping dates.
-2. It would keep reserving its Work Email for those dates.
-3. Status/completeness/list queries would still treat it as Pre-start unless every query joined events; exclusion constraints cannot reference another table.
+**Model (approved):**
+- One nullable operational marker: `employment.cancelled_at timestamptz`. Non-null = the planned period was cancelled before it began. No `cancelled_by` on `employment` in MVP: actor, reason and request metadata live in the `cancel_planned_start` employment event and in audit records (single source of the audit fact).
+- Existing periods stay non-cancelled (`NULL`) by default.
 
-**Recommended data-model approach** (smallest forward-only change)
-- Add nullable `employment.cancelled_at timestamptz` and `employment.cancelled_by uuid` (FK `app_user`). The reason lives on the `cancel_planned_start` employment event (one per period).
-- Recreate `employment_no_overlap_ex` and `employment_work_email_period_ex` with `WHERE (cancelled_at IS NULL)` (work-email: `WHERE (work_email IS NOT NULL AND cancelled_at IS NULL)`).
-- DB guard: once `cancelled_at` is set it cannot be cleared or changed, and a cancelled period's dates/type cannot be edited (trigger). "Before the start date" is checked in the application (date-dependent).
+**Constraints (new forward migration; committed migrations untouched):**
+- Recreate `employment_no_overlap_ex` with `WHERE (cancelled_at IS NULL)`.
+- Recreate `employment_work_email_period_ex` with `WHERE (work_email IS NOT NULL AND cancelled_at IS NULL)`.
+- Verified on PostgreSQL 18.6 (rolled-back probe in `hrms_test`, 2026-10-09): a cancelled period does not block a replacement with the same dates and Work Email; two non-cancelled overlapping periods and duplicate active Work Emails are still rejected; clearing `cancelled_at` into an overlap is rejected by the constraint itself.
+- Technical safeguards enforcing the approved terminal rule: a trigger rejecting any change of `cancelled_at` once set and any change of dates/Employee Type/Work Email on a cancelled period; a partial unique index allowing at most one `cancel_planned_start` event per period. "Start date strictly after today" is validated in the application (date-dependent).
+- Migration is non-destructive (adds a nullable column; drops and recreates two constraints with a narrower predicate; adds a trigger and an index). Applying it to `hrms_dev` needs no reset.
 
-**Required forward migration:** one new migration: add the two columns, drop and recreate the two exclusion constraints with the new `WHERE`, add the guard trigger, grant column access. Non-destructive: no data changes; existing periods are all non-cancelled.
+**Action contract:** `POST /employments/{id}/cancel-planned` with `expected_revision`, mandatory `reason`, `Idempotency-Key`, one transaction: (1) validate start date > today; (2) validate not already cancelled; (3) set `cancelled_at`; (4) insert `cancel_planned_start` event (actor, reason); (5) insert audit record; (6) bump `person.revision`. Replaying the same key returns the stored result without a second event.
 
-**Effect on Employment Status:** cancelled periods are filtered out before computing status, representative period, completeness and list filters; a person with only cancelled periods computes as `no_employment`. Cancelled is not a status; the UI shows the period in history with a "Cancelled" marker.
+**Operational effect:** a cancelled period does not contribute to Employment Status, Pre-start, operational completeness, current/future relationships, manager resolution or current assignment resolution; does not block another valid period; does not reserve a Work Email. Its planned assignments remain stored (still inside the period, satisfying the existing trigger) with no operational effect. Nothing is deleted.
 
-**Effect on overlap constraints:** cancelled periods no longer block new periods or reserve a Work Email; all non-cancelled periods keep the current guarantees.
+**Status:** Cancelled is not a lifecycle status. Codes stay `not_started`/`active`/`ended` (Pre-start/Active/Ended). A person without non-cancelled periods keeps the existing no-employment profile condition. The history UI may show a "Cancelled" badge on that record only.
 
-**Effect on assignments/history:** planned assignments stay (traceability) and still satisfy the "within period" trigger; they are ignored operationally because their period is cancelled. Manager lookups exclude cancelled periods. Nothing is deleted; the cancel event records actor, time and reason.
+**Query design:** a shared employment query module (e.g. `src/modules/core-hr/employments/queries.ts`) is the only place that defines:
+- *operational periods* (non-cancelled) — default for status, completeness, list filters, manager resolution, current assignment;
+- *current period*, *future planned periods* — built on operational periods;
+- *employment history* — explicitly includes cancelled periods, flagged.
 
-**Alternatives considered:** (a) event-only, derived in queries: cannot be used by the exclusion constraints; (b) shrinking dates or deleting the period: loses history and violates the no-delete rule; (c) a generic stored state column: overlaps with the computed-status decision (C-16).
+Services must use these helpers instead of writing `cancelled_at IS NULL` themselves; a test asserts that operational queries exclude cancelled periods.
 
-## 10. Model implications for implementation (summary)
-1. `audit_event.reason` (nullable) and a small table for old/new values of the approved structural fields.
-2. End Reason storage: stable codes with a selectable flag (`RELATIONSHIP_CHANGE` not selectable), plus `end_reason_code` and optional note on the `end` employment event (or the period).
-3. Three new permissions (`employees.update`, `employment.manage`, `employment.correct`) in the application allow-list; HR_EDITOR without `employment.correct`.
-4. Cancel Planned Period columns and constraint changes (§9), pending approval.
+**Legal scope:** cancelling a planned period cancels an HR record only. It does not determine whether EmeSoft may legally withdraw or cancel a signed employment, internship or service agreement; any legal/contract consequence is Pending Legal Review (PL-10) / future Contract domain. No legal conclusion is drawn from a future start date.
+
+## 10. Model implications (summary)
+1. `audit_event.reason` (nullable) and a small table for old/new values of the C-24 structural fields.
+2. End Reason storage: the C-21 codes as system reference data with a `selectable` flag (`RELATIONSHIP_CHANGE` not selectable), and `end_reason_code` + optional note on the `end` employment event.
+3. Permissions `employees.update`, `employment.manage`, `employment.correct` in the application allow-list (HR_EDITOR without `employment.correct`).
+4. `employment.cancelled_at`, the two narrowed exclusion constraints, the terminal-cancel trigger and the one-cancel-event index (§9).
 5. `person.revision` increments on every person/child change; all S4 writes use `expected_revision`.
+6. UI alignment: display label of `not_started` becomes "Pre-start" (C-16); stable code unchanged.
+
+## 11. Proposed implementation slices (awaiting approval)
+
+Each slice is implemented, tested and committed on its own; every slice ends with the full test suite, typecheck, lint, build and OpenAPI regeneration. Ordering note: the cancel marker and shared employment queries land first (S4.0) so every later query is written against *operational periods* from day one instead of being retrofitted.
+
+| Slice | Objective / user value | Schema | API | UI | Permissions | Audit | Depends on | New business approval? |
+|---|---|---|---|---|---|---|---|---|
+| **S4.0 Foundation** | Safe base for all S4 writes; fixes the Pre-start label | Forward migration: `employment.cancelled_at`, narrowed exclusion constraints, terminal-cancel trigger, one-cancel-event index | None new (existing reads move to the shared query module, no behaviour change) | Label `not_started` → "Pre-start" | Add `employees.update`, `employment.manage` (HR_ADMIN, HR_EDITOR), `employment.correct` (HR_ADMIN) to the allow-list; helper enforcing C-25 (today/future for HR_EDITOR, past → HR_ADMIN, PV-19 initial-capture exemption) | None | — | No |
+| **S4.1 Audit foundation** | Reasons and structural old/new values can be recorded | Forward migration: `audit_event.reason`, `audit_field_change` (event id, field, old, new) | None | None | — | `recordAudit` accepts reason and structural values; an allow-list rejects non-C-24 fields | S4.0 | No |
+| **S4.2 Employment history (read)** | HR sees all periods, assignments, events, cancelled records | None | `GET /employees/{id}/employments` | Timeline on the detail page; "Cancelled" badge | `employees.read` | None | S4.0 | No |
+| **S4.3 Profile edit** | HR keeps personal/profile data current | None | `PATCH /employees/{id}` (`expected_revision`) | Edit form with before/after review; reason field for name/DOB | `employees.update`, `employees.write_personal` | Field names; reason for name/DOB; no raw values | S4.1 | No |
+| **S4.4 Work Email update** | IT-provisioned addresses recorded | None | `PATCH /employments/{id}/work-email` | Inline edit on the period card | `employment.manage` | Field name only | S4.1 | **Yes** — see Q1 |
+| **S4.5 Assignment change** | Transfers/promotions with history | None | `POST /employments/{id}/assignments` | "New assignment" dialog with timeline preview | `employment.manage`; past date → HR_ADMIN | Reason; old/new dept/title/level ids and dates | S4.1, S4.2 | No |
+| **S4.6 HR_ADMIN corrections** | Fix entry mistakes without fake history | None | `PATCH /employments/{id}` (type, start/end date corrections); `PATCH /assignments/{id}` | "Correct" actions visible only to HR_ADMIN | `employment.correct` | Reason; old/new structural values | S4.1, S4.2 | **Yes** — see Q2 |
+| **S4.7 End Employment** | Explicit end with structured reason | Forward migration: End Reason reference data (`selectable` flag), `end_reason_code` + note on the `end` event | `POST /employments/{id}/end` | End dialog (reason list, note mandatory for OTHER) | `employment.manage`; past date → HR_ADMIN | Reason code + note; old/new end date | S4.1, S4.5 | No |
+| **S4.8 Rehire** | Returning people get a new period | None | `POST /employees/{id}/employments` (`Idempotency-Key`) | "Rehire" action on profiles whose periods have all ended | `employment.manage`; past start → HR_ADMIN | Reason; new period structural values | S4.7 | **Yes** — see Q3 |
+| **S4.9 Relationship Change** | Continuous type change (e.g. Intern → Employee) | None | `POST /employments/{id}/relationship-change` | Dialog: old end date, next-day start shown, new type, first assignment | `employment.manage`; past date → HR_ADMIN | Reason; system End Reason `RELATIONSHIP_CHANGE` | S4.7, S4.8 | No |
+| **S4.10 Cancel Planned Period** | Undo a planned period without deleting history | None (S4.0) | `POST /employments/{id}/cancel-planned` | "Cancel planned period" on future periods | `employment.manage` | Reason via event + audit | S4.0, S4.1, S4.2 | No |
+
+**Acceptance criteria and tests (all slices):** permission matrix per role (401/403, HR_EDITOR past-date 403, HR_ADMIN allowed); `expected_revision` mismatch → 409; idempotent replay for create-type actions (no duplicate rows/events/audit); atomicity on failure (nothing partial); audit rows match C-23/C-24 (reason present, old/new only for allowed fields, never personal values); operational queries exclude cancelled periods; OpenAPI contract and English-only messages. Slice-specific criteria:
+- S4.0: existing 118 tests unchanged; probe-style constraint tests (cancelled period does not block, non-cancelled still blocked, terminal trigger); label "Pre-start".
+- S4.5: previous row closed at the effective date; Employee Type untouched; effective date inside the period.
+- S4.6: correction that would leave an assignment outside the period or overlap another period is rejected with an explanation.
+- S4.7: blocked when assignments fall outside the end date (C-28), listing them; open assignment closed at end date + 1; `OTHER` without a note rejected; `RELATIONSHIP_CHANGE` not accepted.
+- S4.8: rejected while any non-cancelled period is open or future; same person and code; different type allowed.
+- S4.9: new start = old end + 1 enforced; same type rejected (use Rehire); both writes atomic.
+- S4.10: start date ≤ today rejected; second cancel rejected; replacement period with the same dates/email accepted; person no longer Pre-start.
+
+### Questions needing business approval before the affected slice
+- **Q1 (S4.4):** May HR_EDITOR edit the Work Email of an **ended** period, or is that a historical correction (HR_ADMIN)? Recommended: ended periods → HR_ADMIN correction; cancelled periods → never.
+- **Q2 (S4.6):** May an end-date correction **remove** the end date (re-open an ended period), or must re-opening be a Rehire? Recommended: no re-opening by correction; use Rehire.
+- **Q3 (S4.8):** How does a profile **without any non-cancelled period** (name-only profile, or only cancelled periods) get its first period? It is neither Rehire nor Relationship Change. Recommended: an "Add first Employment Period" action treated as **initial data capture** (PV-19 exemption: HR_EDITOR may use a past start date), with a required reason.
