@@ -103,6 +103,17 @@ export const en = {
     noAssignments: "No assignments yet.",
   },
   gender: { male: "Male", female: "Female", other: "Other" },
+  profileEdit: {
+    edit: "Edit Profile",
+    title: "Edit Profile",
+    reviewTitle: "Review Changes",
+    noChanges: "No changes yet.",
+    reason: "Reason",
+    reasonHelp: "Required when Full Name or Date of Birth changes. Recorded in the audit trail.",
+    save: "Save Changes",
+    cancel: "Cancel",
+    saved: "Profile updated.",
+  },
   form: {
     title: "Create Employee",
     noPermission: "You do not have permission to create employee profiles.",

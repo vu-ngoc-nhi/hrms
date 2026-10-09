@@ -289,6 +289,36 @@ export const EmployeeCreatedSchema = reg(
   }),
 );
 
+export const EmployeeUpdateSchema = reg(
+  "EmployeeUpdate",
+  z.strictObject({
+    expected_revision: z.int().min(1).describe("The revision the caller last read; a stale value returns 409 REVISION_CONFLICT."),
+    reason: z
+      .string()
+      .min(1)
+      .max(1000)
+      .optional()
+      .describe("Required when Full Name or Date of Birth changes (C-23); optional otherwise."),
+    full_name: z.string().min(1).max(200).optional(),
+    personal: z
+      .strictObject({
+        gender: z.enum(["male", "female", "other"]).nullable().optional(),
+        date_of_birth: isoDate().nullable().optional(),
+        mobile_phone: z.string().max(20).nullable().optional(),
+        personal_email: z.email().max(254).nullable().optional().describe("Personal/contact email. Never an identity key."),
+      })
+      .optional()
+      .describe("Requires employees.write_personal. null clears a value."),
+  }),
+  "Profile fields only. Employee code, employee type, employment dates, work email and assignments are not editable here.",
+);
+export const EmployeeUpdatedSchema = reg(
+  "EmployeeUpdated",
+  EmployeeDetailSchema.extend({
+    warnings: z.array(ErrorDetailSchema).describe("Items to review; they do not block the update."),
+  }),
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -322,5 +352,6 @@ export const EmployeeListQuerySchema = z.strictObject({
 });
 
 export type EmployeeCreateInput = z.infer<typeof EmployeeCreateSchema>;
+export type EmployeeUpdateInput = z.infer<typeof EmployeeUpdateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;

@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t, tMaybe } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import { ProfileEditForm } from "./ProfileEditForm";
 
 type Ref = { id: string; code: string; name: string } | null;
 type Assignment = {
@@ -18,6 +20,8 @@ type Assignment = {
   manager: { person_id: string; employee_code: string; full_name: string } | null;
 };
 type Detail = {
+  id: string;
+  revision: number;
   employee_code: string;
   full_name: string;
   employment_status: string;
@@ -43,6 +47,9 @@ export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<ApiCallError | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const session = useSession();
 
   useEffect(() => {
     api<Detail>(`/api/v1/core-hr/employees/${id}`)
@@ -73,6 +80,31 @@ export default function EmployeeDetailPage() {
         </div>
       </div>
       <p className="muted small">{t("detail.statusNote", { date: formatDate(d.status_as_of) })}</p>
+      {notice && <p className="alert ok-note small">{notice}</p>}
+      {session?.can("employees.update") &&
+        (editing ? (
+          <ProfileEditForm
+            profile={d}
+            canEditPersonal={Boolean(session.can("employees.write_personal") && d.personal)}
+            onSaved={(updated) => {
+              setD(updated as unknown as Detail);
+              setEditing(false);
+              setNotice(t("profileEdit.saved"));
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <p>
+            <button
+              onClick={() => {
+                setNotice(null);
+                setEditing(true);
+              }}
+            >
+              {t("profileEdit.edit")}
+            </button>
+          </p>
+        ))}
 
       <div className="grid2">
         <section className="card">

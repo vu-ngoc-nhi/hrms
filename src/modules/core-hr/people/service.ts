@@ -4,7 +4,7 @@ import { getConfig } from "@/lib/config";
 import { addDays, fromDbDate, toDbDate, todayInVietnam } from "@/lib/dates";
 import { db, pgErrorInfo, type Tx } from "@/lib/db";
 import { ApiError, forbidden, notFound, type ErrorDetail } from "@/lib/http/errors";
-import { hasControlChars, normalizePhone, normalizeText, PHONE_RE } from "@/lib/text";
+import { normalizeText } from "@/lib/text";
 import { recordAudit } from "@/modules/audit/audit";
 import type { Principal } from "@/modules/identity/authenticate";
 import { claimIdempotencyKey, requestFingerprint } from "@/modules/idempotency/idempotency";
@@ -17,6 +17,7 @@ import {
 } from "../employments/queries";
 import { assignmentOn, employmentStatus, referenceDate, representativeEmployment } from "../employments/status";
 import { completenessView, missingOperationalItems, type OperationalInput } from "./completeness";
+import { normalizePersonalEmail, validateDateOfBirth, validateFullName, validateMobilePhone } from "./validation";
 
 // ---------------- Protected fields that are not enabled ----------------
 // These groups need encryption, keyed-HMAC lookup, dedicated permissions and legal review (Pending Legal Review).
@@ -111,12 +112,8 @@ async function prepareCreate(principal: Principal, input: EmployeeCreateInput, t
     throw forbidden("You do not have permission to set a legacy employee code.");
   }
 
-  const fullName = normalizeText(input.full_name);
-  if (fullName.length < 2 || fullName.length > 150 || hasControlChars(input.full_name.replace(/[\t\n\r]/g, " "))) {
-    errors.push({ field: "full_name", code: "INVALID", message: "Full name must be 2-150 characters." });
-  } else if (/\d/.test(fullName)) {
-    warnings.push({ field: "full_name", code: "NAME_CONTAINS_DIGIT", message: "Full name contains a digit; please review." });
-  }
+  const issues = { errors, warnings };
+  const fullName = validateFullName(input.full_name, issues);
 
   let legacyCode: string | null = null;
   if (input.employee_code !== undefined) {
@@ -127,23 +124,8 @@ async function prepareCreate(principal: Principal, input: EmployeeCreateInput, t
   }
 
   const p = input.personal ?? {};
-  const dateOfBirth = p.date_of_birth ?? null;
-  if (dateOfBirth && dateOfBirth > today) {
-    errors.push({ field: "personal.date_of_birth", code: "INVALID", message: "Date of birth cannot be in the future." });
-  } else if (dateOfBirth && dateOfBirth > addDays(today, -15 * 365)) {
-    warnings.push({
-      field: "personal.date_of_birth",
-      code: "AGE_REVIEW",
-      message: "Age appears to be under about 15; HR review needed (not a legal conclusion).",
-    });
-  }
-  let mobilePhone: string | null = null;
-  if (p.mobile_phone !== undefined) {
-    mobilePhone = normalizePhone(p.mobile_phone);
-    if (!PHONE_RE.test(mobilePhone)) {
-      errors.push({ field: "personal.mobile_phone", code: "INVALID", message: "Mobile phone must be 0xxxxxxxxx or +84xxxxxxxxx." });
-    }
-  }
+  const dateOfBirth = validateDateOfBirth(p.date_of_birth ?? null, today, issues);
+  const mobilePhone = validateMobilePhone(p.mobile_phone ?? null, issues);
 
   let employment: Prepared["employment"] = null;
   if (input.employment) {
@@ -209,7 +191,7 @@ async function prepareCreate(principal: Principal, input: EmployeeCreateInput, t
   const personal = {
     gender: p.gender ?? null,
     dateOfBirth,
-    personalEmail: p.personal_email ? p.personal_email.trim().toLowerCase() : null,
+    personalEmail: normalizePersonalEmail(p.personal_email ?? null),
     mobilePhone,
   };
 
