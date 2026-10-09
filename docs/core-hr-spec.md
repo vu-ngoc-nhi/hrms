@@ -98,15 +98,15 @@ Column-status legend: **Mapped** = implemented or ready to implement · **Pendin
   | Concept | Meaning | Where | Changes create a new Employment Period? | MVP status |
   |---|---|---|---|---|
   | Employment Period | One continuous relationship span with EmeSoft | person → employment | — | Implemented |
-  | Employee Type | Nature of the relationship: Employee, Service Contractor, Intern (C-13). Not Contract Type | employment period | Genuine change: yes (e.g. Intern → Employee, Contractor → Employee). Data correction: no | Implemented (catalog) |
+  | Employee Type | Nature of the relationship: Employee, Service Contractor, Intern (C-13; Intern defined in C-19 — a time-limited learning relationship, not probation). Not Contract Type | employment period | Genuine change: yes (e.g. Intern → Employee, Contractor → Employee). Data correction: no | Implemented (catalog) |
   | Employment Status | Computed lifecycle: `not_started` / `active` / `ended`, displayed Pre-start / Active / Ended (C-16) | computed | No | Implemented (label fix pending) |
   | End Reason | Why a period ended (resignation, dismissal, contract expiry, probation failure…) | future attribute of the period end | — | Pending Validation (PV-17) |
   | Probation | Effective-dated condition of a period, concurrent with Active; outcome pending/passed/failed/cancelled; pass continues the same period; Failed does not end the period by itself (C-17) | future child of employment period | No | Concept approved; not implemented (PV-16, PL-08) |
   | Working Arrangement | Full-time / Part-time, effective-dated within a period | future | No | Deferred (PV-15) |
-  | Company account expectation | Default per Employee Type (`requires_work_email`); per-period override deferred (C-18) | employee type (+ future period override) | No | Default implemented; override PV-14 |
+  | Company account expectation | Default per Employee Type (`requires_work_email`); per-period override deferred (C-18). Intern eligibility undecided (PV-13); the seeded INTERN value is a demo placeholder | employee type (+ future period override) | No | Default implemented; override PV-14 |
   | Organizational Assignment | Department, job title, level, manager, effective-dated | employment period → assignment | No | Implemented |
 
-  Rehire is a new Employment Period (Pre-start before its start date). Probation, Rehire in Progress, On Leave, Maternity Leave, Resigned, Dismissed and Contract Expired are not lifecycle statuses.
+  Internship duration is the Intern Employment Period's start and end dates; there is no separate Internship Status, and completing or ending an internship is neither passing nor failing probation (C-19). Rehire is a new Employment Period (Pre-start before its start date). Probation, Rehire in Progress, On Leave, Maternity Leave, Resigned, Dismissed and Contract Expired are not lifecycle statuses.
 - **Employment events** (`employment_event`): start, suspend, resume, end, cancel_planned_start. Only `start` is written in S3.
 - **Job assignment** (`job_assignment`):
   - `[effective_from, effective_to)` (start inclusive, end **exclusive**);
