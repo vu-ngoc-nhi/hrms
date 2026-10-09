@@ -904,6 +904,126 @@
         }
       }
     },
+    "/api/v1/core-hr/employments/{id}/end": {
+      "post": {
+        "operationId": "createEndEmployment",
+        "summary": "End Employment",
+        "description": "Explicit business action (C-50) on a non-cancelled period that has not ended and has no Active End Event. Sets the end date of an open period, or shortens / confirms an existing future end date (a later date is a historical correction: 422 END_DATE_LATER_THAN_PLANNED). HR_EDITOR: today or later; a past end date requires employment.correct (HR_ADMIN). Requires a structured End Reason (RELATIONSHIP_CHANGE is not selectable; OTHER needs a note), expected_revision and an Idempotency-Key. Blocked when an assignment starts after the end date (422 FUTURE_ASSIGNMENT_OUTSIDE_END; it is never changed automatically). The assignment in effect on the end date is closed at end date + 1. The end event stores the previous end date, the closed assignment and its previous effective_to for a later safe reversal. Audit: employment.end and assignment.close, same request ID.\n\nRequired permission: `employment.manage`.",
+        "tags": [
+          "Employments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndEmploymentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Owning employee profile after the action (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/core-hr/employments/{id}/period-corrections": {
       "post": {
         "operationId": "createPeriodCorrection",
@@ -3234,6 +3354,7 @@
                     "suspend",
                     "resume",
                     "end",
+                    "end_reversed",
                     "cancel_planned_start"
                   ]
                 },
@@ -3246,16 +3367,54 @@
                   "type": "string",
                   "format": "date-time",
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                },
+                "end_reason": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VOLUNTARY_RESIGNATION",
+                            "EMPLOYER_INITIATED_END",
+                            "PLANNED_TERM_COMPLETED",
+                            "MUTUAL_AGREEMENT",
+                            "PROBATION_NOT_PASSED",
+                            "OTHER",
+                            "RELATIONSHIP_CHANGE"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "label"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Structured End Reason of an end event (null otherwise or when none was recorded). Legal meaning: Pending Legal Review."
                 }
               },
               "required": [
                 "event_type",
                 "effective_date",
-                "recorded_at"
+                "recorded_at",
+                "end_reason"
               ],
               "additionalProperties": false
             },
-            "description": "Recorded employment events in chronological order. Free-text reasons are not exposed here."
+            "description": "Recorded employment events in chronological order. Free-text notes and reasons are never exposed here."
+          },
+          "has_active_end_event": {
+            "type": "boolean",
+            "description": "True when the period has an end event that has not been reversed (Active End Event). A legacy end date may exist without any event."
           },
           "cancelled_at": {
             "anyOf": [
@@ -3321,6 +3480,7 @@
           "end_date",
           "period_lifecycle",
           "events",
+          "has_active_end_event",
           "cancelled_at",
           "employee_type",
           "work_email",
@@ -4185,6 +4345,48 @@
         "required": [
           "expected_revision",
           "reason"
+        ],
+        "additionalProperties": false
+      },
+      "EndEmploymentCreate": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "description": "Last day of the period (inclusive). HR_EDITOR: today or later; a past date requires employment.correct (HR_ADMIN). With an existing future end date: the same or an earlier date only."
+          },
+          "end_reason_code": {
+            "type": "string",
+            "enum": [
+              "VOLUNTARY_RESIGNATION",
+              "EMPLOYER_INITIATED_END",
+              "PLANNED_TERM_COMPLETED",
+              "MUTUAL_AGREEMENT",
+              "PROBATION_NOT_PASSED",
+              "OTHER",
+              "RELATIONSHIP_CHANGE"
+            ],
+            "description": "Structured End Reason (C-21). RELATIONSHIP_CHANGE is not selectable here (422)."
+          },
+          "note": {
+            "description": "Optional; mandatory when end_reason_code is OTHER. Stored on the end event, never shown in the generic history.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "expected_revision",
+          "end_date",
+          "end_reason_code"
         ],
         "additionalProperties": false
       },

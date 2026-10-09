@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { EndReasonCode } from "@/contracts/core-hr/end-reasons";
 import type { EmployeeCreateInput, EmployeeDetail, EmployeeListItem } from "@/contracts/core-hr/schemas";
 import { addDays, fromDbDate, toDbDate, todayInVietnam } from "@/lib/dates";
 import { db, pgErrorInfo, type Tx } from "@/lib/db";
@@ -14,6 +15,7 @@ import {
   operationalEmploymentWhere,
   operationalPeriods,
 } from "../employments/queries";
+import { activeEndEventOf } from "../employments/lifecycle-events";
 import { assignmentOn, employmentStatus, referenceDate, representativeEmployment } from "../employments/status";
 import { completenessView, missingOperationalItems, type OperationalInput } from "./completeness";
 import { normalizePersonalEmail, validateDateOfBirth, validateFullName, validateMobilePhone, validateWorkEmail } from "./validation";
@@ -384,7 +386,7 @@ const detailInclude = {
     orderBy: [{ startDate: "asc" as const }, { createdAt: "asc" as const }],
     include: {
       employeeType: true,
-      events: { orderBy: [{ effectiveDate: "asc" as const }, { recordedAt: "asc" as const }] },
+      events: { orderBy: [{ effectiveDate: "asc" as const }, { recordedAt: "asc" as const }], include: { endReason: true } },
       assignments: {
         orderBy: { effectiveFrom: "asc" as const },
         include: { ...assignmentInclude, managerEmployment: { include: { person: true } } },
@@ -418,11 +420,14 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
     period_lifecycle: historyFlags(e).cancelled_at
       ? null
       : employmentStatus([{ startDate: fromDbDate(e.startDate), endDate: fromDbDate(e.endDate) }], today),
+    // Event type, date and structured End Reason only: free-text notes and reasons are never exposed (C-24).
     events: e.events.map((ev) => ({
-      event_type: ev.eventType as "start" | "suspend" | "resume" | "end" | "cancel_planned_start",
+      event_type: ev.eventType as "start" | "suspend" | "resume" | "end" | "end_reversed" | "cancel_planned_start",
       effective_date: fromDbDate(ev.effectiveDate),
       recorded_at: ev.recordedAt.toISOString(),
+      end_reason: ev.endReason ? { code: ev.endReason.code as EndReasonCode, label: ev.endReason.label } : null,
     })),
+    has_active_end_event: activeEndEventOf(e.events) !== null,
     employee_type: ref(e.employeeType),
     work_email: e.workEmail,
     record_source: e.recordSource,

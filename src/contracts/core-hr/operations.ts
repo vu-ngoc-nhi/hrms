@@ -246,6 +246,22 @@ export const operations = {
     success: { status: 201, description: "Owning employee profile after the change (or replayed result)", schema: S.EmployeeDetailSchema },
     errors: [400, ...AUTH_ERRORS, 404, 409, 422],
   },
+  createEndEmployment: {
+    operationId: "createEndEmployment",
+    method: "post",
+    path: "/api/v1/core-hr/employments/{id}/end",
+    summary: "End Employment",
+    description:
+      "Explicit business action (C-50) on a non-cancelled period that has not ended and has no Active End Event. Sets the end date of an open period, or shortens / confirms an existing future end date (a later date is a historical correction: 422 END_DATE_LATER_THAN_PLANNED). HR_EDITOR: today or later; a past end date requires employment.correct (HR_ADMIN). Requires a structured End Reason (RELATIONSHIP_CHANGE is not selectable; OTHER needs a note), expected_revision and an Idempotency-Key. Blocked when an assignment starts after the end date (422 FUTURE_ASSIGNMENT_OUTSIDE_END; it is never changed automatically). The assignment in effect on the end date is closed at end date + 1. The end event stores the previous end date, the closed assignment and its previous effective_to for a later safe reversal. Audit: employment.end and assignment.close, same request ID.",
+    tag: "Employments",
+    auth: true,
+    permission: "employment.manage",
+    pathParams: S.IdPathSchema,
+    body: S.EndEmploymentCreateSchema,
+    idempotencyKey: "required",
+    success: { status: 201, description: "Owning employee profile after the action (or replayed result)", schema: S.EmployeeDetailSchema },
+    errors: [400, ...AUTH_ERRORS, 404, 409, 422],
+  },
   createPeriodCorrection: {
     operationId: "createPeriodCorrection",
     method: "post",

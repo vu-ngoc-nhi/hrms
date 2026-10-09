@@ -16,6 +16,7 @@ import type { Principal } from "@/modules/identity/authenticate";
 import { bumpPersonRevision } from "../people/revision";
 import { assignmentTimelineConflict } from "./assignment-change";
 import { personIdForEmployment, reasonRequired, rule, runIdempotentCommand } from "./command";
+import { findActiveEndEvent } from "./lifecycle-events";
 import { loadWritableEmployment } from "./queries";
 
 const OPERATION = "createPeriodCorrection";
@@ -160,12 +161,11 @@ export async function createPeriodCorrection(
         ).count;
       }
       if (endChanged) {
-        syncedEvents += (
-          await tx.employmentEvent.updateMany({
-            where: { employmentId, eventType: "end", effectiveDate: toDbDate(oldEnd!) },
-            data: { effectiveDate: toDbDate(newEnd!) },
-          })
-        ).count;
+        // The Active End Event (C-51), never an end event matched by date. Legacy end dates may have no event.
+        const activeEnd = await findActiveEndEvent(tx, employmentId);
+        if (activeEnd) {
+          syncedEvents += (await tx.employmentEvent.updateMany({ where: { id: activeEnd.id }, data: { effectiveDate: toDbDate(newEnd!) } })).count;
+        }
       }
 
       await auditPeriodCorrection(tx, {

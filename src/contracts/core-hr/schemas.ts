@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { END_REASON_CODES, SELECTABLE_END_REASON_CODES } from "./end-reasons";
 
 // Single schema registry: route handlers validate with these schemas and OpenAPI is generated from them.
 // Wire values (enums, codes) are stable English identifiers; display text lives in the UI message catalog.
@@ -215,6 +216,9 @@ export const AssignmentSchema = reg(
     record_source: z.string(),
   }),
 );
+export { END_REASON_CODES, SELECTABLE_END_REASON_CODES };
+export const EndReasonCodeSchema = z.enum(END_REASON_CODES);
+
 export const EmploymentSchema = reg(
   "Employment",
   z.object({
@@ -227,12 +231,19 @@ export const EmploymentSchema = reg(
     events: z
       .array(
         z.object({
-          event_type: z.enum(["start", "suspend", "resume", "end", "cancel_planned_start"]),
+          event_type: z.enum(["start", "suspend", "resume", "end", "end_reversed", "cancel_planned_start"]),
           effective_date: isoDate(),
           recorded_at: isoDateTime(),
+          end_reason: z
+            .object({ code: EndReasonCodeSchema, label: z.string() })
+            .nullable()
+            .describe("Structured End Reason of an end event (null otherwise or when none was recorded). Legal meaning: Pending Legal Review."),
         }),
       )
-      .describe("Recorded employment events in chronological order. Free-text reasons are not exposed here."),
+      .describe("Recorded employment events in chronological order. Free-text notes and reasons are never exposed here."),
+    has_active_end_event: z
+      .boolean()
+      .describe("True when the period has an end event that has not been reversed (Active End Event). A legacy end date may exist without any event."),
     cancelled_at: isoDateTime()
       .nullable()
       .describe("Set when this planned period was cancelled before it began. Cancelled periods stay in history but have no operational effect; Cancelled is not an employment status."),
@@ -426,6 +437,19 @@ export const AssignmentCorrectionCreateSchema = reg(
   "Historical correction of a wrongly entered assignment row, edited in place (HR_ADMIN). effective_to is never edited directly.",
 );
 
+export const EndEmploymentCreateSchema = reg(
+  "EndEmploymentCreate",
+  z.strictObject({
+    expected_revision: z.int().min(1).describe("Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."),
+    end_date: isoDate().describe(
+      "Last day of the period (inclusive). HR_EDITOR: today or later; a past date requires employment.correct (HR_ADMIN). With an existing future end date: the same or an earlier date only.",
+    ),
+    end_reason_code: EndReasonCodeSchema.describe("Structured End Reason (C-21). RELATIONSHIP_CHANGE is not selectable here (422)."),
+    note: z.string().min(1).max(1000).optional().describe("Optional; mandatory when end_reason_code is OTHER. Stored on the end event, never shown in the generic history."),
+  }),
+  "End Employment (C-50): ends a non-cancelled period that has not ended and has no Active End Event.",
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -464,6 +488,7 @@ export type WorkEmailUpdateInput = z.infer<typeof WorkEmailUpdateSchema>;
 export type AssignmentChangeInput = z.infer<typeof AssignmentChangeCreateSchema>;
 export type InitialAssignmentInput = z.infer<typeof InitialAssignmentCreateSchema>;
 export type PeriodCorrectionInput = z.infer<typeof PeriodCorrectionCreateSchema>;
+export type EndEmploymentInput = z.infer<typeof EndEmploymentCreateSchema>;
 export type AssignmentCorrectionInput = z.infer<typeof AssignmentCorrectionCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;

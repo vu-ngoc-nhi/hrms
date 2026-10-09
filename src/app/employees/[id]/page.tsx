@@ -10,6 +10,7 @@ import { api, ApiCallError } from "@/lib/client/api";
 import { ProfileEditForm } from "./ProfileEditForm";
 import { AssignmentChangeForm } from "./AssignmentChangeForm";
 import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
+import { EndEmploymentForm } from "./EndEmploymentForm";
 import { InitialAssignmentForm } from "./InitialAssignmentForm";
 import { PeriodCorrectionForm } from "./PeriodCorrectionForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
@@ -40,7 +41,8 @@ type Detail = {
     start_date: string;
     end_date: string | null;
     period_lifecycle: string | null;
-    events: { event_type: string; effective_date: string; recorded_at: string }[];
+    events: { event_type: string; effective_date: string; recorded_at: string; end_reason: { code: string; label: string } | null }[];
+    has_active_end_event: boolean;
     cancelled_at: string | null;
     employee_type: Ref;
     work_email: string | null;
@@ -216,6 +218,23 @@ export default function EmployeeDetailPage() {
               }}
             />
           )}
+          {!e.cancelled_at && e.period_lifecycle !== "ended" && !e.has_active_end_event && session?.can("employment.manage") && (
+            <EndEmploymentForm<Detail>
+              key={`${e.id}-${d.revision}-end`}
+              employmentId={e.id}
+              employeeType={e.employee_type?.name ?? null}
+              startDate={e.start_date}
+              currentEnd={e.end_date}
+              assignments={e.assignments}
+              today={d.status_as_of}
+              canBackdate={Boolean(session.can("employment.correct"))}
+              revision={d.revision}
+              onSaved={(updated) => {
+                setD(updated);
+                setNotice(t("profileEdit.saved"));
+              }}
+            />
+          )}
           {!e.cancelled_at && e.assignments.length === 0 && session?.can("employment.manage") && (
             <InitialAssignmentForm<Detail>
               key={`${e.id}-${d.revision}-initial`}
@@ -323,6 +342,7 @@ export default function EmployeeDetailPage() {
               {e.events.map((ev, i) => (
                 <li key={i}>
                   {tMaybe(`detail.eventType.${ev.event_type}`) ?? ev.event_type} — {formatDate(ev.effective_date)}
+                  {ev.end_reason && <> · {tMaybe(`endReason.${ev.end_reason.code}`) ?? ev.end_reason.label}</>}
                 </li>
               ))}
             </ul>

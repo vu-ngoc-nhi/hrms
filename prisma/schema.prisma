@@ -149,36 +149,63 @@ model Employment {
 }
 
 model EmploymentEvent {
-  id            String     @id @default(uuid()) @db.Uuid
-  employmentId  String     @map("employment_id") @db.Uuid
-  eventType     String     @map("event_type")
-  effectiveDate DateTime   @map("effective_date") @db.Date
-  reason        String?
-  recordedAt    DateTime   @default(now()) @map("recorded_at") @db.Timestamptz
-  recordedBy    String     @map("recorded_by") @db.Uuid
-  employment    Employment @relation(fields: [employmentId], references: [id])
+  id                                  String            @id @default(uuid()) @db.Uuid
+  employmentId                        String            @map("employment_id") @db.Uuid
+  eventType                           String            @map("event_type")
+  effectiveDate                       DateTime          @map("effective_date") @db.Date
+  reason                              String?
+  recordedAt                          DateTime          @default(now()) @map("recorded_at") @db.Timestamptz
+  recordedBy                          String            @map("recorded_by") @db.Uuid
+  /// end events only (C-52): structured End Reason, optional note (required for OTHER).
+  endReasonCode                       String?           @map("end_reason_code")
+  endNote                             String?           @map("end_note")
+  /// end events only (C-52): employment.end_date before End Employment (null = open period).
+  previousEndDate                     DateTime?         @map("previous_end_date") @db.Date
+  /// end events only (C-52): assignment changed by End Employment and its exact previous effective_to.
+  closedAssignmentId                  String?           @map("closed_assignment_id") @db.Uuid
+  closedAssignmentPreviousEffectiveTo DateTime?         @map("closed_assignment_previous_effective_to") @db.Date
+  /// end_reversed events only (C-52): the exact end event reversed.
+  reversesEventId                     String?           @map("reverses_event_id") @db.Uuid
+  employment                          Employment        @relation(fields: [employmentId], references: [id])
+  endReason                           EndReason?        @relation(fields: [endReasonCode], references: [code])
+  reversesEvent                       EmploymentEvent?  @relation("EndReversal", fields: [reversesEventId], references: [id])
+  reversedBy                          EmploymentEvent[] @relation("EndReversal")
+  closedAssignment                    JobAssignment?    @relation("EndClosedAssignment", fields: [closedAssignmentId], references: [id])
 
   @@map("employment_event")
 }
 
+/// C-21 End Reason reference data (system-managed; legal meaning Pending Legal Review PL-09).
+model EndReason {
+  code         String            @id
+  label        String
+  selectable   Boolean
+  noteRequired Boolean           @default(false) @map("note_required")
+  sortOrder    Int               @map("sort_order")
+  events       EmploymentEvent[]
+
+  @@map("end_reason")
+}
+
 model JobAssignment {
-  id                  String      @id @default(uuid()) @db.Uuid
-  employmentId        String      @map("employment_id") @db.Uuid
-  effectiveFrom       DateTime    @map("effective_from") @db.Date
-  effectiveTo         DateTime?   @map("effective_to") @db.Date
-  departmentId        String      @map("department_id") @db.Uuid
-  jobTitleId          String      @map("job_title_id") @db.Uuid
-  jobLevelId          String?     @map("job_level_id") @db.Uuid
-  managerEmploymentId String?     @map("manager_employment_id") @db.Uuid
-  recordSource        String      @default("form") @map("record_source")
-  changeReason        String      @map("change_reason")
-  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz
-  createdBy           String      @map("created_by") @db.Uuid
-  employment          Employment  @relation("AssignmentEmployment", fields: [employmentId], references: [id])
-  managerEmployment   Employment? @relation("AssignmentManager", fields: [managerEmploymentId], references: [id])
-  department          Department  @relation(fields: [departmentId], references: [id])
-  jobTitle            JobTitle    @relation(fields: [jobTitleId], references: [id])
-  jobLevel            JobLevel?   @relation(fields: [jobLevelId], references: [id])
+  id                  String            @id @default(uuid()) @db.Uuid
+  employmentId        String            @map("employment_id") @db.Uuid
+  effectiveFrom       DateTime          @map("effective_from") @db.Date
+  effectiveTo         DateTime?         @map("effective_to") @db.Date
+  departmentId        String            @map("department_id") @db.Uuid
+  jobTitleId          String            @map("job_title_id") @db.Uuid
+  jobLevelId          String?           @map("job_level_id") @db.Uuid
+  managerEmploymentId String?           @map("manager_employment_id") @db.Uuid
+  recordSource        String            @default("form") @map("record_source")
+  changeReason        String            @map("change_reason")
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  createdBy           String            @map("created_by") @db.Uuid
+  employment          Employment        @relation("AssignmentEmployment", fields: [employmentId], references: [id])
+  managerEmployment   Employment?       @relation("AssignmentManager", fields: [managerEmploymentId], references: [id])
+  department          Department        @relation(fields: [departmentId], references: [id])
+  jobTitle            JobTitle          @relation(fields: [jobTitleId], references: [id])
+  jobLevel            JobLevel?         @relation(fields: [jobLevelId], references: [id])
+  closedByEndEvents   EmploymentEvent[] @relation("EndClosedAssignment")
 
   @@map("job_assignment")
 }
