@@ -8,6 +8,13 @@ import { hasControlChars, normalizePhone, normalizeText, PHONE_RE } from "@/lib/
 import { recordAudit } from "@/modules/audit/audit";
 import type { Principal } from "@/modules/identity/authenticate";
 import { claimIdempotencyKey, requestFingerprint } from "@/modules/idempotency/idempotency";
+import {
+  currentEmploymentWhere,
+  futurePlannedEmploymentWhere,
+  historyFlags,
+  operationalEmploymentWhere,
+  operationalPeriods,
+} from "../employments/queries";
 import { assignmentOn, employmentStatus, referenceDate, representativeEmployment } from "../employments/status";
 import { completenessView, missingOperationalItems, type OperationalInput } from "./completeness";
 
@@ -179,7 +186,7 @@ async function prepareCreate(principal: Principal, input: EmployeeCreateInput, t
         // The manager must have an employment period covering the assignment's effective date, not just "today".
         const onDate = toDbDate(e.start_date);
         const mgr = await db().employment.findFirst({
-          where: { personId: a.manager_person_id, startDate: { lte: onDate }, OR: [{ endDate: null }, { endDate: { gte: onDate } }] },
+          where: currentEmploymentWhere(onDate, { personId: a.manager_person_id }),
         });
         if (!mgr) {
           errors.push({
@@ -426,10 +433,12 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
   const today = todayInVietnam();
   const canSeePersonal = principal.permissions.has("employees.read_personal");
 
-  const employments = person.employments.map((e) => ({
+  // Employment history: every period, cancelled ones included and flagged.
+  const toApiPeriod = (e: (typeof person.employments)[number]) => ({
     id: e.id,
     start_date: fromDbDate(e.startDate),
     end_date: fromDbDate(e.endDate),
+    ...historyFlags(e),
     employee_type: ref(e.employeeType),
     work_email: e.workEmail,
     record_source: e.recordSource,
@@ -449,8 +458,12 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
         : null,
       record_source: a.recordSource,
     })),
-  }));
-  const dates = employments.map((e) => ({ startDate: e.start_date, endDate: e.end_date, e }));
+  });
+  const employments = person.employments.map(toApiPeriod);
+  // Status, representative period, current assignment and completeness use operational periods only.
+  const dates = operationalPeriods(person.employments)
+    .map(toApiPeriod)
+    .map((e) => ({ startDate: e.start_date, endDate: e.end_date, e }));
   const rep = representativeEmployment(dates, today);
   const repAssignment = rep
     ? assignmentOn(
@@ -513,7 +526,8 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
   if (!principal.permissions.has("employees.read")) throw forbidden();
   const today = todayInVietnam();
   const t = toDbDate(today);
-  const activeCond = { startDate: { lte: t }, OR: [{ endDate: null }, { endDate: { gte: t } }] };
+  const activeCond = currentEmploymentWhere(t);
+  const anyOperational = operationalEmploymentWhere();
   const and: Record<string, unknown>[] = [];
   if (q.search) {
     const s = normalizeText(q.search);
@@ -521,17 +535,21 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
   }
   if (q.employment_status === "active") and.push({ employments: { some: activeCond } });
   if (q.employment_status === "not_started") {
-    and.push({ employments: { none: activeCond } }, { employments: { some: { startDate: { gt: t } } } });
+    and.push({ employments: { none: activeCond } }, { employments: { some: futurePlannedEmploymentWhere(t) } });
   }
   if (q.employment_status === "ended") {
-    and.push({ employments: { some: {} } }, { employments: { none: activeCond } }, { employments: { none: { startDate: { gt: t } } } });
+    and.push(
+      { employments: { some: anyOperational } },
+      { employments: { none: activeCond } },
+      { employments: { none: futurePlannedEmploymentWhere(t) } },
+    );
   }
-  if (q.employment_status === "no_employment") and.push({ employments: { none: {} } });
+  if (q.employment_status === "no_employment") and.push({ employments: { none: anyOperational } });
   if (q.department_id) {
     // Department of the assignment effective today, or the first assignment of someone who has not started yet.
     and.push({
       employments: {
-        some: {
+        some: operationalEmploymentWhere({
           assignments: {
             some: {
               departmentId: q.department_id,
@@ -541,7 +559,7 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
               ],
             },
           },
-        },
+        }),
       },
     });
   }
@@ -552,7 +570,13 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
       orderBy: [{ employeeCode: "asc" }, { id: "asc" }],
       skip: (q.page - 1) * q.page_size,
       take: q.page_size,
-      include: { employments: { include: { employeeType: true, assignments: { include: assignmentInclude } } } },
+      // List rows only need operational periods (cancelled periods have no operational effect).
+      include: {
+        employments: {
+          where: operationalEmploymentWhere(),
+          include: { employeeType: true, assignments: { include: assignmentInclude } },
+        },
+      },
     }),
     db().person.count({ where }),
   ]);

@@ -40,7 +40,7 @@ export const en = {
   },
   employmentStatus: {
     no_employment: "No Employment Record",
-    not_started: "Not Started",
+    not_started: "Pre-start",
     active: "Active",
     ended: "Ended",
   },
@@ -81,6 +81,8 @@ export const en = {
     notDetermined: "Not determined",
     workEmail: "Work Email",
     employeeType: "Employee Type",
+    cancelledBadge: "Cancelled",
+    cancelledNote: "Planned period cancelled before it began. Kept for history; it has no operational effect.",
     effectiveFrom: "Effective From",
     effectiveTo: "Effective To (exclusive)",
     jobLevel: "Level",

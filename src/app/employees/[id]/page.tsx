@@ -30,6 +30,7 @@ type Detail = {
     id: string;
     start_date: string;
     end_date: string | null;
+    cancelled_at: string | null;
     employee_type: Ref;
     work_email: string | null;
     assignments: Assignment[];
@@ -109,7 +110,12 @@ export default function EmployeeDetailPage() {
       <h2>{t("detail.employmentTitle")}</h2>
       {d.employments.length === 0 && <p className="muted">{t("detail.noEmployment")}</p>}
       {d.employments.map((e) => (
-        <section key={e.id} className="card" style={{ marginBottom: 12 }}>
+        <section key={e.id} className="card" style={{ marginBottom: 12, opacity: e.cancelled_at ? 0.7 : 1 }}>
+          {e.cancelled_at && (
+            <p className="muted small">
+              <span className="badge">{t("detail.cancelledBadge")}</span> {t("detail.cancelledNote")}
+            </p>
+          )}
           <dl className="kv">
             <dt>{t("detail.startDate")}</dt>
             <dd>{formatDate(e.start_date)}</dd>

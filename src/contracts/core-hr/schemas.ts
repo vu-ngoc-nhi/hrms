@@ -221,6 +221,9 @@ export const EmploymentSchema = reg(
     id: z.uuid(),
     start_date: isoDate(),
     end_date: isoDate().nullable().describe("Inclusive."),
+    cancelled_at: isoDateTime()
+      .nullable()
+      .describe("Set when this planned period was cancelled before it began. Cancelled periods stay in history but have no operational effect; Cancelled is not an employment status."),
     employee_type: CatalogRefSchema.nullable(),
     work_email: z.string().nullable(),
     record_source: z.string(),

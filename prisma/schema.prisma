@@ -135,6 +135,7 @@ model Employment {
   endDate            DateTime?         @map("end_date") @db.Date
   workEmail          String?           @map("work_email")
   employeeTypeId     String?           @map("employee_type_id") @db.Uuid
+  cancelledAt        DateTime?         @map("cancelled_at") @db.Timestamptz
   recordSource       String            @default("form") @map("record_source")
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz
   createdBy          String            @map("created_by") @db.Uuid

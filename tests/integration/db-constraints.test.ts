@@ -125,6 +125,51 @@ describe("Data constraints", () => {
       "23503",
     );
   });
+  it("cancelled periods are excluded from overlap and Work Email constraints; non-cancelled are still protected", async () => {
+    // A person needs its registered code in the same transaction (deferred FK).
+    await app.query("BEGIN");
+    const p2 = await app.query(
+      "INSERT INTO person (employee_code, full_name, created_by) VALUES ('DBT0002', 'Test Cancel Constraint', $1) RETURNING id",
+      [fx.userId],
+    );
+    await app.query("INSERT INTO employee_code_registry (code, person_id, source, issued_by) VALUES ('DBT0002', $1, 'legacy', $2)", [
+      p2.rows[0].id,
+      fx.userId,
+    ]);
+    await app.query("COMMIT");
+    const pid = p2.rows[0].id;
+    const ins = (start: string, email: string | null, cancelled: boolean) =>
+      app.query(
+        `INSERT INTO employment (person_id, start_date, work_email, cancelled_at, created_by) VALUES ($1, $2, $3, ${cancelled ? "now()" : "NULL"}, $4) RETURNING id`,
+        [pid, start, email, fx.userId],
+      );
+    const cancelled = await ins("2031-01-01", "constraint.probe@example.test", true);
+    await ins("2031-01-01", "constraint.probe@example.test", false); // replacement accepted
+    await expectSqlError(
+      "INSERT INTO employment (person_id, start_date, created_by) VALUES ($1, '2031-06-01', $2)",
+      [pid, fx.userId],
+      "23P01",
+    ); // two non-cancelled periods still cannot overlap
+    await expectSqlError(
+      "INSERT INTO employment (person_id, start_date, work_email, created_by) VALUES ($1, '2031-01-01', 'Constraint.Probe@example.test', $2)",
+      [fx.personId, fx.userId],
+      "23P01",
+    ); // active Work Email still unique across people
+    // Terminal rule: a cancelled period cannot be un-cancelled or edited.
+    await expectSqlError("UPDATE employment SET cancelled_at = NULL WHERE id = $1", [cancelled.rows[0].id], "23514");
+    await expectSqlError("UPDATE employment SET start_date = '2031-02-01' WHERE id = $1", [cancelled.rows[0].id], "23514");
+    await expectSqlError("UPDATE employment SET work_email = NULL WHERE id = $1", [cancelled.rows[0].id], "23514");
+    // At most one cancellation event per period.
+    await app.query(
+      "INSERT INTO employment_event (employment_id, event_type, effective_date, reason, recorded_by) VALUES ($1, 'cancel_planned_start', '2030-12-01', 'test', $2)",
+      [cancelled.rows[0].id, fx.userId],
+    );
+    await expectSqlError(
+      "INSERT INTO employment_event (employment_id, event_type, effective_date, reason, recorded_by) VALUES ($1, 'cancel_planned_start', '2030-12-02', 'test', $2)",
+      [cancelled.rows[0].id, fx.userId],
+      "23505",
+    );
+  });
   it("employee codes differing only by case are rejected", async () => {
     await expectSqlError(
       "INSERT INTO employee_code_registry (code, person_id, source, issued_by) VALUES ('dbt0001', $1, 'legacy', $2)",

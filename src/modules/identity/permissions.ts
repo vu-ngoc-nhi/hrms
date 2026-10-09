@@ -5,7 +5,10 @@ export const PERMISSIONS = [
   "employees.create",
   "employees.write_personal",
   "employees.set_code", // supply a legacy employee code instead of an auto-issued one
+  "employees.update", // edit profile fields (S4)
   "employees.read_sensitive", // sensitive group (legal ID, tax, social insurance...): NOT implemented, no role has it
+  "employment.manage", // normal employment business events effective today or later (S4, C-25)
+  "employment.correct", // historical corrections and past-dated business events: HR_ADMIN only (C-22, C-25)
   "catalogs.read",
   "catalogs.manage",
   "docs.read",
@@ -24,10 +27,22 @@ const ROLE_PERMISSIONS: Record<RoleCode, readonly Permission[]> = {
     "employees.create",
     "employees.write_personal",
     "employees.set_code",
+    "employees.update",
+    "employment.manage",
+    "employment.correct",
     "catalogs.read",
     "catalogs.manage",
   ],
-  HR_EDITOR: ["employees.read", "employees.read_personal", "employees.create", "employees.write_personal", "catalogs.read"],
+  // HR_EDITOR never receives employment.correct (C-22).
+  HR_EDITOR: [
+    "employees.read",
+    "employees.read_personal",
+    "employees.create",
+    "employees.write_personal",
+    "employees.update",
+    "employment.manage",
+    "catalogs.read",
+  ],
   // Technical role for developers: API documentation only, no HR data.
   API_DOCS_READER: ["docs.read"],
 };
