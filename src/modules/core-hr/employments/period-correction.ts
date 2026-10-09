@@ -1,7 +1,8 @@
 // S4.6 Employment Period correction (C-40, C-43, C-44, C-45): fixes a wrongly entered Employee Type, start date or
 // end date on the SAME period. HR_ADMIN only (route permission employment.correct), mandatory reason.
-//  - end_date only changes from one date to another: null → USE_REVERSE_END_EMPLOYMENT (S4.7R), a date on an open
-//    period → USE_END_EMPLOYMENT (S4.7);
+//  - end_date changes from one date to another; a date on an open period → USE_END_EMPLOYMENT (S4.7). Clearing it
+//    (null) is a correction only when the period has NO Active End Event (C-58: legacy/seed/imported periods, planned
+//    end dates entered in error, a planned end left after a reversal); otherwise → USE_REVERSE_END_EMPLOYMENT (S4.7R);
 //  - assignments move only when they were aligned with the old boundary (first row starting on the old start date,
 //    last row ending with the old end date); nothing is invented or silently repaired otherwise — the correction is
 //    blocked when an assignment would fall outside the corrected period;
@@ -63,12 +64,6 @@ export async function createPeriodCorrection(
     personIdForResource: personIdForEmployment,
     precheck: () => {
       if (!reason) throw reasonRequired("A correction reason is required.");
-      if (input.end_date === null) {
-        throw rule(
-          "USE_REVERSE_END_EMPLOYMENT",
-          "An end date cannot be cleared by a correction. Use Reverse End Employment for an End Employment entered by mistake.",
-        );
-      }
     },
     mapError: correctionDbError,
     execute: async (tx) => {
@@ -77,11 +72,17 @@ export async function createPeriodCorrection(
 
       const oldStart = fromDbDate(period.startDate);
       const oldEnd = fromDbDate(period.endDate);
-      if (input.end_date !== undefined && oldEnd === null) {
+      if (input.end_date && oldEnd === null) {
         throw rule("USE_END_EMPLOYMENT", "This period has no end date. Ending a period is End Employment, not a correction.");
       }
+      if (input.end_date === null && oldEnd !== null && (await findActiveEndEvent(tx, employmentId))) {
+        throw rule(
+          "USE_REVERSE_END_EMPLOYMENT",
+          "This end date was set by End Employment. Use Reverse End Employment to undo an End Employment entered by mistake.",
+        );
+      }
       const newStart = input.start_date ?? oldStart;
-      const newEnd = input.end_date ?? oldEnd;
+      const newEnd = input.end_date === undefined ? oldEnd : input.end_date;
       const newType = input.employee_type_id ?? period.employeeTypeId;
       const startChanged = newStart !== oldStart;
       const endChanged = newEnd !== oldEnd;
@@ -119,14 +120,15 @@ export async function createPeriodCorrection(
         }
       }
       if (endChanged && rows.length) {
-        const after = rows.filter((a) => fromDbDate(a.effectiveFrom) > newEnd!);
+        const after = newEnd === null ? [] : rows.filter((a) => fromDbDate(a.effectiveFrom) > newEnd);
         if (after.length) {
           throw outside(after, "Assignments start after the corrected end date. Correct the assignments first (they are never changed automatically).");
         }
         const last = rows[rows.length - 1];
         const lastTo = fromDbDate(last.effectiveTo);
-        if (lastTo === addDays(oldEnd!, 1)) patch(last).to = addDays(newEnd!, 1);
-        else if (lastTo === null || lastTo > addDays(newEnd!, 1)) {
+        // The last row follows the period end only when it ended with the old end date (cleared end → open row).
+        if (lastTo === addDays(oldEnd!, 1)) patch(last).to = newEnd === null ? null : addDays(newEnd, 1);
+        else if (newEnd !== null && (lastTo === null || lastTo > addDays(newEnd, 1))) {
           throw outside([last], "The last assignment would end after the corrected end date. Correct the assignments first.");
         }
       }
@@ -148,7 +150,7 @@ export async function createPeriodCorrection(
         where: { id: employmentId },
         data: {
           ...(startChanged ? { startDate: toDbDate(newStart) } : {}),
-          ...(endChanged ? { endDate: toDbDate(newEnd!) } : {}),
+          ...(endChanged ? { endDate: newEnd === null ? null : toDbDate(newEnd) } : {}),
           ...(typeChanged ? { employeeTypeId: newType } : {}),
         },
       });
@@ -160,7 +162,7 @@ export async function createPeriodCorrection(
           await tx.employmentEvent.updateMany({ where: { employmentId, eventType: "start" }, data: { effectiveDate: toDbDate(newStart) } })
         ).count;
       }
-      if (endChanged) {
+      if (endChanged && newEnd !== null) {
         // The Active End Event (C-51), never an end event matched by date. Legacy end dates may have no event.
         const activeEnd = await findActiveEndEvent(tx, employmentId);
         if (activeEnd) {

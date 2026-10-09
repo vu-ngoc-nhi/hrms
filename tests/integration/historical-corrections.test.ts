@@ -241,13 +241,10 @@ describe("Employment Period correction", () => {
     expect((await rows(employmentId))[0].to).toBe(addDays(future, 1));
   });
 
-  it("rejects end_date null (USE_REVERSE_END_EMPLOYMENT) and an end date on an open period (USE_END_EMPLOYMENT)", async () => {
+  it("rejects an end date on an open period (USE_END_EMPLOYMENT) and an end before the start", async () => {
     const personId = await bare();
     const ended = await legacyPeriod(personId, { start: "2019-01-07", end: "2019-12-31" });
     const rev = await revision(personId);
-    const clear = await correctPeriod(ended, { expected_revision: rev, reason: "Never left", end_date: null });
-    expect(clear.status).toBe(422);
-    expect(clear.body.details[0].code).toBe("USE_REVERSE_END_EMPLOYMENT");
     const open = await hired("2024-03-04");
     const set = await correctPeriod(open.employmentId, { expected_revision: await revision(open.personId), reason: "Left", end_date: "2025-01-31" });
     expect(set.status).toBe(422);
@@ -256,6 +253,47 @@ describe("Employment Period correction", () => {
     const before = await correctPeriod(ended, { expected_revision: rev, reason: "Fix", end_date: "2018-12-31" });
     expect(before.status).toBe(422);
     expect(before.body.details[0].code).toBe("END_BEFORE_START");
+    const noop = await correctPeriod(open.employmentId, { expected_revision: await revision(open.personId), reason: "Fix", end_date: null });
+    expect(noop.status).toBe(422);
+    expect(noop.body.details[0].code).toBe("NO_CHANGE");
+  });
+
+  it("C-58: clears a legacy end date without an Active End Event (HR_ADMIN, reason); the aligned last row reopens; no event is synthesized", async () => {
+    const personId = await bare();
+    const ended = await legacyPeriod(personId, { start: "2019-01-07", end: "2019-12-31" });
+    const [row] = await rows(ended);
+    const rev = await revision(personId);
+    expect((await correctPeriod(ended, { expected_revision: rev, reason: "Never left", end_date: null }, "editor")).status).toBe(403);
+    const blank = await correctPeriod(ended, { expected_revision: rev, reason: " ", end_date: null });
+    expect(blank.status).toBe(422);
+    expect(blank.body.details[0].code).toBe("REASON_REQUIRED");
+    const r = await correctPeriod(ended, { expected_revision: rev, reason: "Imported end date was wrong", end_date: null });
+    expect(r.status).toBe(200);
+    expect(r.body.employments[0]).toMatchObject({ end_date: null, period_lifecycle: "active", has_active_end_event: false });
+    expect((await rows(ended))[0]).toEqual({ ...row, to: null });
+    expect(await db().employmentEvent.count({ where: { employmentId: ended } })).toBe(0);
+    const [period, moved] = await audits([ended, row.id]);
+    expect(period).toMatchObject({ action: "employment.correct", reason: "Imported end date was wrong" });
+    expect(values(period)).toEqual({ "employment.end_date": ["2019-12-31", null] });
+    expect(values(moved)).toEqual({ "assignment.effective_to": ["2020-01-01", null] });
+  });
+
+  it("C-58: clearing an end date still enforces period overlap and Work Email constraints", async () => {
+    const personId = await bare();
+    const a = await legacyPeriod(personId, { start: "2018-01-08", end: "2018-12-31" });
+    await legacyPeriod(personId, { start: "2019-06-03" });
+    const overlap = await correctPeriod(a, { expected_revision: await revision(personId), reason: "Fix", end_date: null });
+    expect(overlap.status).toBe(409);
+    expect(overlap.body.error).toBe("PERIOD_OVERLAP");
+
+    const x = await bare();
+    const xPeriod = await legacyPeriod(x, { start: "2017-01-09", end: "2017-12-29", email: "cleared.end@example.test" });
+    const y = await bare();
+    await legacyPeriod(y, { start: "2018-03-01", email: "cleared.end@example.test" });
+    const email = await correctPeriod(xPeriod, { expected_revision: await revision(x), reason: "Fix", end_date: null });
+    expect(email.status).toBe(409);
+    expect(email.body.error).toBe("WORK_EMAIL_IN_USE");
+    expect(fromDbDate((await db().employment.findUniqueOrThrow({ where: { id: xPeriod } })).endDate)).toBe("2017-12-29");
   });
 
   it("blocks an end date before an assignment start without touching any assignment", async () => {

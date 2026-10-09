@@ -1028,7 +1028,7 @@
       "post": {
         "operationId": "createPeriodCorrection",
         "summary": "Correct the Employee Type, start date or end date of an employment period",
-        "description": "Historical correction (HR_ADMIN, employment.correct) of wrongly entered data on the same period; reason, expected_revision and Idempotency-Key required. An existing inactive Employee Type is allowed. end_date may only change from one date to another: null returns 422 USE_REVERSE_END_EMPLOYMENT and a date on an open period returns 422 USE_END_EMPLOYMENT. The first assignment moves with the start date only when it started on the old start date; the last assignment moves with the end date only when it ended with the old end date; otherwise assignments are never moved and the correction is blocked if they would fall outside the period (422 ASSIGNMENT_OUTSIDE_PERIOD). An existing start/end lifecycle event date is synced (no event is created). Overlap with another period: 409 PERIOD_OVERLAP; Work Email range conflict: 409 WORK_EMAIL_IN_USE. Audit: employment.correct on the period and assignment.correct on every moved assignment, same request ID and reason.\n\nRequired permission: `employment.correct`.",
+        "description": "Historical correction (HR_ADMIN, employment.correct) of wrongly entered data on the same period; reason, expected_revision and Idempotency-Key required. An existing inactive Employee Type is allowed. end_date changes from one date to another; a date on an open period returns 422 USE_END_EMPLOYMENT. end_date null clears the end date only when the period has no Active End Event (legacy/imported periods, planned end dates entered in error); with an Active End Event it returns 422 USE_REVERSE_END_EMPLOYMENT. The first assignment moves with the start date only when it started on the old start date; the last assignment moves with the end date only when it ended with the old end date; otherwise assignments are never moved and the correction is blocked if they would fall outside the period (422 ASSIGNMENT_OUTSIDE_PERIOD). An existing start/end lifecycle event date is synced (no event is created). Overlap with another period: 409 PERIOD_OVERLAP; Work Email range conflict: 409 WORK_EMAIL_IN_USE. Audit: employment.correct on the period and assignment.correct on every moved assignment, same request ID and reason.\n\nRequired permission: `employment.correct`.",
         "tags": [
           "Employments"
         ],
@@ -4263,7 +4263,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
           },
           "end_date": {
-            "description": "Corrected last day (inclusive) of a period that already has an end date. null is rejected with USE_REVERSE_END_EMPLOYMENT; a date on an open period is rejected with USE_END_EMPLOYMENT.",
+            "description": "Corrected last day (inclusive) of a period that already has an end date; a date on an open period is rejected with USE_END_EMPLOYMENT. null clears the end date only when the period has no Active End Event (C-58); otherwise USE_REVERSE_END_EMPLOYMENT.",
             "anyOf": [
               {
                 "type": "string",

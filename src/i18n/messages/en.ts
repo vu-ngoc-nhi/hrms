@@ -166,7 +166,10 @@ export const en = {
     title: "Correct Employment Period",
     help: "Historical correction of wrongly entered data on this same period. It never creates or ends a period: a genuine change of working relationship is a new period.",
     openEndNote: "This period has no end date. Ending it is End Employment, not a correction.",
-    endDateNote: "An end date can only be corrected to another date. Undoing an End Employment entered by mistake is a separate action (Reverse End Employment).",
+    endDateNote:
+      "This end date was set by End Employment: it can be corrected to another date here, but undoing the End Employment itself is a separate action (Reverse End Employment).",
+    clearEnd: "Clear the end date (no End Employment event exists for this period)",
+    clearEndNote: "No End Employment event exists for this period, so a wrongly recorded end date can be corrected or cleared here. No lifecycle event is created.",
     assignmentNote:
       "An assignment that started on the old start date, or ended with the old end date, moves with it. Other assignments are never moved: if they would fall outside the period, correct them first.",
     save: "Save Correction",

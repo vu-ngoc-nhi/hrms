@@ -418,6 +418,22 @@ describe("Active End Event and lifecycle metadata rules", () => {
     }
   });
 
+  it("C-58: clearing the end date of a period with an Active End Event requires Reverse End Employment", async () => {
+    const p = await hired("2024-02-05");
+    expect((await end(p.employmentId, { expected_revision: await revision(p.personId), end_date: addDays(today, 30), end_reason_code: "MUTUAL_AGREEMENT" })).status).toBe(201);
+    const r = await call(periodCorrectionRoute, {
+      path: "/x",
+      method: "POST",
+      user: "admin",
+      params: { id: p.employmentId },
+      body: { expected_revision: await revision(p.personId), reason: "Never left", end_date: null },
+      headers: { "idempotency-key": key("clr") },
+    });
+    expect(r.status).toBe(422);
+    expect(r.body.details[0].code).toBe("USE_REVERSE_END_EMPLOYMENT");
+    expect(fromDbDate((await db().employment.findUniqueOrThrow({ where: { id: p.employmentId } })).endDate)).toBe(addDays(today, 30));
+  });
+
   it("an end-date correction syncs the Active End Event date only; its metadata stays as recorded", async () => {
     const p = await hired("2024-02-05");
     const planned = addDays(today, 30);

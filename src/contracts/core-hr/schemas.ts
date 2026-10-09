@@ -402,7 +402,7 @@ export const PeriodCorrectionCreateSchema = reg(
         .nullable()
         .optional()
         .describe(
-          "Corrected last day (inclusive) of a period that already has an end date. null is rejected with USE_REVERSE_END_EMPLOYMENT; a date on an open period is rejected with USE_END_EMPLOYMENT.",
+          "Corrected last day (inclusive) of a period that already has an end date; a date on an open period is rejected with USE_END_EMPLOYMENT. null clears the end date only when the period has no Active End Event (C-58); otherwise USE_REVERSE_END_EMPLOYMENT.",
         ),
     })
     .refine((v) => v.employee_type_id !== undefined || v.start_date !== undefined || v.end_date !== undefined, {

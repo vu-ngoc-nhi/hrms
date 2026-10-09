@@ -211,6 +211,7 @@ export default function EmployeeDetailPage() {
               key={`${e.id}-${d.revision}-period`}
               employmentId={e.id}
               current={{ start_date: e.start_date, end_date: e.end_date, employee_type: e.employee_type }}
+              hasActiveEndEvent={e.has_active_end_event}
               revision={d.revision}
               onSaved={(updated) => {
                 setD(updated);

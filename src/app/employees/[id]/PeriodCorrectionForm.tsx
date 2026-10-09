@@ -10,11 +10,14 @@ import type { Option } from "./useAssignmentOptions";
 export function PeriodCorrectionForm<T>({
   employmentId,
   current,
+  hasActiveEndEvent,
   revision,
   onSaved,
 }: {
   employmentId: string;
   current: { start_date: string; end_date: string | null; employee_type: { id: string; name: string } | null };
+  /** With an Active End Event the end date can only be cleared through Reverse End Employment (C-58). */
+  hasActiveEndEvent: boolean;
   revision: number;
   onSaved: (updated: T) => void;
 }) {
@@ -24,6 +27,7 @@ export function PeriodCorrectionForm<T>({
     employee_type_id: current.employee_type?.id ?? "",
     start_date: current.start_date,
     end_date: current.end_date ?? "",
+    clear_end: false,
     reason: "",
   });
   const [busy, setBusy] = useState(false);
@@ -59,9 +63,11 @@ export function PeriodCorrectionForm<T>({
       ? { name: t("detail.employeeType"), before: current.employee_type?.name ?? "—", after: types.find((o) => o.id === form.employee_type_id)?.label ?? "…" }
       : null,
     form.start_date !== current.start_date ? { name: t("detail.startDate"), before: formatDate(current.start_date), after: formatDate(form.start_date) } : null,
-    current.end_date && form.end_date !== current.end_date
-      ? { name: t("detail.endDate"), before: formatDate(current.end_date), after: formatDate(form.end_date) }
-      : null,
+    current.end_date && form.clear_end
+      ? { name: t("detail.endDate"), before: formatDate(current.end_date), after: t("detail.notDetermined") }
+      : current.end_date && form.end_date !== current.end_date
+        ? { name: t("detail.endDate"), before: formatDate(current.end_date), after: formatDate(form.end_date) }
+        : null,
   ].filter((c) => c !== null);
 
   async function save(e: React.FormEvent) {
@@ -69,7 +75,8 @@ export function PeriodCorrectionForm<T>({
     const body: Record<string, unknown> = { expected_revision: revision, reason: form.reason.trim() };
     if (form.employee_type_id !== (current.employee_type?.id ?? "")) body.employee_type_id = form.employee_type_id;
     if (form.start_date !== current.start_date) body.start_date = form.start_date;
-    if (current.end_date && form.end_date !== current.end_date) body.end_date = form.end_date;
+    if (current.end_date && form.clear_end) body.end_date = null;
+    else if (current.end_date && form.end_date !== current.end_date) body.end_date = form.end_date;
     const payload = JSON.stringify(body);
     if (!attempt.current || attempt.current.payload !== payload) attempt.current = { key: crypto.randomUUID(), payload };
     setBusy(true);
@@ -113,15 +120,23 @@ export function PeriodCorrectionForm<T>({
           <input type="date" required value={form.start_date} onChange={set("start_date")} />
         </label>
         {current.end_date ? (
-          <label>
-            {t("detail.endDate")}
-            <input type="date" required min={form.start_date} value={form.end_date} onChange={set("end_date")} />
-          </label>
+          <div>
+            <label>
+              {t("detail.endDate")}
+              <input type="date" required={!form.clear_end} disabled={form.clear_end} min={form.start_date} value={form.end_date} onChange={set("end_date")} />
+            </label>
+            {!hasActiveEndEvent && (
+              <label className="small" style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
+                <input type="checkbox" checked={form.clear_end} onChange={(e) => setForm((f) => ({ ...f, clear_end: e.target.checked }))} />
+                {t("periodCorrection.clearEnd")}
+              </label>
+            )}
+          </div>
         ) : (
           <p className="muted small">{t("periodCorrection.openEndNote")}</p>
         )}
       </div>
-      <p className="muted small">{t("periodCorrection.endDateNote")}</p>
+      <p className="muted small">{hasActiveEndEvent ? t("periodCorrection.endDateNote") : t("periodCorrection.clearEndNote")}</p>
       <h2>{t("profileEdit.reviewTitle")}</h2>
       {changes.length === 0 ? (
         <p className="muted small">{t("profileEdit.noChanges")}</p>
