@@ -556,21 +556,32 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
   }
   if (q.employment_status === "no_employment") and.push({ employments: { none: anyOperational } });
   if (q.department_id) {
-    // Department of the assignment effective today, or the first assignment of someone who has not started yet.
+    // Department of the assignment effective today, or — only for someone who has NOT started yet (no current
+    // period) — the first assignment of a future planned period. A person with a current period is never matched
+    // through a later planned period (e.g. a planned Rehire or Relationship Change), so filter and display agree.
     and.push({
-      employments: {
-        some: operationalEmploymentWhere({
-          assignments: {
-            some: {
-              departmentId: q.department_id,
-              OR: [
-                { effectiveFrom: { lte: t }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: t } }] },
-                { effectiveFrom: { gt: t }, employment: { startDate: { gt: t } } },
-              ],
-            },
+      OR: [
+        {
+          employments: {
+            some: operationalEmploymentWhere({
+              assignments: { some: { departmentId: q.department_id, effectiveFrom: { lte: t }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: t } }] } },
+            }),
           },
-        }),
-      },
+        },
+        {
+          AND: [
+            { employments: { none: activeCond } },
+            {
+              employments: {
+                some: operationalEmploymentWhere({
+                  startDate: { gt: t },
+                  assignments: { some: { departmentId: q.department_id, effectiveFrom: { gt: t } } },
+                }),
+              },
+            },
+          ],
+        },
+      ],
     });
   }
   const where = and.length ? { AND: and } : {};
