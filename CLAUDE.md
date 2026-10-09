@@ -14,13 +14,58 @@
 - An old migration may be edited only if it is clearly uncommitted/local-only and has never been part of shared history.
 - Never rewrite committed migration history silently.
 
+## Auto Development vs Business Decision Gate
+Auto mode may be used for normal local engineering work, but never to make unresolved HR/Product business decisions.
+
+### Work that may proceed automatically
+- Bug fixes that preserve approved business behavior; refactoring that does not change business semantics.
+- TypeScript/type fixes; linting, formatting and code cleanup.
+- Unit, integration and contract tests; running tests against `hrms_test` under the fail-closed guard; typecheck, lint and builds.
+- Regenerating OpenAPI from already-approved API changes.
+- Documentation updates that reflect decisions already Confirmed or approved as MVP decisions.
+- English-first UI/i18n implementation.
+- Synthetic/demo seed updates that only represent approved rules.
+- Technical logging and error handling that do not expose sensitive data.
+- Performance/index improvements that do not change business behavior.
+- Security hardening that does not change business permissions.
+- Non-destructive forward migrations required to implement an already-approved rule, and applying them to the guarded local `hrms_dev` when no data is removed or semantically transformed.
+
+### Mandatory Business Decision Gate
+STOP and ask the user before implementing anything that introduces, changes, removes or interprets an unresolved business rule, including (not limited to):
+- Employee Type values or meaning; mapping legacy CLASSIFY values;
+- Employment Status values or lifecycle transitions; Employment Period creation/termination rules; rehire rules;
+- Working Arrangement / Full-time / Part-time / FTE; Probation model, dates, status, outcome or extension;
+- profile completeness requirements; required vs optional HR fields;
+- Work Email / Personal Email business requirements; company account eligibility;
+- role or permission changes; approval authority; Entra role/group/business access mapping;
+- historical-data correction rules; backdating or overlapping effective dates; audit requirements; required correction reasons;
+- retention rules; privacy/legal interpretation; handling of real employee data;
+- Leave, Contract, Payroll, Benefits or other HR policy rules.
+
+When such a question appears:
+1. Stop before implementing the business behavior. Do not silently choose a "reasonable default".
+2. Do not infer a permanent rule from demo data, legacy fields, UI wording or old code.
+3. Explain the decision needed, why it matters, the main options, the recommended option, and the impact on data model/API/UI/history.
+4. Mark the item `Pending Validation` in `docs/decision-register.md`.
+5. Wait for explicit user approval before implementing it. Technical work that does not depend on the decision may continue.
+
+If it is uncertain whether a change is technical implementation or a business decision, treat it as a business decision and ask first.
+
+### Safety operations (always require explicit approval, regardless of Auto mode)
+Destructive reset of `hrms_dev`; destructive database operations outside `hrms_test`; staging or production migrations; staging or production data changes; deployment; real employee data use; irreversible Git operations; force push.
+
 ## Data and legal
 - Use synthetic data only. Never use real employee data in development, tests, fixtures, logs or AI tools; real data is a pre-production gate.
 - Do not invent legal conclusions or retention periods. Mark unresolved items `Pending Legal Review`.
 
 ## Decisions
-- Track decisions in `docs/decision-register.md` as Confirmed Decision / MVP Decision / Pending Validation / Pending Legal Review.
-- Do not turn a Pending item into a permanent rule. Raise material conflicts before implementing instead of assuming.
+- Track decisions in `docs/decision-register.md` with these statuses, used consistently:
+  - `Confirmed Decision` — approved business/product rule.
+  - `MVP Decision` — approved for the current version; may change later.
+  - `Pending Validation` — user/stakeholder decision required before implementation.
+  - `Pending IT Configuration` — requires IT/identity configuration.
+  - `Pending Legal Review` — must not be resolved by engineering assumptions.
+- Never silently promote a Pending item into a Confirmed or MVP decision. Raise material conflicts before implementing instead of assuming.
 
 ## Language and naming
 - English-first: UI text, messages, docs, acceptance criteria, tests and code use English. UI strings go through `src/i18n` (no hardcoded user-facing strings in components).

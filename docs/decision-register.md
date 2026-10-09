@@ -7,6 +7,7 @@ Last updated: 2026-10-08 (revision 2: PV-01, PV-03, PV-11 decisions; hrms_dev re
 | **Confirmed Decision** | Approved business, product or engineering rule. |
 | **MVP Decision** | Accepted for the current version; may change. |
 | **Pending Validation** | Needs stakeholder confirmation. The code must not hard-wire it as a permanent rule. |
+| **Pending IT Configuration** | Requires IT/identity configuration (e.g. Entra registrations). |
 | **Pending Legal Review** | Must be resolved before real employee data or production use. |
 
 > Note: "Confirmed" below means the Product Owner explicitly stated the rule on 2026-10-08. Formal sign-off by the other stakeholder groups (HR, IT/Entra, Security/Privacy, Legal, QA/DevOps) has not been recorded yet.
