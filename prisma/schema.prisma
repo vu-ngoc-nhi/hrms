@@ -184,17 +184,30 @@ model JobAssignment {
 }
 
 model AuditEvent {
-  id            BigInt   @id @default(autoincrement())
-  occurredAt    DateTime @default(now()) @map("occurred_at") @db.Timestamptz
-  actorUserId   String?  @map("actor_user_id") @db.Uuid
+  id            BigInt             @id @default(autoincrement())
+  occurredAt    DateTime           @default(now()) @map("occurred_at") @db.Timestamptz
+  actorUserId   String?            @map("actor_user_id") @db.Uuid
   action        String
   outcome       String
-  entityType    String   @map("entity_type")
-  entityId      String?  @map("entity_id") @db.Uuid
-  requestId     String   @map("request_id")
-  changedFields String[] @default([]) @map("changed_fields")
+  entityType    String             @map("entity_type")
+  entityId      String?            @map("entity_id") @db.Uuid
+  requestId     String             @map("request_id")
+  changedFields String[]           @default([]) @map("changed_fields")
+  reason        String?
+  fieldChanges  AuditFieldChange[]
 
   @@map("audit_event")
+}
+
+model AuditFieldChange {
+  id           BigInt     @id @default(autoincrement())
+  auditEventId BigInt     @map("audit_event_id")
+  field        String
+  oldValue     String?    @map("old_value")
+  newValue     String?    @map("new_value")
+  auditEvent   AuditEvent @relation(fields: [auditEventId], references: [id])
+
+  @@map("audit_field_change")
 }
 
 model IdempotencyRecord {
