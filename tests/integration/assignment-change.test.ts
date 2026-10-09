@@ -5,7 +5,7 @@ import { POST as createRoute } from "@/app/api/v1/core-hr/employees/route";
 import { EmployeeDetailSchema } from "@/contracts/core-hr/schemas";
 import { addDays, fromDbDate, toDbDate, todayInVietnam } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { call, catalogIds, key, type TestUser } from "../helpers";
+import { call, catalogIds, key, userId, type TestUser } from "../helpers";
 
 // S4.5: normal Assignment Change = new effective-dated assignment row; history is never rewritten.
 let ids: Awaited<ReturnType<typeof catalogIds>>;
@@ -186,6 +186,87 @@ describe("Assignment Change", () => {
     const tl = await timeline(p.employmentId);
     for (let i = 1; i < tl.length; i++) expect(tl[i - 1].to).toBe(tl[i].from);
     expect(tl.at(-1)!.to).toBeNull();
+  });
+
+  // Idempotency semantics (verified before S4.6). Case 1: same key + same payload → executed once, every caller succeeds.
+  it("idempotency case 1 — same key + same payload sent concurrently: executed once, both succeed with the same result", async () => {
+    const p = await person();
+    const k = key("same");
+    const body = { expected_revision: p.revision, effective_date: today, reason: "Move", department_id: ids.d.QA };
+    const results = await Promise.all([change(p.employmentId, body, "editor", k), change(p.employmentId, body, "editor", k)]);
+    expect(results.map((r) => r.status)).toEqual([201, 201]);
+    expect(results.filter((r) => r.headers.get("idempotent-replayed") === "true")).toHaveLength(1);
+    expect(results.map((r) => r.body.revision)).toEqual([p.revision + 1, p.revision + 1]);
+    expect(await timeline(p.employmentId)).toHaveLength(2);
+    expect(await db().auditEvent.count({ where: { entityId: p.employmentId, action: "assignment.change" } })).toBe(1);
+  });
+
+  it("idempotency case 1 (deterministic) — both requests block on the in-transaction claim; the loser replays instead of failing on the revision", async () => {
+    const p = await person();
+    const k = key("held");
+    const body = { expected_revision: p.revision, effective_date: today, reason: "Move", department_id: ids.d.QA };
+    // A third transaction holds the same key uncommitted, so both requests pass the pre-check and block on the claim INSERT.
+    await app.query("BEGIN");
+    let released = false;
+    const release = async () => {
+      if (!released) await app.query("ROLLBACK");
+      released = true;
+    };
+    try {
+      await app.query(
+        `INSERT INTO idempotency_record (actor_user_id, operation, idempotency_key, request_hmac, resource_id, expires_at)
+         VALUES ($1, 'createAssignmentChange', $2, 'held', gen_random_uuid(), now() + interval '1 hour')`,
+        [await userId("editor"), k],
+      );
+      const pending = Promise.all([change(p.employmentId, body, "editor", k), change(p.employmentId, body, "editor", k)]);
+      // Poll from a separate connection: pg_stat_activity is snapshotted per transaction.
+      const watcher = new pg.Client({ connectionString: process.env.DATABASE_URL });
+      await watcher.connect();
+      let waiting = 0;
+      for (let i = 0; i < 60 && waiting < 2; i += 1) {
+        const { rows } = await watcher.query(
+          "SELECT count(*)::int AS n FROM pg_stat_activity WHERE state = 'active' AND wait_event_type = 'Lock' AND query ILIKE '%INSERT INTO idempotency_record%'",
+        );
+        waiting = rows[0].n;
+        if (waiting < 2) await new Promise((r) => setTimeout(r, 50));
+      }
+      await watcher.end();
+      expect(waiting).toBe(2);
+      await release();
+      const results = await pending;
+      expect(results.map((r) => r.status)).toEqual([201, 201]);
+      expect(results.filter((r) => r.headers.get("idempotent-replayed") === "true")).toHaveLength(1);
+      expect(results.map((r) => r.body.revision)).toEqual([p.revision + 1, p.revision + 1]);
+      expect(await timeline(p.employmentId)).toHaveLength(2);
+      expect(await db().auditEvent.count({ where: { entityId: p.employmentId, action: "assignment.change" } })).toBe(1);
+    } finally {
+      await release();
+    }
+  });
+
+  it("idempotency case 2 — same key + different payload sent concurrently: only one action runs, the other is IDEMPOTENCY_KEY_REUSED", async () => {
+    const p = await person();
+    const k = key("mismatch");
+    const results = await Promise.all([
+      change(p.employmentId, { expected_revision: p.revision, effective_date: today, reason: "A", department_id: ids.d.QA }, "editor", k),
+      change(p.employmentId, { expected_revision: p.revision, effective_date: today, reason: "B", department_id: ids.d.HRA }, "editor", k),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(results.find((r) => r.status === 409)!.body.error).toBe("IDEMPOTENCY_KEY_REUSED");
+    expect(await timeline(p.employmentId)).toHaveLength(2);
+    expect(await db().auditEvent.count({ where: { entityId: p.employmentId, action: "assignment.change" } })).toBe(1);
+  });
+
+  it("idempotency case 3 — different keys + same expected_revision: optimistic concurrency, one REVISION_CONFLICT", async () => {
+    const p = await person();
+    const results = await Promise.all([
+      change(p.employmentId, { expected_revision: p.revision, effective_date: today, reason: "A", department_id: ids.d.QA }, "editor", key("k1")),
+      change(p.employmentId, { expected_revision: p.revision, effective_date: today, reason: "B", department_id: ids.d.HRA }, "editor", key("k2")),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(results.find((r) => r.status === 409)!.body.error).toBe("REVISION_CONFLICT");
+    expect(await timeline(p.employmentId)).toHaveLength(2);
+    expect(await db().auditEvent.count({ where: { entityId: p.employmentId, action: "assignment.change" } })).toBe(1);
   });
 
   it("rejects a stale revision, and concurrent changes leave exactly one consistent result (rollback)", async () => {
