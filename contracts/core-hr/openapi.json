@@ -1024,6 +1024,246 @@
         }
       }
     },
+    "/api/v1/core-hr/employees/{id}/initial-employment": {
+      "post": {
+        "operationId": "createInitialEmployment",
+        "summary": "Add Initial Employment Period",
+        "description": "For a person with zero non-cancelled employment periods (profile-only, imported without employment data, or only cancelled planned periods); otherwise 422 EMPLOYMENT_ALREADY_EXISTS. HR_EDITOR and HR_ADMIN; Initial Data Capture allows a past start date, which then requires a reason. Creates the period (Employee Type, dates, optional planned end date, optional Work Email) and a start event; no assignment and no End event. expected_revision and Idempotency-Key required. Audit: employment.initial or employment.initial_data_capture.\n\nRequired permission: `employment.manage`.",
+        "tags": [
+          "Employments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitialEmploymentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Employee profile after the action (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core-hr/employees/{id}/rehire": {
+      "post": {
+        "operationId": "createRehire",
+        "summary": "Rehire (new employment period after the latest one)",
+        "description": "Creates a NEW period for the same person and Employee Code after the latest non-cancelled period, which must have an end date (an end event is not required; 422 LATEST_PERIOD_HAS_NO_END / NO_PREVIOUS_EMPLOYMENT otherwise). start_date must be after that end date (422 REHIRE_START_NOT_AFTER_PREVIOUS_END); a planned Rehire before the previous end date is reached is allowed. HR_EDITOR today or later; a past start date requires employment.correct (HR_ADMIN). Reason, expected_revision and Idempotency-Key required. Nothing is copied from the previous period; no assignment and no End event are created; a start event is. Audit: employment.rehire. A Rehire after an End Employment keeps that End irreversible while the new period exists.\n\nRequired permission: `employment.manage`.",
+        "tags": [
+          "Employments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RehireCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Employee profile after the action (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/core-hr/employments/{id}/reverse-end": {
       "post": {
         "operationId": "createReverseEnd",
@@ -4634,6 +4874,101 @@
         },
         "required": [
           "expected_revision",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "InitialEmploymentCreate": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Revision of the person profile; stale values return 409 REVISION_CONFLICT."
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "description": "First day of the new employment period."
+          },
+          "end_date": {
+            "description": "Optional initially known/planned last day (inclusive, ≥ start_date). It does not create an End Employment event.",
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "employee_type_id": {
+            "description": "Employee Type of the new period (active). Never copied from earlier periods.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "work_email": {
+            "description": "Optional company-issued email. Never generated or copied from an earlier period; an earlier address may be reused explicitly if no other period holds it for overlapping dates.",
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "reason": {
+            "description": "Required when start_date is in the past (Initial Data Capture on an existing person); not required otherwise (C-60).",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "expected_revision",
+          "start_date"
+        ],
+        "additionalProperties": false
+      },
+      "RehireCreate": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Revision of the person profile; stale values return 409 REVISION_CONFLICT."
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "description": "First day of the new employment period."
+          },
+          "end_date": {
+            "description": "Optional initially known/planned last day (inclusive, ≥ start_date). It does not create an End Employment event.",
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "employee_type_id": {
+            "description": "Employee Type of the new period (active). Never copied from earlier periods.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "work_email": {
+            "description": "Optional company-issued email. Never generated or copied from an earlier period; an earlier address may be reused explicitly if no other period holds it for overlapping dates.",
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Mandatory Rehire reason (C-23)."
+          }
+        },
+        "required": [
+          "expected_revision",
+          "start_date",
           "reason"
         ],
         "additionalProperties": false

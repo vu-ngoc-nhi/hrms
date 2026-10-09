@@ -152,6 +152,34 @@ export const en = {
     blocked: "An assignment starts after this end date ({list}). Correct it first; it is never changed automatically.",
     save: "Save End Employment",
   },
+  newPeriod: {
+    plannedEnd: "Planned End Date (optional)",
+    notCopied:
+      "Nothing is copied from earlier periods: add the assignment with Add Initial Assignment afterwards. A planned end date does not record End Employment.",
+  },
+  initialEmployment: {
+    open: "Add Initial Employment Period",
+    title: "Add Initial Employment Period",
+    help: "Records the first real employment period of this person. Use it when the profile has no employment period yet.",
+    cancelledNote: "Cancelled planned periods stay in the history, but they never make this a Rehire.",
+    backdatedNote: "This start date is in the past: it is recorded as Initial Data Capture and needs a reason.",
+    save: "Save Employment Period",
+  },
+  rehire: {
+    open: "Rehire",
+    title: "Rehire",
+    help: "Creates a new employment period after the latest one ends, for the same person and Employee Code. Use it for a genuine return after leaving.",
+    previousPeriod: "Previous Period",
+    previousEnd: "Previous End Date",
+    endRecorded: "End Employment recorded",
+    endWithoutEvent: "End date recorded without an End Employment event",
+    plannedNote: "The previous period has not ended yet (it ends on {date}): this is a planned future Rehire.",
+    reverseEndWarning:
+      "Creating this Rehire creates a later Employment Period. The previous End Employment cannot be reversed while this later period remains valid.",
+    relationshipChangeReminder:
+      "If this is a continuous relationship transition rather than a genuine return, use Relationship Change.",
+    save: "Save Rehire",
+  },
   reverseEnd: {
     open: "Reverse End Employment",
     title: "Reverse End Employment",

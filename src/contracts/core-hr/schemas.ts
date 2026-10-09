@@ -471,6 +471,43 @@ export const ReverseEndCreateSchema = reg(
   "Reverse End Employment (C-54): exact reversal of the Active End Event or no reversal.",
 );
 
+const newPeriodFields = {
+  expected_revision: z.int().min(1).describe("Revision of the person profile; stale values return 409 REVISION_CONFLICT."),
+  start_date: isoDate().describe("First day of the new employment period."),
+  end_date: isoDate()
+    .optional()
+    .describe("Optional initially known/planned last day (inclusive, ≥ start_date). It does not create an End Employment event."),
+  employee_type_id: z.uuid().optional().describe("Employee Type of the new period (active). Never copied from earlier periods."),
+  work_email: z
+    .email()
+    .max(254)
+    .optional()
+    .describe("Optional company-issued email. Never generated or copied from an earlier period; an earlier address may be reused explicitly if no other period holds it for overlapping dates."),
+};
+
+export const InitialEmploymentCreateSchema = reg(
+  "InitialEmploymentCreate",
+  z.strictObject({
+    ...newPeriodFields,
+    reason: z
+      .string()
+      .min(1)
+      .max(1000)
+      .optional()
+      .describe("Required when start_date is in the past (Initial Data Capture on an existing person); not required otherwise (C-60)."),
+  }),
+  "Add Initial Employment Period (C-60): for a person with no non-cancelled employment period. No assignment is created (use Add Initial Assignment).",
+);
+
+export const RehireCreateSchema = reg(
+  "RehireCreate",
+  z.strictObject({
+    ...newPeriodFields,
+    reason: z.string().min(1).max(1000).describe("Mandatory Rehire reason (C-23)."),
+  }),
+  "Rehire (C-61): a NEW period after the latest non-cancelled period, which must have an end date. Nothing is copied from the previous relationship.",
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -511,6 +548,8 @@ export type InitialAssignmentInput = z.infer<typeof InitialAssignmentCreateSchem
 export type PeriodCorrectionInput = z.infer<typeof PeriodCorrectionCreateSchema>;
 export type EndEmploymentInput = z.infer<typeof EndEmploymentCreateSchema>;
 export type ReverseEndInput = z.infer<typeof ReverseEndCreateSchema>;
+export type InitialEmploymentInput = z.infer<typeof InitialEmploymentCreateSchema>;
+export type RehireInput = z.infer<typeof RehireCreateSchema>;
 export type AssignmentCorrectionInput = z.infer<typeof AssignmentCorrectionCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;

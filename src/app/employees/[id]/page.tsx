@@ -12,6 +12,7 @@ import { AssignmentChangeForm } from "./AssignmentChangeForm";
 import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
 import { EndEmploymentForm } from "./EndEmploymentForm";
 import { InitialAssignmentForm } from "./InitialAssignmentForm";
+import { NewPeriodForm } from "./NewPeriodForm";
 import { PeriodCorrectionForm } from "./PeriodCorrectionForm";
 import { ReverseEndForm } from "./ReverseEndForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
@@ -75,6 +76,9 @@ export default function EmployeeDetailPage() {
   if (error) return <ErrorBox error={error} />;
   if (!d) return <p className="muted">{t("app.loading")}</p>;
   const op = d.completeness.operational;
+  // S4.8: non-cancelled periods decide between Add Initial Employment Period and Rehire (latest by chronology).
+  const realPeriods = d.employments.filter((e) => !e.cancelled_at);
+  const latest = realPeriods.reduce<(typeof realPeriods)[number] | null>((a, e) => (a === null || e.start_date >= a.start_date ? e : a), null);
   // Historical corrections: HR_ADMIN only (employment.correct), never on cancelled periods.
   const canCorrect = (e: Detail["employments"][number]) => !e.cancelled_at && Boolean(session?.can("employment.correct"));
 
@@ -161,6 +165,38 @@ export default function EmployeeDetailPage() {
       <h2>{t("detail.employmentTitle")}</h2>
       <p className="muted small">{t("detail.historyNote")}</p>
       {d.employments.length === 0 && <p className="muted">{t("detail.noEmployment")}</p>}
+      {session?.can("employment.manage") &&
+        (realPeriods.length === 0 ? (
+          <NewPeriodForm<Detail>
+            key={`${d.revision}-initial-employment`}
+            mode="initial"
+            personId={d.id}
+            hasCancelledPeriods={d.employments.length > 0}
+            today={d.status_as_of}
+            canBackdate
+            revision={d.revision}
+            onSaved={(updated) => {
+              setD(updated);
+              setNotice(t("profileEdit.saved"));
+            }}
+          />
+        ) : (
+          latest?.end_date && (
+            <NewPeriodForm<Detail>
+              key={`${d.revision}-rehire`}
+              mode="rehire"
+              personId={d.id}
+              previous={{ ...latest, end_date: latest.end_date }}
+              today={d.status_as_of}
+              canBackdate={Boolean(session.can("employment.correct"))}
+              revision={d.revision}
+              onSaved={(updated) => {
+                setD(updated);
+                setNotice(t("profileEdit.saved"));
+              }}
+            />
+          )
+        ))}
       {d.employments.map((e, index) => (
         <section key={e.id} className="card" style={{ marginBottom: 12, opacity: e.cancelled_at ? 0.7 : 1 }}>
           <div className="spread" style={{ marginBottom: 8 }}>
