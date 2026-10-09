@@ -1,5 +1,9 @@
 // SYNTHETIC data for development and tests only. No real personnel data; emails use the example.test domain.
-// Controlled values (catalogs) are English demo values pending HR validation, not the company's real catalogs.
+// Catalog values:
+//   - Employee Types (Employee, Service Contractor, Intern) are the CONFIRMED MVP set (decision register C-13, C-19);
+//     their company-account defaults follow C-10, C-18 and C-20.
+//   - Departments, Job Titles and Job Levels are English demo/reference data still pending HR validation (PV-06),
+//     not the company's real catalogs.
 import type { PrismaClient } from "../src/generated/prisma/client";
 import { TEST_TENANT_ID } from "../src/modules/identity/token-verifiers";
 
@@ -39,7 +43,7 @@ export const CATALOGS = {
     { code: "L3", name: "Senior", sortOrder: 30 },
     { code: "L4", name: "Lead", sortOrder: 40 },
   ],
-  // Nature of the working relationship (PV-01). Not working arrangements (full-time/part-time) or stages (probation).
+  // Confirmed MVP Employee Types (C-13): nature of the working relationship, not working arrangement or probation.
   employeeTypes: [
     { code: "EMPLOYEE", name: "Employee", requiresWorkEmail: true },
     { code: "SERVICE_CONTRACTOR", name: "Service Contractor", requiresWorkEmail: false },
