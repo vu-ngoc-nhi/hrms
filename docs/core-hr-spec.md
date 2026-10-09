@@ -272,6 +272,8 @@ Synthetic data only: names like `Test Employee A`, `@example.test` emails, gener
   - Columns outside the caller's permissions are never exported, including in error files.
 
 ## 9. Planned endpoints (not in the trial OpenAPI)
+
+S4 scope, rules, permissions and the Cancel Planned Period model analysis: `docs/design/s4-employee-employment-management.md` (decisions C-21 to C-29).
 - S4:
   - `PATCH /api/v1/core-hr/employees/{id}`;
   - `GET`/`POST …/employees/{id}/employments`;
