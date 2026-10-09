@@ -19,6 +19,7 @@
     "db:seed": "tsx scripts/seed.ts",
     "db:reset-test": "APP_ENV=test tsx scripts/reset-test-db.ts",
     "openapi:write": "tsx scripts/write-openapi.ts",
+    "integrity:scan": "tsx scripts/integrity-scan.ts",
     "test": "APP_ENV=test vitest run",
     "test:watch": "APP_ENV=test vitest"
   },

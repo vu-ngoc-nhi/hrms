@@ -1,0 +1,87 @@
+import { readdirSync, statSync } from "node:fs";
+import path from "node:path";
+import pg from "pg";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+// H7: database guarantees on hrms_test, which globalSetup rebuilt from zero with every committed migration
+// (`prisma migrate deploy` under the fail-closed reset guard). Checked as the application role.
+let app: pg.Client;
+const q = async (sql: string, params: unknown[] = []) => (await app.query(sql, params)).rows;
+
+beforeAll(async () => {
+  app = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await app.connect();
+});
+afterAll(async () => {
+  await app.end();
+});
+
+describe("Database guarantees (H7)", () => {
+  it("every committed migration is applied, finished and not rolled back", async () => {
+    const dir = path.join(process.cwd(), "prisma/migrations");
+    const folders = readdirSync(dir).filter((f) => statSync(path.join(dir, f)).isDirectory()).sort();
+    // Prisma's bookkeeping table is normally not readable by the application role; the quality gate also runs
+    // `prisma migrate status` as the owner. When readable, it must list exactly the committed folders.
+    const visible = await q("SELECT has_table_privilege(current_user, '_prisma_migrations', 'SELECT') AS can").catch(() => [{ can: false }]);
+    if (visible[0].can) {
+      const rows = await q("SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations ORDER BY migration_name");
+      expect(rows.map((r) => r.migration_name)).toEqual(folders);
+      expect(rows.every((r) => r.finished_at !== null && r.rolled_back_at === null)).toBe(true);
+    }
+    // The newest migration's objects exist, which proves the full chain ran.
+    expect(await q("SELECT count(*)::int AS n FROM end_reason")).toEqual([{ n: 7 }]);
+    expect(folders.at(-1)).toBe("20261011000000_end_employment");
+  });
+
+  it("exclusion, CHECK and partial unique constraints exist (cancelled periods excluded where approved)", async () => {
+    const defs = Object.fromEntries(
+      (await q("SELECT conname, pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE connamespace = 'public'::regnamespace")).map((r) => [r.conname, r.def]),
+    );
+    expect(defs.employment_no_overlap_ex).toContain("WHERE ((cancelled_at IS NULL))");
+    expect(defs.employment_work_email_period_ex).toContain("cancelled_at IS NULL");
+    expect(defs.job_assignment_no_overlap_ex).toContain("EXCLUDE USING gist");
+    expect(defs.job_assignment_dates_ck).toContain("effective_to > effective_from");
+    for (const c of [
+      "employment_event_event_type_check",
+      "employment_event_end_metadata_ck",
+      "employment_event_closed_assignment_ck",
+      "employment_event_end_note_ck",
+      "employment_event_other_needs_note_ck",
+      "employment_event_reversal_link_ck",
+      "audit_field_change_differs_ck",
+    ]) {
+      expect(defs[c], c).toBeDefined();
+    }
+    const indexes = (await q("SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public'")).map((r) => r.indexname);
+    for (const i of ["employment_event_one_start_uq", "employment_event_one_cancel_uq", "employment_event_one_reversal_uq"]) expect(indexes).toContain(i);
+  });
+
+  it("integrity and immutability triggers exist", async () => {
+    const triggers = (await q("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal")).map((r) => r.tgname);
+    for (const t of [
+      "job_assignment_within_employment_trg",
+      "employment_contains_assignments_trg",
+      "employment_cancelled_is_terminal_trg",
+      "employment_event_date_correction_scope_trg",
+      "employment_event_lifecycle_rules_trg",
+    ]) {
+      expect(triggers, t).toContain(t);
+    }
+  });
+
+  it("the application role cannot delete HR history, rewrite audit or edit lifecycle events beyond effective_date", async () => {
+    const priv = async (table: string, p: string) => (await q("SELECT has_table_privilege($1, $2) AS ok", [table, p]))[0].ok as boolean;
+    for (const t of ["person", "employment", "job_assignment", "employment_event", "audit_event", "audit_field_change", "employee_code_registry", "end_reason"]) {
+      expect(await priv(t, "DELETE"), `DELETE ${t}`).toBe(false);
+    }
+    for (const t of ["audit_event", "audit_field_change", "employee_code_registry", "end_reason"]) expect(await priv(t, "UPDATE"), `UPDATE ${t}`).toBe(false);
+    expect(await priv("employment_event", "UPDATE")).toBe(false); // no table-level UPDATE …
+    const cols = await q(
+      "SELECT column_name FROM information_schema.column_privileges WHERE table_name = 'employment_event' AND privilege_type = 'UPDATE' AND grantee = current_user",
+    );
+    expect(cols.map((c) => c.column_name)).toEqual(["effective_date"]); // … only the approved column (C-43, C-53)
+    expect(await priv("idempotency_record", "UPDATE")).toBe(false);
+    await expect(app.query("TRUNCATE audit_event")).rejects.toMatchObject({ code: "42501" });
+    await expect(app.query("ALTER TABLE person ADD COLUMN x int")).rejects.toMatchObject({ code: "42501" });
+  });
+});
