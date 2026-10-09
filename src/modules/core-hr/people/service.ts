@@ -90,7 +90,7 @@ type Prepared = {
 
 const CODE_RE = /^[A-Za-z0-9._-]{1,20}$/;
 
-async function checkActive(
+export async function checkActive(
   errors: ErrorDetail[],
   field: string,
   label: string,

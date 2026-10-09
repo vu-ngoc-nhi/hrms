@@ -103,6 +103,17 @@ export const en = {
     noAssignments: "No assignments yet.",
   },
   gender: { male: "Male", female: "Female", other: "Other" },
+  assignmentChange: {
+    open: "Change Assignment",
+    title: "Change Assignment",
+    help: "Records a real organizational change. The current assignment ends on the effective date and a new assignment starts that day. Employee Type is not affected. To fix a wrongly entered assignment, use a historical correction instead.",
+    effectiveDate: "Effective Date",
+    impact: "Timeline Impact",
+    impactClose: "The assignment in effect since {from} ends on {to}.",
+    impactNone: "No assignment is currently in effect.",
+    impactOpen: "A new assignment starts on {from}.",
+    save: "Save Assignment Change",
+  },
   workEmail: {
     edit: "Edit Work Email",
     correct: "Correct Work Email",

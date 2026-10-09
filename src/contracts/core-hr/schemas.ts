@@ -333,6 +333,22 @@ export const WorkEmailUpdateSchema = reg(
   }),
 );
 
+export const AssignmentChangeCreateSchema = reg(
+  "AssignmentChangeCreate",
+  z.strictObject({
+    expected_revision: z.int().min(1).describe("Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."),
+    effective_date: isoDate().describe(
+      "First day of the new assignment. HR_EDITOR: today or later. A past date requires employment.correct (HR_ADMIN).",
+    ),
+    reason: z.string().min(1).max(1000).describe("Mandatory for every Assignment Change (C-23)."),
+    department_id: z.uuid().optional(),
+    job_title_id: z.uuid().optional(),
+    job_level_id: z.uuid().nullable().optional().describe("null clears the level; omit to keep the current one."),
+    manager_person_id: z.uuid().nullable().optional().describe("null clears the manager; omit to keep the current one."),
+  }),
+  "A genuine organizational change: closes the applicable assignment at effective_date and creates a new effective-dated assignment. Omitted fields keep their current values. Never changes Employee Type.",
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -368,5 +384,6 @@ export const EmployeeListQuerySchema = z.strictObject({
 export type EmployeeCreateInput = z.infer<typeof EmployeeCreateSchema>;
 export type EmployeeUpdateInput = z.infer<typeof EmployeeUpdateSchema>;
 export type WorkEmailUpdateInput = z.infer<typeof WorkEmailUpdateSchema>;
+export type AssignmentChangeInput = z.infer<typeof AssignmentChangeCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;

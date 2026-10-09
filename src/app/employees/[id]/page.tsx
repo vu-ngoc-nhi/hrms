@@ -8,6 +8,7 @@ import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t, tMaybe } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import { ProfileEditForm } from "./ProfileEditForm";
+import { AssignmentChangeForm } from "./AssignmentChangeForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
 
 type Ref = { id: string; code: string; name: string } | null;
@@ -15,8 +16,8 @@ type Assignment = {
   id: string;
   effective_from: string;
   effective_to: string | null;
-  department: { name: string };
-  job_title: { name_en: string };
+  department: { id: string; name: string };
+  job_title: { id: string; name_en: string };
   job_level: Ref;
   manager: { person_id: string; employee_code: string; full_name: string } | null;
 };
@@ -194,6 +195,20 @@ export default function EmployeeDetailPage() {
                 }}
               />
             )}
+          {!e.cancelled_at && e.period_lifecycle !== "ended" && session?.can("employment.manage") && (
+            <AssignmentChangeForm<Detail>
+              key={`${e.id}-${d.revision}`}
+              employmentId={e.id}
+              personId={d.id}
+              current={e.assignments.at(-1) ?? null}
+              revision={d.revision}
+              minDate={session.can("employment.correct") ? undefined : d.status_as_of}
+              onSaved={(updated) => {
+                setD(updated);
+                setNotice(t("profileEdit.saved"));
+              }}
+            />
+          )}
           <div className="table-wrap" style={{ marginTop: 12 }}>
             <table>
               <thead>
