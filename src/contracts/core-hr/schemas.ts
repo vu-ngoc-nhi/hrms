@@ -323,13 +323,19 @@ export const WorkEmailUpdateSchema = reg(
   "WorkEmailUpdate",
   z.strictObject({
     expected_revision: z.int().min(1).describe("Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."),
-    work_email: z.email().max(254).describe("Company-issued email of this employment period. Not an identity key."),
+    work_email: z
+      .email()
+      .max(254)
+      .nullable()
+      .describe(
+        "Company-issued email of this employment period. Not an identity key. null clears it: a data correction for an address that was wrong or should never have been recorded (HR_ADMIN, reason required). Account deprovisioning is never represented by clearing it (C-36).",
+      ),
     reason: z
       .string()
       .min(1)
       .max(1000)
       .optional()
-      .describe("Required when the period has ended (historical correction, HR_ADMIN only); optional otherwise."),
+      .describe("Required when clearing the Work Email or when the period has ended (historical correction, HR_ADMIN only); optional otherwise."),
   }),
 );
 
@@ -370,6 +376,56 @@ export const InitialAssignmentCreateSchema = reg(
   "Records the FIRST assignment of a non-cancelled employment period that has no assignment rows (C-41). Catalog values must be active.",
 );
 
+const correctionReason = () =>
+  z.string().min(1).max(1000).describe("Mandatory correction reason (C-23). Stored in audit only; never shown in history.");
+
+export const PeriodCorrectionCreateSchema = reg(
+  "PeriodCorrectionCreate",
+  z
+    .strictObject({
+      expected_revision: z.int().min(1).describe("Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."),
+      reason: correctionReason(),
+      employee_type_id: z.uuid().optional().describe("Corrected Employee Type of this period. An existing inactive type is allowed (C-44)."),
+      start_date: isoDate().optional().describe("Corrected first day of the period."),
+      end_date: isoDate()
+        .nullable()
+        .optional()
+        .describe(
+          "Corrected last day (inclusive) of a period that already has an end date. null is rejected with USE_REVERSE_END_EMPLOYMENT; a date on an open period is rejected with USE_END_EMPLOYMENT.",
+        ),
+    })
+    .refine((v) => v.employee_type_id !== undefined || v.start_date !== undefined || v.end_date !== undefined, {
+      message: "Provide at least one of employee_type_id, start_date or end_date.",
+    }),
+  "Historical correction of a wrongly entered Employee Type, start date or end date on the same period (HR_ADMIN). Never creates or ends a period.",
+);
+
+export const AssignmentCorrectionCreateSchema = reg(
+  "AssignmentCorrectionCreate",
+  z
+    .strictObject({
+      expected_revision: z.int().min(1).describe("Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."),
+      reason: correctionReason(),
+      effective_from: isoDate()
+        .optional()
+        .describe("Corrected first day of this row. For a non-first row, the previous row's effective_to moves to the same date (C-42)."),
+      department_id: z.uuid().optional().describe("An existing inactive value is allowed (C-44)."),
+      job_title_id: z.uuid().optional().describe("An existing inactive value is allowed (C-44)."),
+      job_level_id: z.uuid().nullable().optional().describe("null clears the level. An existing inactive value is allowed (C-44)."),
+      manager_person_id: z.uuid().nullable().optional().describe("null clears the manager."),
+    })
+    .refine(
+      (v) =>
+        v.effective_from !== undefined ||
+        v.department_id !== undefined ||
+        v.job_title_id !== undefined ||
+        v.job_level_id !== undefined ||
+        v.manager_person_id !== undefined,
+      { message: "Provide at least one field to correct." },
+    ),
+  "Historical correction of a wrongly entered assignment row, edited in place (HR_ADMIN). effective_to is never edited directly.",
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -407,5 +463,7 @@ export type EmployeeUpdateInput = z.infer<typeof EmployeeUpdateSchema>;
 export type WorkEmailUpdateInput = z.infer<typeof WorkEmailUpdateSchema>;
 export type AssignmentChangeInput = z.infer<typeof AssignmentChangeCreateSchema>;
 export type InitialAssignmentInput = z.infer<typeof InitialAssignmentCreateSchema>;
+export type PeriodCorrectionInput = z.infer<typeof PeriodCorrectionCreateSchema>;
+export type AssignmentCorrectionInput = z.infer<typeof AssignmentCorrectionCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;

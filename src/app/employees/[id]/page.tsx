@@ -9,7 +9,9 @@ import { formatDate, t, tMaybe } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import { ProfileEditForm } from "./ProfileEditForm";
 import { AssignmentChangeForm } from "./AssignmentChangeForm";
+import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
 import { InitialAssignmentForm } from "./InitialAssignmentForm";
+import { PeriodCorrectionForm } from "./PeriodCorrectionForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
 
 type Ref = { id: string; code: string; name: string } | null;
@@ -52,6 +54,7 @@ export default function EmployeeDetailPage() {
   const [error, setError] = useState<ApiCallError | null>(null);
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [correctingRow, setCorrectingRow] = useState<string | null>(null);
   const session = useSession();
 
   useEffect(() => {
@@ -63,6 +66,8 @@ export default function EmployeeDetailPage() {
   if (error) return <ErrorBox error={error} />;
   if (!d) return <p className="muted">{t("app.loading")}</p>;
   const op = d.completeness.operational;
+  // Historical corrections: HR_ADMIN only (employment.correct), never on cancelled periods.
+  const canCorrect = (e: Detail["employments"][number]) => !e.cancelled_at && Boolean(session?.can("employment.correct"));
 
   return (
     <>
@@ -179,8 +184,9 @@ export default function EmployeeDetailPage() {
             <dd>{e.work_email ?? "—"}</dd>
           </dl>
           {!e.cancelled_at &&
-            (e.period_lifecycle === "ended" ? session?.can("employment.correct") : session?.can("employment.manage")) && (
+            (session?.can("employment.correct") || (e.period_lifecycle !== "ended" && session?.can("employment.manage"))) && (
               <WorkEmailEditor<Detail>
+                key={`${e.id}-${d.revision}-email`}
                 employmentId={e.id}
                 periodLabel={t("detail.periodHeading", {
                   n: index + 1,
@@ -189,6 +195,8 @@ export default function EmployeeDetailPage() {
                 })}
                 current={e.work_email}
                 ended={e.period_lifecycle === "ended"}
+                canEdit={Boolean(e.period_lifecycle === "ended" ? session?.can("employment.correct") : session?.can("employment.manage"))}
+                canClear={Boolean(session?.can("employment.correct"))}
                 revision={d.revision}
                 onSaved={(updated) => {
                   setD(updated);
@@ -196,6 +204,18 @@ export default function EmployeeDetailPage() {
                 }}
               />
             )}
+          {!e.cancelled_at && session?.can("employment.correct") && (
+            <PeriodCorrectionForm<Detail>
+              key={`${e.id}-${d.revision}-period`}
+              employmentId={e.id}
+              current={{ start_date: e.start_date, end_date: e.end_date, employee_type: e.employee_type }}
+              revision={d.revision}
+              onSaved={(updated) => {
+                setD(updated);
+                setNotice(t("profileEdit.saved"));
+              }}
+            />
+          )}
           {!e.cancelled_at && e.assignments.length === 0 && session?.can("employment.manage") && (
             <InitialAssignmentForm<Detail>
               key={`${e.id}-${d.revision}-initial`}
@@ -235,6 +255,7 @@ export default function EmployeeDetailPage() {
                   <th>{t("employees.columns.jobTitle")}</th>
                   <th>{t("detail.jobLevel")}</th>
                   <th>{t("detail.manager")}</th>
+                  {canCorrect(e) && <th>{t("detail.actions")}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -254,11 +275,18 @@ export default function EmployeeDetailPage() {
                         "—"
                       )}
                     </td>
+                    {canCorrect(e) && (
+                      <td>
+                        <button type="button" onClick={() => setCorrectingRow(a.id)} disabled={correctingRow === a.id}>
+                          {t("assignmentCorrection.open")}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {e.assignments.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="muted">
+                    <td colSpan={7} className="muted">
                       {t("detail.noAssignments")}
                     </td>
                   </tr>
@@ -266,6 +294,25 @@ export default function EmployeeDetailPage() {
               </tbody>
             </table>
           </div>
+          {canCorrect(e) &&
+            e.assignments.map(
+              (a, i) =>
+                correctingRow === a.id && (
+                  <AssignmentCorrectionForm<Detail>
+                    key={`${a.id}-${d.revision}`}
+                    row={a}
+                    previous={i > 0 ? e.assignments[i - 1] : null}
+                    personId={d.id}
+                    revision={d.revision}
+                    onSaved={(updated) => {
+                      setD(updated);
+                      setCorrectingRow(null);
+                      setNotice(t("profileEdit.saved"));
+                    }}
+                    onClose={() => setCorrectingRow(null)}
+                  />
+                ),
+            )}
           <p className="small" style={{ marginTop: 12, marginBottom: 4 }}>
             <strong>{t("detail.events")}</strong>
           </p>

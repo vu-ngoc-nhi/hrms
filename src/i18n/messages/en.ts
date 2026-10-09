@@ -101,6 +101,7 @@ export const en = {
     jobLevel: "Level",
     manager: "Line Manager",
     noAssignments: "No assignments yet.",
+    actions: "Actions",
   },
   gender: { male: "Male", female: "Female", other: "Other" },
   assignmentChange: {
@@ -127,6 +128,27 @@ export const en = {
     owner: "Work Email of {period}.",
     endedNote: "This period has ended: this is a historical correction and needs a reason.",
     save: "Save Work Email",
+    clear: "Clear Work Email",
+    clearNote:
+      "Clearing is a data correction for an address that was wrong or should never have been recorded. It does not represent disabling the company account. A reason is required.",
+    clearSave: "Clear Work Email",
+  },
+  periodCorrection: {
+    open: "Correct Period",
+    title: "Correct Employment Period",
+    help: "Historical correction of wrongly entered data on this same period. It never creates or ends a period: a genuine change of working relationship is a new period.",
+    openEndNote: "This period has no end date. Ending it is End Employment, not a correction.",
+    endDateNote: "An end date can only be corrected to another date. Undoing an End Employment entered by mistake is a separate action (Reverse End Employment).",
+    assignmentNote:
+      "An assignment that started on the old start date, or ended with the old end date, moves with it. Other assignments are never moved: if they would fall outside the period, correct them first.",
+    save: "Save Correction",
+  },
+  assignmentCorrection: {
+    open: "Correct",
+    title: "Correct Assignment from {from}",
+    help: "Fixes a wrongly entered assignment in place; no new assignment is created. Inactive catalog values are allowed (marked ✕) because they may have been valid at the time.",
+    previousMoves: "The previous assignment (from {from}) will end on {to}.",
+    save: "Save Correction",
   },
   profileEdit: {
     edit: "Edit Profile",
@@ -203,5 +225,6 @@ export const en = {
     INTERNAL_ERROR: "An internal error occurred.",
     EMPLOYMENT_PERIOD_READ_ONLY: "This employment period was cancelled and is read-only history.",
     REVISION_CONFLICT: "This profile was changed by someone else. Reload to see the latest version before editing again.",
+    PERIOD_OVERLAP: "The corrected dates would overlap another employment period of this person.",
   },
 } as const;

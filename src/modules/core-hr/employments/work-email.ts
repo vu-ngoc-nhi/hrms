@@ -1,6 +1,8 @@
-// S4.4 Work Email management (C-30). Work Email belongs to an Employment Period:
-//  - pre-start or active (not ended) period: normal update, employment.manage, no reason;
-//  - ended period: historical correction, employment.correct (HR_ADMIN) and a mandatory reason;
+// S4.4 / S4.6 Work Email management (C-30, C-36). Work Email belongs to an Employment Period:
+//  - pre-start or active (not ended) period: adding or replacing it is a normal update, employment.manage, no reason;
+//  - clearing a recorded address (any period) is a data correction: employment.correct (HR_ADMIN) and a reason.
+//    Account deprovisioning is never represented by clearing it;
+//  - ended period: any change is a historical correction, employment.correct (HR_ADMIN) and a mandatory reason;
 //  - cancelled period: read-only (shared write guard).
 // Audit records the field name and reason only; email values are never stored (C-24).
 import type { EmployeeDetail, WorkEmailUpdateInput } from "@/contracts/core-hr/schemas";
@@ -21,7 +23,7 @@ export async function updateWorkEmail(
   requestId: string,
 ): Promise<EmployeeDetail> {
   const issues = { errors: [] as ErrorDetail[], warnings: [] as ErrorDetail[] };
-  const email = validateWorkEmail(input.work_email, issues, "work_email");
+  const email = input.work_email === null ? null : validateWorkEmail(input.work_email, issues, "work_email");
   if (issues.errors.length) throw new ApiError(422, "BUSINESS_RULE_VIOLATION", "The request violates a business rule.", issues.errors);
   const reason = input.reason?.trim() || null;
   const today = todayInVietnam();
@@ -31,12 +33,17 @@ export async function updateWorkEmail(
     personId = await db().$transaction(async (tx) => {
       const period = await loadWritableEmployment(tx, employmentId); // 404 / 409 when cancelled
       const ended = period.endDate !== null && fromDbDate(period.endDate) < today;
-      if (ended) {
+      const clearing = email === null && period.workEmail !== null;
+      if (ended || clearing) {
         if (!principal.permissions.has("employment.correct")) {
-          throw forbidden("Changing the Work Email of an ended employment period is a historical correction for HR administrators.");
+          throw forbidden(
+            clearing
+              ? "Clearing a recorded Work Email is a data correction for HR administrators."
+              : "Changing the Work Email of an ended employment period is a historical correction for HR administrators.",
+          );
         }
         if (!reason) {
-          throw new ApiError(422, "BUSINESS_RULE_VIOLATION", "A correction reason is required for an ended employment period.", [
+          throw new ApiError(422, "BUSINESS_RULE_VIOLATION", "A correction reason is required for this Work Email change.", [
             { field: "reason", code: "REASON_REQUIRED", message: "A reason is required for this correction." },
           ]);
         }
@@ -52,7 +59,7 @@ export async function updateWorkEmail(
       await recordAudit(
         {
           actorUserId: principal.userId,
-          action: ended ? "employment.work_email.correct" : "employment.work_email.update",
+          action: clearing ? "employment.work_email.clear" : ended ? "employment.work_email.correct" : "employment.work_email.update",
           outcome: "success",
           entityType: "employment",
           entityId: period.id,
