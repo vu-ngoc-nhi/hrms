@@ -89,7 +89,7 @@ Column-status legend: **Mapped** = implemented or ready to implement · **Pendin
   - `profile_state` is deprecated (M-04).
 - **Employment period** (`employment`):
   - start date; end date (**inclusive**); work email (company-issued; separate from the personal/contact email on `person`);
-  - **employee type** (nature of the relationship: Employee, Service Contractor, Intern…, C-09). It can be filled in once but never changed in place (DB trigger); a relationship change is a new period.
+  - **employee type** (nature of the relationship: Employee, Service Contractor, Intern…, C-09). A genuine relationship change is a new period; a data-entry correction updates the existing period in place (authorized HR user with a reason, S4). There is no database-level immutability (migration `20261009000000`).
   - Periods of one person cannot overlap. A work email is unique within its assigned period (exclusion constraint).
   - Rehire and relationship changes (e.g. Service Contractor → Employee) create a new period.
   - Not modelled in MVP: Working Arrangement (Full-time/Part-time) and Employment Stage (Probation, Rehire in Progress…), which are separate concepts (PV-02).
@@ -190,7 +190,7 @@ Synthetic data only: names like `Test Employee A`, `@example.test` emails, gener
 34. **Given** an Employee with Full Name, Work Email, Start Date, Department, Job Title and Employee Type, without DOB, gender, level or personal details **When** creating **Then** operational completeness is `complete`, HR is `not_defined` and legal is `pending_legal_review`.
 35. **Given** no Employee Type **Then** operational completeness is `incomplete`, with only `employee_type` missing.
 35a. **Given** an active Employee with a contact email but no work email **Then** `work_email` is missing. **Given** a Service Contractor (type without a company account) with a contact email **Then** complete. **Given** a pre-start hire with only a contact email **Then** complete.
-35b. **Given** `employee_type_id` inside `assignment` **Then** 400 (it belongs to the employment period). **Given** a period whose type is set **When** changing it in place **Then** the database rejects it.
+35b. **Given** `employee_type_id` inside `assignment` **Then** 400 (it belongs to the employment period). **Given** a period with a wrongly entered type **When** an authorized correction updates it in place **Then** it is accepted, no extra period is created, and an unknown type id is rejected (FK).
 35c. **Given** a v2 token whose `aud` is the App ID URI, or a token with `ver` ≠ `2.0` **Then** 401.
 35d. **Given** a freshly migrated test database **When** running the development demo seed **Then** each demo profile has its documented status and completeness, and the Service Contractor → Employee change shows as two periods.
 36. **Given** a future start date **Then** the employment status is `not_started`.

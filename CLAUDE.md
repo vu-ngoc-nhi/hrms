@@ -29,7 +29,7 @@
 - Business terminology is English in UI and code (Job Title, Employee Type). Logic and the database depend on ids, codes and stable enum values, never on display text.
 
 ## Domain model
-- Employee Type belongs to the employment period, not the assignment; a relationship change is a new period. Working Arrangement and Employment Stage are separate concepts.
+- Employee Type belongs to the employment period, not the assignment. A genuine relationship change is a new period; a data-entry correction updates the existing period (authorized user, reason). Working Arrangement, Employment Status and Probation are separate concepts and stay Pending Validation.
 - Work email and personal/contact email are separate fields; email is never an identity key.
 
 ## Identity

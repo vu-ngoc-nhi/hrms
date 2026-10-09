@@ -107,13 +107,23 @@ describe("Data constraints", () => {
       "23514",
     );
   });
-  it("the employee type of an employment period can be filled in once but never changed in place", async () => {
+  it("an authorized data correction can fix a period's employee type in place, without a fake new period", async () => {
     const types = await app.query("SELECT id, code FROM employee_type WHERE code IN ('EMPLOYEE', 'SERVICE_CONTRACTOR')");
     const id = (c: string) => types.rows.find((r: { code: string }) => r.code === c).id;
     const e = await app.query("SELECT id FROM employment WHERE person_id = $1", [fx.personId]);
+    const before = await app.query("SELECT count(*)::int AS n FROM employment WHERE person_id = $1", [fx.personId]);
     await app.query("UPDATE employment SET employee_type_id = $1 WHERE id = $2", [id("SERVICE_CONTRACTOR"), e.rows[0].id]);
-    await expectSqlError("UPDATE employment SET employee_type_id = $1 WHERE id = $2", [id("EMPLOYEE"), e.rows[0].id], "23514");
-    await expectSqlError("UPDATE employment SET employee_type_id = NULL WHERE id = $1", [e.rows[0].id], "23514");
+    // Correction of a data-entry mistake: Service Contractor -> Employee on the SAME period (migration 20261009000000).
+    await app.query("UPDATE employment SET employee_type_id = $1 WHERE id = $2", [id("EMPLOYEE"), e.rows[0].id]);
+    const after = await app.query("SELECT employee_type_id FROM employment WHERE id = $1", [e.rows[0].id]);
+    expect(after.rows[0].employee_type_id).toBe(id("EMPLOYEE"));
+    expect((await app.query("SELECT count(*)::int AS n FROM employment WHERE person_id = $1", [fx.personId])).rows[0].n).toBe(before.rows[0].n);
+    // The value must still reference an existing employee type.
+    await expectSqlError(
+      "UPDATE employment SET employee_type_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' WHERE id = $1",
+      [e.rows[0].id],
+      "23503",
+    );
   });
   it("employee codes differing only by case are rejected", async () => {
     await expectSqlError(

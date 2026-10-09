@@ -13,7 +13,7 @@
 5. **No delete API** for profiles in this phase, and the app role cannot delete from `person`, `employment` or `job_assignment`. Retention-driven deletion or anonymization will be a separate, privileged process, designed after PL-01 is resolved.
 6. **Profile revision**: every transaction that changes a person or its child data will increment `person.revision` under a row lock. S3 only creates profiles (revision 1); PATCH with `expected_revision` is planned for S4.
 7. **Completeness is computed, not stored** (M-04). `person.profile_state` is deprecated (nullable, unused) and is kept in this iteration (C-12). It will be dropped only after the computed model has been stable, all dependencies have been verified, and the drop has been explicitly approved.
-8. **Relationship history** (C-09): a change of Employee Type is a new employment period; the database blocks changing a period's type in place.
+8. **Relationship history vs. correction** (C-09, revised 2026-10-09): a genuine relationship change is a new employment period. A data-entry correction updates the existing period in place, done by an authorized user with a reason (S4). The database no longer blocks in-place changes (forward migration `20261009000000`). A later audit table (changed_by, changed_at, old_value, new_value, reason) can record corrections without changing this model.
 
 ## Pending Legal Review
 - Retention per data group and its basis; reviewer; handling of backups.

@@ -183,7 +183,7 @@ export const EmployeeCreateSchema = reg(
     employment: z
       .strictObject({
         start_date: isoDate(),
-        employee_type_id: z.uuid().optional().describe("Employee Type of this employment period. Cannot be changed later; a different relationship starts a new period."),
+        employee_type_id: z.uuid().optional().describe("Employee Type of this employment period. A genuine relationship change is a new period; a data-entry mistake is corrected on the same period (S4)."),
         work_email: z.email().max(254).optional().describe("Company-issued email. Separate from the personal/contact email."),
         assignment: z
           .strictObject({

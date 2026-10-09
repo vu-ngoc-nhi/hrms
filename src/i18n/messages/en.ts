@@ -100,7 +100,7 @@ export const en = {
     personal: "Personal Information and Contact Email (optional)",
     employment: "Employment and First Assignment",
     employmentHelp:
-      "Leave Start Date blank if unknown — no placeholder employment record is created. Employee Type describes the working relationship of this employment period and cannot be changed later; a different relationship starts a new period.",
+      "Leave Start Date blank if unknown — no placeholder employment record is created. Employee Type describes the working relationship of this employment period. A genuine change of relationship later starts a new period; an input mistake can be corrected by HR.",
     startDate: "Start Date",
     workEmail: "Work Email",
     department: "Department",
