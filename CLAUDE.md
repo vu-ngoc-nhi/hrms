@@ -8,6 +8,12 @@
 - `npm test` may reset ONLY the local `hrms_test` schema, through the guard in `src/lib/db-safety.ts` (APP_ENV=test, db exactly `hrms_test`, loopback host, no production-like variables; fails closed). Do not bypass or weaken this guard.
 - Never reset, drop or truncate `hrms_dev` without explicit approval. Seeds must stay insert-only.
 
+## Migration governance
+- A migration committed to Git (shared project history) is immutable. Never edit it to represent a new schema change.
+- Every schema evolution after the baseline — constraint changes, column changes, data transformations, removals — gets a NEW forward migration.
+- An old migration may be edited only if it is clearly uncommitted/local-only and has never been part of shared history.
+- Never rewrite committed migration history silently.
+
 ## Data and legal
 - Use synthetic data only. Never use real employee data in development, tests, fixtures, logs or AI tools; real data is a pre-production gate.
 - Do not invent legal conclusions or retention periods. Mark unresolved items `Pending Legal Review`.
