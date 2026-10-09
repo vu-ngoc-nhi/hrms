@@ -298,7 +298,7 @@ export const EmployeeUpdateSchema = reg(
       .min(1)
       .max(1000)
       .optional()
-      .describe("Required when Full Name or Date of Birth changes (C-23); optional otherwise."),
+      .describe("Required when Full Name changes or a recorded Date of Birth is corrected or removed (C-23). Not required when a missing Date of Birth is filled in."),
     full_name: z.string().min(1).max(200).optional(),
     personal: z
       .strictObject({

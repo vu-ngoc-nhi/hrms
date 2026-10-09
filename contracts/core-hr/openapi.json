@@ -447,7 +447,7 @@
       "patch": {
         "operationId": "updateEmployee",
         "summary": "Edit employee profile fields",
-        "description": "Edits Full Name and personal/contact fields only. Requires expected_revision (409 REVISION_CONFLICT when stale). A reason is required when Full Name or Date of Birth changes. Personal fields require employees.write_personal. Audit records changed field names and the reason; personal values are never stored in audit.\n\nRequired permission: `employees.update`.",
+        "description": "Edits Full Name and personal/contact fields only. Requires expected_revision (409 REVISION_CONFLICT when stale). A reason is required when Full Name changes or a recorded Date of Birth is corrected or removed (filling in a missing Date of Birth needs none). Personal fields require employees.write_personal. Audit records changed field names and the reason; personal values are never stored in audit.\n\nRequired permission: `employees.update`.",
         "tags": [
           "Employees"
         ],
@@ -3104,7 +3104,7 @@
             "description": "The revision the caller last read; a stale value returns 409 REVISION_CONFLICT."
           },
           "reason": {
-            "description": "Required when Full Name or Date of Birth changes (C-23); optional otherwise.",
+            "description": "Required when Full Name changes or a recorded Date of Birth is corrected or removed (C-23). Not required when a missing Date of Birth is filled in.",
             "type": "string",
             "minLength": 1,
             "maxLength": 1000

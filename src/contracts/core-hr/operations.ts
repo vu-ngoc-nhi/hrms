@@ -190,7 +190,7 @@ export const operations = {
     path: "/api/v1/core-hr/employees/{id}",
     summary: "Edit employee profile fields",
     description:
-      "Edits Full Name and personal/contact fields only. Requires expected_revision (409 REVISION_CONFLICT when stale). A reason is required when Full Name or Date of Birth changes. Personal fields require employees.write_personal. Audit records changed field names and the reason; personal values are never stored in audit.",
+      "Edits Full Name and personal/contact fields only. Requires expected_revision (409 REVISION_CONFLICT when stale). A reason is required when Full Name changes or a recorded Date of Birth is corrected or removed (filling in a missing Date of Birth needs none). Personal fields require employees.write_personal. Audit records changed field names and the reason; personal values are never stored in audit.",
     tag: "Employees",
     auth: true,
     permission: "employees.update",

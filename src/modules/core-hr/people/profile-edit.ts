@@ -8,8 +8,10 @@ import type { Principal } from "@/modules/identity/authenticate";
 import { getEmployee } from "./service";
 import { normalizePersonalEmail, validateDateOfBirth, validateFullName, validateMobilePhone } from "./validation";
 
-// Fields whose change requires a reason (C-23). Changes are compared after normalization.
-const REASON_REQUIRED = new Set(["full_name", "personal.date_of_birth"]);
+// Reason rules (C-23, clarified 2026-10-09). Changes are compared after normalization.
+//  - Full Name: any actual change requires a reason.
+//  - Date of Birth: null -> date is completion of missing data (no reason); date -> other date is a correction and
+//    date -> null removes recorded information (reason required for both).
 
 export async function updateEmployeeProfile(
   principal: Principal,
@@ -28,6 +30,7 @@ export async function updateEmployeeProfile(
   const today = todayInVietnam();
   const data: Record<string, unknown> = {};
   const changed: string[] = [];
+  const reasonFor: string[] = [];
   const set = (field: string, column: string, next: unknown, prev: unknown) => {
     if (next !== prev) {
       data[column] = next;
@@ -37,14 +40,17 @@ export async function updateEmployeeProfile(
 
   if (input.full_name !== undefined) {
     set("full_name", "fullName", validateFullName(input.full_name, issues), current.fullName);
+    if (changed.includes("full_name")) reasonFor.push("full_name");
   }
   const p = input.personal ?? {};
   if (p.gender !== undefined) set("personal.gender", "gender", p.gender, current.gender);
   if (p.date_of_birth !== undefined) {
     const dob = validateDateOfBirth(p.date_of_birth, today, issues);
-    if (dob !== fromDbDate(current.dateOfBirth)) {
+    const previous = fromDbDate(current.dateOfBirth);
+    if (dob !== previous) {
       data.dateOfBirth = dob ? toDbDate(dob) : null;
       changed.push("personal.date_of_birth");
+      if (previous !== null) reasonFor.push("personal.date_of_birth");
     }
   }
   if (p.mobile_phone !== undefined) set("personal.mobile_phone", "mobilePhone", validateMobilePhone(p.mobile_phone, issues), current.mobilePhone);
@@ -54,12 +60,12 @@ export async function updateEmployeeProfile(
   if (issues.errors.length) throw new ApiError(422, "BUSINESS_RULE_VIOLATION", "The request violates a business rule.", issues.errors);
 
   const reason = input.reason?.trim() || null;
-  const needsReason = changed.filter((f) => REASON_REQUIRED.has(f));
+  const needsReason = reasonFor;
   if (needsReason.length && !reason) {
     throw new ApiError(
       422,
       "BUSINESS_RULE_VIOLATION",
-      "A reason is required when changing Full Name or Date of Birth.",
+      "A reason is required when changing Full Name or correcting/removing a recorded Date of Birth.",
       needsReason.map((f) => ({ field: "reason", code: "REASON_REQUIRED", message: `A reason is required for ${f}.` })),
     );
   }

@@ -69,7 +69,24 @@ describe("Profile edit", () => {
     expect(stored).not.toContain("Nguyễn Thị Mai\"");
   });
 
-  it("requires a reason for a Date of Birth correction (including clearing it)", async () => {
+  it("fills in a missing Date of Birth without a reason (completion of missing data)", async () => {
+    const r = await call(createRoute, {
+      path: "/api/v1/core-hr/employees",
+      method: "POST",
+      user: "admin",
+      headers: { "idempotency-key": key("dob") },
+      body: { full_name: "Đinh Quốc Huy" },
+    });
+    personId = r.body.id;
+    const ok = await patch({ expected_revision: 1, personal: { date_of_birth: "1996-03-04" } });
+    expect(ok.status).toBe(200);
+    expect(ok.body.personal.date_of_birth).toBe("1996-03-04");
+    const [ev] = await audits();
+    expect(ev.changedFields).toEqual(["personal.date_of_birth"]);
+    expect(ev.reason).toBeNull();
+  });
+
+  it("requires a reason for correcting or removing a recorded Date of Birth", async () => {
     expect((await patch({ expected_revision: 1, personal: { date_of_birth: "1993-07-12" } })).status).toBe(422);
     expect((await patch({ expected_revision: 1, personal: { date_of_birth: null } })).status).toBe(422);
     const ok = await patch({ expected_revision: 1, personal: { date_of_birth: "1993-07-12" }, reason: "Typo at onboarding" });

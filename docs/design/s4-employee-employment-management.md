@@ -58,7 +58,7 @@ Cancel Planned Period is not an End Reason. `PROBATION_NOT_PASSED` is chosen exp
 | Field | Editable by | Action type | Effective-dated? | Reason | Audit old/new value? (S4-04) |
 |---|---|---|---|---|---|
 | `full_name` | `employees.update` (HR_ADMIN, HR_EDITOR) | Correction/change | No | **Required** | No (field name only) |
-| `date_of_birth` | `employees.write_personal` | Correction | No | **Required** | No |
+| `date_of_birth` | `employees.write_personal` | `null → date`: completion of missing data; `date → other date`: correction; `date → null`: removal | No | `null → date`: none. Correction or removal: **required** (clarified 2026-10-09). Same value: no change, no audit, no revision bump | No |
 | `gender` | `employees.write_personal` | Simple edit | No | — | No |
 | `mobile_phone`, `personal_email` | `employees.write_personal` | Simple edit (clear allowed) | No | — | No |
 | `employee_code` | Nobody in S4 | — | — | — | — |
@@ -79,6 +79,10 @@ Every write keeps the existing audit fields (actor, timestamp, action, outcome, 
 - **old/new values only** for `employee_type_id`, `department_id`, `job_title_id`, `job_level_id`, employment start/end dates and assignment effective_from/effective_to.
 
 Never stored as raw values: full name, date of birth, gender, mobile phone, personal/contact email, Work Email, manager. No audit UI in S4.
+
+**Employment History reason visibility (2026-10-09):** the generic history response exposes event type and event date only. It never exposes free-text event reasons, correction reasons, narrative notes or other free-text HR notes. A future structured End Reason code/label may be shown to HR_ADMIN and HR_EDITOR; free-text End Employment notes do not automatically become part of the generic history. No new permission or history-detail API in S4.
+
+**Missing events:** the absence of an event row means the system has no recorded event. Events are never synthesized for demo or migrated periods (UI copy: "No recorded events").
 
 ## 6. Permissions (existing roles only; S4-02)
 

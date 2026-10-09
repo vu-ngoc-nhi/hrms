@@ -17,7 +17,10 @@ const LABELS: Record<keyof FormState, MessageKey> = {
   mobile_phone: "detail.mobilePhone",
   personal_email: "detail.personalEmail",
 };
-const REASON_FIELDS: (keyof FormState)[] = ["full_name", "date_of_birth"];
+// Mirrors the server rule (C-23): Full Name change, or correcting/removing a recorded Date of Birth.
+function needsReason(field: keyof FormState, before: string): boolean {
+  return field === "full_name" || (field === "date_of_birth" && before.trim() !== "");
+}
 
 function initial(p: EditableProfile): FormState {
   return {
@@ -50,7 +53,7 @@ export function ProfileEditForm({
     ? ["full_name", "gender", "date_of_birth", "mobile_phone", "personal_email"]
     : ["full_name"];
   const changed = fields.filter((f) => form[f].trim() !== start[f].trim());
-  const reasonRequired = changed.some((f) => REASON_FIELDS.includes(f));
+  const reasonRequired = changed.some((f) => needsReason(f, start[f]));
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
