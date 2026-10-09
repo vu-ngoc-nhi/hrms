@@ -221,6 +221,18 @@ export const EmploymentSchema = reg(
     id: z.uuid(),
     start_date: isoDate(),
     end_date: isoDate().nullable().describe("Inclusive."),
+    period_lifecycle: EmploymentStatusSchema.nullable().describe(
+      "Computed lifecycle of this period at status_as_of (not_started/active/ended). null when the period was cancelled: Cancelled is a record disposition, not a lifecycle status.",
+    ),
+    events: z
+      .array(
+        z.object({
+          event_type: z.enum(["start", "suspend", "resume", "end", "cancel_planned_start"]),
+          effective_date: isoDate(),
+          recorded_at: isoDateTime(),
+        }),
+      )
+      .describe("Recorded employment events in chronological order. Free-text reasons are not exposed here."),
     cancelled_at: isoDateTime()
       .nullable()
       .describe("Set when this planned period was cancelled before it began. Cancelled periods stay in history but have no operational effect; Cancelled is not an employment status."),

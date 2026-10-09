@@ -406,9 +406,11 @@ const assignmentInclude = {
 };
 const detailInclude = {
   employments: {
-    orderBy: { startDate: "asc" as const },
+    // History order: chronological by start date, then by record creation (a replacement after a cancellation).
+    orderBy: [{ startDate: "asc" as const }, { createdAt: "asc" as const }],
     include: {
       employeeType: true,
+      events: { orderBy: [{ effectiveDate: "asc" as const }, { recordedAt: "asc" as const }] },
       assignments: {
         orderBy: { effectiveFrom: "asc" as const },
         include: { ...assignmentInclude, managerEmployment: { include: { person: true } } },
@@ -439,6 +441,14 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
     start_date: fromDbDate(e.startDate),
     end_date: fromDbDate(e.endDate),
     ...historyFlags(e),
+    period_lifecycle: historyFlags(e).cancelled_at
+      ? null
+      : employmentStatus([{ startDate: fromDbDate(e.startDate), endDate: fromDbDate(e.endDate) }], today),
+    events: e.events.map((ev) => ({
+      event_type: ev.eventType as "start" | "suspend" | "resume" | "end" | "cancel_planned_start",
+      effective_date: fromDbDate(ev.effectiveDate),
+      recorded_at: ev.recordedAt.toISOString(),
+    })),
     employee_type: ref(e.employeeType),
     work_email: e.workEmail,
     record_source: e.recordSource,

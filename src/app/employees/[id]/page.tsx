@@ -30,6 +30,8 @@ type Detail = {
     id: string;
     start_date: string;
     end_date: string | null;
+    period_lifecycle: string | null;
+    events: { event_type: string; effective_date: string; recorded_at: string }[];
     cancelled_at: string | null;
     employee_type: Ref;
     work_email: string | null;
@@ -108,14 +110,29 @@ export default function EmployeeDetailPage() {
       </div>
 
       <h2>{t("detail.employmentTitle")}</h2>
+      <p className="muted small">{t("detail.historyNote")}</p>
       {d.employments.length === 0 && <p className="muted">{t("detail.noEmployment")}</p>}
-      {d.employments.map((e) => (
+      {d.employments.map((e, index) => (
         <section key={e.id} className="card" style={{ marginBottom: 12, opacity: e.cancelled_at ? 0.7 : 1 }}>
-          {e.cancelled_at && (
-            <p className="muted small">
-              <span className="badge">{t("detail.cancelledBadge")}</span> {t("detail.cancelledNote")}
-            </p>
-          )}
+          <div className="spread" style={{ marginBottom: 8 }}>
+            <strong>
+              {t("detail.periodHeading", {
+                n: index + 1,
+                from: formatDate(e.start_date),
+                to: e.end_date ? formatDate(e.end_date) : t("detail.periodOpenEnd"),
+              })}
+            </strong>
+            {e.cancelled_at ? (
+              <span className="badge">{t("detail.cancelledBadge")}</span>
+            ) : (
+              e.period_lifecycle && (
+                <span className={`badge ${e.period_lifecycle === "active" ? "ok" : ""}`}>
+                  {tMaybe(`employmentStatus.${e.period_lifecycle}`) ?? e.period_lifecycle}
+                </span>
+              )
+            )}
+          </div>
+          {e.cancelled_at && <p className="muted small">{t("detail.cancelledNote")}</p>}
           <dl className="kv">
             <dt>{t("detail.startDate")}</dt>
             <dd>{formatDate(e.start_date)}</dd>
@@ -167,6 +184,20 @@ export default function EmployeeDetailPage() {
               </tbody>
             </table>
           </div>
+          <p className="small" style={{ marginTop: 12, marginBottom: 4 }}>
+            <strong>{t("detail.events")}</strong>
+          </p>
+          {e.events.length === 0 ? (
+            <p className="muted small">{t("detail.noEvents")}</p>
+          ) : (
+            <ul className="small" style={{ margin: 0 }}>
+              {e.events.map((ev, i) => (
+                <li key={i}>
+                  {tMaybe(`detail.eventType.${ev.event_type}`) ?? ev.event_type} — {formatDate(ev.effective_date)}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ))}
     </>

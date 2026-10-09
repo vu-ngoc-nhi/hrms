@@ -2505,6 +2505,59 @@
             ],
             "description": "Inclusive."
           },
+          "period_lifecycle": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "no_employment",
+                  "not_started",
+                  "active",
+                  "ended"
+                ],
+                "description": "Computed from employment periods at status_as_of. Value set is an MVP Decision."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Computed lifecycle of this period at status_as_of (not_started/active/ended). null when the period was cancelled: Cancelled is a record disposition, not a lifecycle status."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "event_type": {
+                  "type": "string",
+                  "enum": [
+                    "start",
+                    "suspend",
+                    "resume",
+                    "end",
+                    "cancel_planned_start"
+                  ]
+                },
+                "effective_date": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "recorded_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              },
+              "required": [
+                "event_type",
+                "effective_date",
+                "recorded_at"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Recorded employment events in chronological order. Free-text reasons are not exposed here."
+          },
           "cancelled_at": {
             "anyOf": [
               {
@@ -2567,6 +2620,8 @@
           "id",
           "start_date",
           "end_date",
+          "period_lifecycle",
+          "events",
           "cancelled_at",
           "employee_type",
           "work_email",
