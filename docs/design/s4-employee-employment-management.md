@@ -1,7 +1,7 @@
 # S4 — Employee & Employment Period Management (design)
 
 - Status: **Design approved (decisions C-21 to C-29 and PV-19, 2026-10-09), including the Cancel Planned Period data model (§9). Not implemented.**
-- Implementation slices (§11): **proposed, awaiting approval.**
+- Implementation slices (§11): **approved 2026-10-09 (C-33).** PV-20 resolved (C-30, C-31, C-32); Reverse End Employment representation pending (PV-21).
 - Decision IDs refer to `docs/decision-register.md`. Nothing here changes Pending Validation / Pending Legal Review items.
 
 ## 1. Scope
@@ -63,7 +63,7 @@ Cancel Planned Period is not an End Reason. `PROBATION_NOT_PASSED` is chosen exp
 | `mobile_phone`, `personal_email` | `employees.write_personal` | Simple edit (clear allowed) | No | — | No |
 | `employee_code` | Nobody in S4 | — | — | — | — |
 | `profile_state` | Nobody (deprecated, C-12) | — | — | — | — |
-| `employment.work_email` | `employment.manage` | Simple edit | No (period value) | — | No |
+| `employment.work_email` | Non-ended period: `employment.manage`. Ended period: `employment.correct` (HR_ADMIN). Cancelled period: never (C-30) | Simple edit / historical correction when ended | No (period value) | Ended period: **required** | No |
 | `employment.employee_type_id` | `employment.correct` (HR_ADMIN) | Correction | No (fixed per period) | **Required** | **Yes** |
 | `employment.start_date` | `employment.correct` (HR_ADMIN) | Correction | It is the effective date | **Required** | **Yes** |
 | `employment.end_date` | End Employment (`employment.manage`; past date → HR_ADMIN) or correction (`employment.correct`) | Event or correction | It is the effective date | **Required** | **Yes** |
@@ -145,7 +145,7 @@ Services must use these helpers instead of writing `cancelled_at IS NULL` themse
 5. `person.revision` increments on every person/child change; all S4 writes use `expected_revision`.
 6. UI alignment: display label of `not_started` becomes "Pre-start" (C-16); stable code unchanged.
 
-## 11. Proposed implementation slices (awaiting approval)
+## 11. Implementation slices (approved 2026-10-09, C-33)
 
 Each slice is implemented, tested and committed on its own; every slice ends with the full test suite, typecheck, lint, build and OpenAPI regeneration. Ordering note: the cancel marker and shared employment queries land first (S4.0) so every later query is written against *operational periods* from day one instead of being retrofitted.
 
@@ -155,11 +155,11 @@ Each slice is implemented, tested and committed on its own; every slice ends wit
 | **S4.1 Audit foundation** | Reasons and structural old/new values can be recorded | Forward migration: `audit_event.reason`, `audit_field_change` (event id, field, old, new) | None | None | — | `recordAudit` accepts reason and structural values; an allow-list rejects non-C-24 fields | S4.0 | No |
 | **S4.2 Employment history (read)** | HR sees all periods, assignments, events, cancelled records | None | `GET /employees/{id}/employments` | Timeline on the detail page; "Cancelled" badge | `employees.read` | None | S4.0 | No |
 | **S4.3 Profile edit** | HR keeps personal/profile data current | None | `PATCH /employees/{id}` (`expected_revision`) | Edit form with before/after review; reason field for name/DOB | `employees.update`, `employees.write_personal` | Field names; reason for name/DOB; no raw values | S4.1 | No |
-| **S4.4 Work Email update** | IT-provisioned addresses recorded | None | `PATCH /employments/{id}/work-email` | Inline edit on the period card | `employment.manage` | Field name only | S4.1 | **Yes** — see Q1 |
+| **S4.4 Work Email update** | IT-provisioned addresses recorded | None | `PATCH /employments/{id}/work-email` | Inline edit on the period card | Non-ended: `employment.manage`; ended: `employment.correct` + reason (C-30); cancelled: rejected | Field name only (+ reason when ended) | S4.1 | No (C-30) |
 | **S4.5 Assignment change** | Transfers/promotions with history | None | `POST /employments/{id}/assignments` | "New assignment" dialog with timeline preview | `employment.manage`; past date → HR_ADMIN | Reason; old/new dept/title/level ids and dates | S4.1, S4.2 | No |
-| **S4.6 HR_ADMIN corrections** | Fix entry mistakes without fake history | None | `PATCH /employments/{id}` (type, start/end date corrections); `PATCH /assignments/{id}` | "Correct" actions visible only to HR_ADMIN | `employment.correct` | Reason; old/new structural values | S4.1, S4.2 | **Yes** — see Q2 |
+| **S4.6 HR_ADMIN corrections** | Fix entry mistakes without fake history | None for corrections; Reverse End Employment may need a small forward migration (PV-21) | `PATCH /employments/{id}` (type, start date, end date *changes* — never clearing it); `PATCH /assignments/{id}`; `POST /employments/{id}/reverse-end` | "Correct" / "Reverse End Employment" actions visible only to HR_ADMIN | `employment.correct` | Reason; old/new structural values; reversal keeps the original end event | S4.1, S4.2, S4.7 for reversal | Reverse End representation: **PV-21 design approval** |
 | **S4.7 End Employment** | Explicit end with structured reason | Forward migration: End Reason reference data (`selectable` flag), `end_reason_code` + note on the `end` event | `POST /employments/{id}/end` | End dialog (reason list, note mandatory for OTHER) | `employment.manage`; past date → HR_ADMIN | Reason code + note; old/new end date | S4.1, S4.5 | No |
-| **S4.8 Rehire** | Returning people get a new period | None | `POST /employees/{id}/employments` (`Idempotency-Key`) | "Rehire" action on profiles whose periods have all ended | `employment.manage`; past start → HR_ADMIN | Reason; new period structural values | S4.7 | **Yes** — see Q3 |
+| **S4.8 Add Initial Employment Period / Rehire** (two separate concepts, C-32 / C-26) | People without a real period get their first one; returning people get a new period | None | Separate actions, e.g. `POST /employees/{id}/initial-employment` and `POST /employees/{id}/rehire` (`Idempotency-Key`); shared internals allowed | "Add initial employment" for profiles with no non-cancelled period; "Rehire" for profiles whose real periods have all ended | Initial: `employment.manage`, past start allowed for HR_EDITOR (initial data capture), reason required when backdated on an existing Person. Rehire: `employment.manage`, past start → HR_ADMIN, reason required | Reason; structural values; initial capture audited as such | S4.7 | No (C-26, C-32) |
 | **S4.9 Relationship Change** | Continuous type change (e.g. Intern → Employee) | None | `POST /employments/{id}/relationship-change` | Dialog: old end date, next-day start shown, new type, first assignment | `employment.manage`; past date → HR_ADMIN | Reason; system End Reason `RELATIONSHIP_CHANGE` | S4.7, S4.8 | No |
 | **S4.10 Cancel Planned Period** | Undo a planned period without deleting history | None (S4.0) | `POST /employments/{id}/cancel-planned` | "Cancel planned period" on future periods | `employment.manage` | Reason via event + audit | S4.0, S4.1, S4.2 | No |
 
@@ -172,7 +172,7 @@ Each slice is implemented, tested and committed on its own; every slice ends wit
 - S4.9: new start = old end + 1 enforced; same type rejected (use Rehire); both writes atomic.
 - S4.10: start date ≤ today rejected; second cancel rejected; replacement period with the same dates/email accepted; person no longer Pre-start.
 
-### Questions needing business approval before the affected slice
-- **Q1 (S4.4):** May HR_EDITOR edit the Work Email of an **ended** period, or is that a historical correction (HR_ADMIN)? Recommended: ended periods → HR_ADMIN correction; cancelled periods → never.
-- **Q2 (S4.6):** May an end-date correction **remove** the end date (re-open an ended period), or must re-opening be a Rehire? Recommended: no re-opening by correction; use Rehire.
-- **Q3 (S4.8):** How does a profile **without any non-cancelled period** (name-only profile, or only cancelled periods) get its first period? It is neither Rehire nor Relationship Change. Recommended: an "Add first Employment Period" action treated as **initial data capture** (PV-19 exemption: HR_EDITOR may use a past start date), with a required reason.
+### Resolved slice questions (PV-20, 2026-10-09)
+- **Q1 → C-30:** Work Email on an ended period is an HR_ADMIN historical correction with reason; cancelled periods are immutable.
+- **Q2 → C-31:** a mistaken End Employment is undone by the admin-only **Reverse End Employment** action (not Rehire, not a PATCH clearing `end_date`), preserving the original end event. Its event-model representation (PV-21) must be designed and approved before S4.6 implements it.
+- **Q3 → C-32:** **Add Initial Employment Period** is its own action, separate from Rehire.
