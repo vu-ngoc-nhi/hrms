@@ -74,7 +74,7 @@ Destructive reset of `hrms_dev`; destructive database operations outside `hrms_t
 - Business terminology is English in UI and code (Job Title, Employee Type). Logic and the database depend on ids, codes and stable enum values, never on display text.
 
 ## Domain model
-- Employee Type belongs to the employment period, not the assignment. A genuine relationship change is a new period; a data-entry correction updates the existing period (authorized user, reason). Working Arrangement, Employment Status and Probation are separate concepts and stay Pending Validation.
+- Employee Type belongs to the employment period, not the assignment. A genuine relationship change is a new period; a data-entry correction updates the existing period (authorized user, reason). Working Arrangement, Employment Status and Probation are separate concepts: Employment Status is computed (`not_started`/`active`/`ended` → Pre-start/Active/Ended; end causes are future End Reasons); Probation is a concurrent condition of an Active period whose Failed outcome never ends the period automatically. Working Arrangement and the probation module are not implemented (Pending Validation).
 - Work email and personal/contact email are separate fields; email is never an identity key.
 
 ## Identity

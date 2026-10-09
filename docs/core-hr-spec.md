@@ -56,7 +56,7 @@ Column-status legend: **Mapped** = implemented or ready to implement · **Pendin
 | P | POSITION VIETNAMESE | cross-check with `job_title.name_vi` | ref | must belong to the same job title as O | Pending Validation |
 | Q | Level | `job_assignment.job_level_id` | ref | exact match | Mapped (not part of operational completeness) |
 | R | LINE MANAGER | `job_assignment.manager_employment_id` | text-id → ref | employee code only, never a name; manager employed on the effective date | Pending Validation (D-07) |
-| S | CLASSIFY ("Fulltime, Probation" list on the header) | **not** Employee Type: mixes Working Arrangement (Fulltime) and Employment Stage (Probation) | — | not mapped | Pending Validation (PV-01b, PV-02) |
+| S | CLASSIFY ("Fulltime, Probation" list on the header) | **never** Employee Type (C-15). "Fulltime" is a Working Arrangement candidate, "Probation" a probation-condition candidate; neither is migrated automatically and no dates are inferred | — | not mapped; HR classifies each real value as Map / Transform / Discard / Needs Investigation from a value/count report without personal data | Confirmed process (C-15); actual values Pending Validation (PV-05) |
 | T | STATUS | not mapped | — | — | Pending Validation (D-04) |
 | U–X | current contract | — | — | dropped at read, never stored | Out of scope |
 | Y | (blank) | — | — | warn if populated | Mapped |
@@ -92,7 +92,21 @@ Column-status legend: **Mapped** = implemented or ready to implement · **Pendin
   - **employee type** (nature of the relationship: Employee, Service Contractor, Intern…, C-09). A genuine relationship change is a new period; a data-entry correction updates the existing period in place (authorized HR user with a reason, S4). There is no database-level immutability (migration `20261009000000`).
   - Periods of one person cannot overlap. A work email is unique within its assigned period (exclusion constraint).
   - Rehire and relationship changes (e.g. Service Contractor → Employee) create a new period.
-  - Not modelled in MVP: Working Arrangement (Full-time/Part-time) and Employment Stage (Probation, Rehire in Progress…), which are separate concepts (PV-02).
+  - Not modelled in MVP: Working Arrangement (PV-15) and Probation (C-17, implementation PV-16). See "Employment lifecycle model" below.
+- **Employment lifecycle model** (C-13 to C-18, 2026-10-09):
+
+  | Concept | Meaning | Where | Changes create a new Employment Period? | MVP status |
+  |---|---|---|---|---|
+  | Employment Period | One continuous relationship span with EmeSoft | person → employment | — | Implemented |
+  | Employee Type | Nature of the relationship: Employee, Service Contractor, Intern (C-13). Not Contract Type | employment period | Genuine change: yes (e.g. Intern → Employee, Contractor → Employee). Data correction: no | Implemented (catalog) |
+  | Employment Status | Computed lifecycle: `not_started` / `active` / `ended`, displayed Pre-start / Active / Ended (C-16) | computed | No | Implemented (label fix pending) |
+  | End Reason | Why a period ended (resignation, dismissal, contract expiry, probation failure…) | future attribute of the period end | — | Pending Validation (PV-17) |
+  | Probation | Effective-dated condition of a period, concurrent with Active; outcome pending/passed/failed/cancelled; pass continues the same period; Failed does not end the period by itself (C-17) | future child of employment period | No | Concept approved; not implemented (PV-16, PL-08) |
+  | Working Arrangement | Full-time / Part-time, effective-dated within a period | future | No | Deferred (PV-15) |
+  | Company account expectation | Default per Employee Type (`requires_work_email`); per-period override deferred (C-18) | employee type (+ future period override) | No | Default implemented; override PV-14 |
+  | Organizational Assignment | Department, job title, level, manager, effective-dated | employment period → assignment | No | Implemented |
+
+  Rehire is a new Employment Period (Pre-start before its start date). Probation, Rehire in Progress, On Leave, Maternity Leave, Resigned, Dismissed and Contract Expired are not lifecycle statuses.
 - **Employment events** (`employment_event`): start, suspend, resume, end, cancel_planned_start. Only `start` is written in S3.
 - **Job assignment** (`job_assignment`):
   - `[effective_from, effective_to)` (start inclusive, end **exclusive**);
