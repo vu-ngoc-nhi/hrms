@@ -152,5 +152,7 @@ export const en = {
     WORK_EMAIL_IN_USE: "This work email is already assigned to someone else for an overlapping period.",
     IDEMPOTENCY_KEY_REUSED: "This submission conflicts with an earlier one. Please reload the form.",
     INTERNAL_ERROR: "An internal error occurred.",
+    EMPLOYMENT_PERIOD_READ_ONLY: "This employment period was cancelled and is read-only history.",
+    REVISION_CONFLICT: "This profile was changed by someone else. Reload to see the latest version before editing again.",
   },
 } as const;

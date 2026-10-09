@@ -135,6 +135,8 @@ Never stored as raw values: full name, date of birth, gender, mobile phone, pers
 
 Services must use these helpers instead of writing `cancelled_at IS NULL` themselves; a test asserts that operational queries exclude cancelled periods.
 
+**Cancelled periods are read-only (S4 rule, 2026-10-09):** once `cancelled_at` is set, no normal or correction write may target the period: editing period fields, Work Email, adding/editing/correcting/changing assignments, End Employment, Relationship Change. The record and its planned assignments stay visible for traceability only; nothing is deleted and there is no Uncancel/Restore. Enforcement: the employment trigger protects the period row itself; every S4 write path loads its target through the shared domain guard `loadWritableEmployment` / `assertEmploymentWritable` (in `employments/queries.ts`), which rejects cancelled periods with 409 `EMPLOYMENT_PERIOD_READ_ONLY`. Assignment writes rely on this guard (no extra assignment trigger), covered by tests.
+
 **Legal scope:** cancelling a planned period cancels an HR record only. It does not determine whether EmeSoft may legally withdraw or cancel a signed employment, internship or service agreement; any legal/contract consequence is Pending Legal Review (PL-10) / future Contract domain. No legal conclusion is drawn from a future start date.
 
 ## 10. Model implications (summary)

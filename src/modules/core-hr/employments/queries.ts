@@ -8,6 +8,8 @@
 //   future planned       - operational and starting after a given date
 //   employment history   - ALL periods including cancelled ones, each flagged (see `historyFlags`)
 import type { Prisma } from "@/generated/prisma/client";
+import type { Db, Tx } from "@/lib/db";
+import { ApiError, notFound } from "@/lib/http/errors";
 
 const OPERATIONAL: Prisma.EmploymentWhereInput = { cancelledAt: null };
 
@@ -36,4 +38,27 @@ export function operationalPeriods<T extends { cancelledAt: Date | null }>(rows:
 /** History presentation flag for a loaded period. */
 export function historyFlags(row: { cancelledAt: Date | null }): { cancelled_at: string | null } {
   return { cancelled_at: row.cancelledAt ? row.cancelledAt.toISOString() : null };
+}
+
+// ---------------- Write guard (C-29 clarification) ----------------
+// A cancelled Employment Period is read-only history in S4: no period edit, Work Email update, assignment add/edit/
+// correction/change, End Employment or Relationship Change may write to it. Every S4 write path must load the target
+// period through `loadWritableEmployment` (or call `assertEmploymentWritable` on an already-loaded row) instead of
+// checking the marker itself.
+export const EMPLOYMENT_READ_ONLY = "EMPLOYMENT_PERIOD_READ_ONLY";
+
+export function assertEmploymentWritable(row: { id: string; cancelledAt: Date | null }): void {
+  if (row.cancelledAt !== null) {
+    throw new ApiError(409, EMPLOYMENT_READ_ONLY, "This employment period was cancelled and is read-only history.", [
+      { field: "employment_id", code: EMPLOYMENT_READ_ONLY, message: "Cancelled employment periods cannot be changed." },
+    ]);
+  }
+}
+
+/** Loads a period (or 404) and rejects it when it is cancelled. Use inside the write transaction. */
+export async function loadWritableEmployment(client: Tx | Db, employmentId: string) {
+  const row = await client.employment.findUnique({ where: { id: employmentId } });
+  if (!row) throw notFound("Employment period not found.");
+  assertEmploymentWritable(row);
+  return row;
 }
