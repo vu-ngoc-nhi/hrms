@@ -8,6 +8,7 @@ import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t, tMaybe } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import { ProfileEditForm } from "./ProfileEditForm";
+import { WorkEmailEditor } from "./WorkEmailEditor";
 
 type Ref = { id: string; code: string; name: string } | null;
 type Assignment = {
@@ -175,6 +176,24 @@ export default function EmployeeDetailPage() {
             <dt>{t("detail.workEmail")}</dt>
             <dd>{e.work_email ?? "—"}</dd>
           </dl>
+          {!e.cancelled_at &&
+            (e.period_lifecycle === "ended" ? session?.can("employment.correct") : session?.can("employment.manage")) && (
+              <WorkEmailEditor<Detail>
+                employmentId={e.id}
+                periodLabel={t("detail.periodHeading", {
+                  n: index + 1,
+                  from: formatDate(e.start_date),
+                  to: e.end_date ? formatDate(e.end_date) : t("detail.periodOpenEnd"),
+                })}
+                current={e.work_email}
+                ended={e.period_lifecycle === "ended"}
+                revision={d.revision}
+                onSaved={(updated) => {
+                  setD(updated);
+                  setNotice(t("profileEdit.saved"));
+                }}
+              />
+            )}
           <div className="table-wrap" style={{ marginTop: 12 }}>
             <table>
               <thead>

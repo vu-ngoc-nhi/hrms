@@ -103,6 +103,13 @@ export const en = {
     noAssignments: "No assignments yet.",
   },
   gender: { male: "Male", female: "Female", other: "Other" },
+  workEmail: {
+    edit: "Edit Work Email",
+    correct: "Correct Work Email",
+    owner: "Work Email of {period}.",
+    endedNote: "This period has ended: this is a historical correction and needs a reason.",
+    save: "Save Work Email",
+  },
   profileEdit: {
     edit: "Edit Profile",
     title: "Edit Profile",

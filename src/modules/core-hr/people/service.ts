@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { EmployeeCreateInput, EmployeeDetail, EmployeeListItem } from "@/contracts/core-hr/schemas";
-import { getConfig } from "@/lib/config";
 import { addDays, fromDbDate, toDbDate, todayInVietnam } from "@/lib/dates";
 import { db, pgErrorInfo, type Tx } from "@/lib/db";
 import { ApiError, forbidden, notFound, type ErrorDetail } from "@/lib/http/errors";
@@ -17,7 +16,7 @@ import {
 } from "../employments/queries";
 import { assignmentOn, employmentStatus, referenceDate, representativeEmployment } from "../employments/status";
 import { completenessView, missingOperationalItems, type OperationalInput } from "./completeness";
-import { normalizePersonalEmail, validateDateOfBirth, validateFullName, validateMobilePhone } from "./validation";
+import { normalizePersonalEmail, validateDateOfBirth, validateFullName, validateMobilePhone, validateWorkEmail } from "./validation";
 
 // ---------------- Protected fields that are not enabled ----------------
 // These groups need encryption, keyed-HMAC lookup, dedicated permissions and legal review (Pending Legal Review).
@@ -137,14 +136,7 @@ async function prepareCreate(principal: Principal, input: EmployeeCreateInput, t
         message: "Start date is unusual (before 2000 or more than 90 days ahead); please review.",
       });
     }
-    let workEmail: string | null = null;
-    if (e.work_email) {
-      workEmail = e.work_email.trim().toLowerCase();
-      const domains = getConfig().companyEmailDomains;
-      if (domains.length && !domains.includes(workEmail.split("@")[1])) {
-        errors.push({ field: "employment.work_email", code: "DOMAIN_NOT_ALLOWED", message: "Work email must use a company domain." });
-      }
-    }
+    const workEmail = e.work_email ? validateWorkEmail(e.work_email, issues) : null;
     let employeeType: NonNullable<Prepared["employment"]>["employeeType"] = null;
     if (e.employee_type_id) {
       const t = await db().employeeType.findUnique({ where: { id: e.employee_type_id } });

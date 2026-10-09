@@ -319,6 +319,20 @@ export const EmployeeUpdatedSchema = reg(
   }),
 );
 
+export const WorkEmailUpdateSchema = reg(
+  "WorkEmailUpdate",
+  z.strictObject({
+    expected_revision: z.int().min(1).describe("Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."),
+    work_email: z.email().max(254).describe("Company-issued email of this employment period. Not an identity key."),
+    reason: z
+      .string()
+      .min(1)
+      .max(1000)
+      .optional()
+      .describe("Required when the period has ended (historical correction, HR_ADMIN only); optional otherwise."),
+  }),
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -353,5 +367,6 @@ export const EmployeeListQuerySchema = z.strictObject({
 
 export type EmployeeCreateInput = z.infer<typeof EmployeeCreateSchema>;
 export type EmployeeUpdateInput = z.infer<typeof EmployeeUpdateSchema>;
+export type WorkEmailUpdateInput = z.infer<typeof WorkEmailUpdateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;

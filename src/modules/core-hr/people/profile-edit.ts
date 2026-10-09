@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { ApiError, forbidden, notFound, type ErrorDetail } from "@/lib/http/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import type { Principal } from "@/modules/identity/authenticate";
+import { bumpPersonRevision, revisionConflict } from "./revision";
 import { getEmployee } from "./service";
 import { normalizePersonalEmail, validateDateOfBirth, validateFullName, validateMobilePhone } from "./validation";
 
@@ -73,11 +74,7 @@ export async function updateEmployeeProfile(
   if (changed.length) {
     await db().$transaction(async (tx) => {
       // Optimistic concurrency: only the revision the caller read may be updated (also guards concurrent writes).
-      const res = await tx.person.updateMany({
-        where: { id: personId, revision: input.expected_revision },
-        data: { ...data, revision: { increment: 1 }, updatedAt: new Date() },
-      });
-      if (res.count !== 1) throw revisionConflict();
+      await bumpPersonRevision(tx, personId, input.expected_revision, data);
       // Personal values are never stored in audit: changed field names and the reason only (C-24).
       await recordAudit(
         {
@@ -96,10 +93,4 @@ export async function updateEmployeeProfile(
   }
   const detail = await getEmployee(principal, personId);
   return { ...detail, warnings: issues.warnings };
-}
-
-function revisionConflict() {
-  return new ApiError(409, "REVISION_CONFLICT", "The profile was changed by someone else. Reload it and try again.", [
-    { field: "expected_revision", code: "STALE_REVISION", message: "The revision is out of date." },
-  ]);
 }

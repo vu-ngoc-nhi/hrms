@@ -1,5 +1,6 @@
 // Shared validation for person fields, used by profile creation (S3) and profile editing (S4.3) so both paths apply
 // exactly the same rules and messages.
+import { getConfig } from "@/lib/config";
 import { addDays } from "@/lib/dates";
 import type { ErrorDetail } from "@/lib/http/errors";
 import { hasControlChars, normalizePhone, normalizeText, PHONE_RE } from "@/lib/text";
@@ -36,4 +37,14 @@ export function validateMobilePhone(raw: string | null, issues: Issues, field = 
 
 export function normalizePersonalEmail(raw: string | null): string | null {
   return raw === null ? null : raw.trim().toLowerCase();
+}
+
+/** Work Email: lower-cased; must use a configured company domain. Never an identity key. */
+export function validateWorkEmail(raw: string, issues: Issues, field = "employment.work_email"): string {
+  const email = raw.trim().toLowerCase();
+  const domains = getConfig().companyEmailDomains;
+  if (domains.length && !domains.includes(email.split("@")[1])) {
+    issues.errors.push({ field, code: "DOMAIN_NOT_ALLOWED", message: "Work email must use a company domain." });
+  }
+  return email;
 }
