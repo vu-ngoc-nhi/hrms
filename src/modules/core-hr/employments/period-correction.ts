@@ -25,10 +25,10 @@ const OPERATION = "createPeriodCorrection";
 export function correctionDbError(error: unknown): ApiError | undefined {
   const info = pgErrorInfo(error);
   if (info.sqlState === "23P01" && info.constraint === "employment_no_overlap_ex") {
-    return new ApiError(409, "PERIOD_OVERLAP", "The corrected dates would overlap another employment period of this person.");
+    return new ApiError(409, "PERIOD_OVERLAP", "These dates would overlap another employment period of this person.");
   }
   if (info.sqlState === "23P01" && info.constraint === "employment_work_email_period_ex") {
-    return new ApiError(409, "WORK_EMAIL_IN_USE", "With the corrected dates, this period's work email would overlap another period that uses it.", [
+    return new ApiError(409, "WORK_EMAIL_IN_USE", "This work email is already used by another employment period for overlapping dates.", [
       { field: "work_email", code: "IN_USE", message: "Work email already in use." },
     ]);
   }

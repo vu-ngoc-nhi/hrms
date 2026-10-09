@@ -24,7 +24,7 @@ import { loadWritableEmployment, operationalEmploymentWhere } from "./queries";
 const activeEndExists = () =>
   rule(
     "ACTIVE_END_EVENT_EXISTS",
-    "This employment period already has an End Employment. Resolve it first (for example Reverse End Employment if it was recorded by mistake).",
+    "This employment period already has a recorded End Employment. If it was recorded by mistake, use Reverse End Employment first.",
   );
 
 export async function createRelationshipChange(
@@ -64,7 +64,7 @@ export async function createRelationshipChange(
         where: operationalEmploymentWhere({ personId, id: { not: employmentId }, startDate: { gt: old.startDate } }),
       });
       if (later > 0) {
-        throw rule("NOT_LATEST_PERIOD", "A later employment period exists. Relationship Change only applies to the latest period.");
+        throw rule("NOT_LATEST_PERIOD", "A later employment period exists for this person. Relationship Change is only available on the latest period.");
       }
       if (await findActiveEndEvent(tx, employmentId)) throw activeEndExists();
 

@@ -25,7 +25,7 @@ const OPERATION = "createEndEmployment";
 const endAlreadyRecorded = () =>
   rule(
     "END_ALREADY_RECORDED",
-    "This employment period already has an End Employment event. Correct its date through a historical correction or reverse it.",
+    "This employment period already has a recorded End Employment. To change its date use Correct Period; if it was recorded by mistake use Reverse End Employment.",
   );
 
 export async function createEndEmployment(

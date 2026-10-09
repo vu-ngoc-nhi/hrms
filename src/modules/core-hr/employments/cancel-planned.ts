@@ -54,10 +54,10 @@ export async function createCancelPlanned(
         where: operationalEmploymentWhere({ personId: period.personId, id: { not: employmentId }, startDate: { gt: period.startDate } }),
       });
       if (later > 0) {
-        throw new ApiError(409, "LATER_PERIOD_EXISTS", "A later employment period exists. Only the latest planned period can be cancelled; nothing is cascaded.");
+        throw new ApiError(409, "LATER_PERIOD_EXISTS", "A later employment period exists for this person. Only the latest planned period can be cancelled.");
       }
       if (await findActiveEndEvent(tx, employmentId)) {
-        throw rule("ACTIVE_END_EVENT_EXISTS", "This planned period has an End Employment. Reverse that End Employment first, then cancel the period.");
+        throw rule("ACTIVE_END_EVENT_EXISTS", "This planned period already has a recorded End Employment. Use Reverse End Employment first, then cancel the period.");
       }
 
       const recordedAt = new Date();

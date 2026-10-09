@@ -9,6 +9,7 @@ export function ErrorBox({ error }: { error: { status?: number; body?: ApiErrorB
   return (
     <div className="alert error" role="alert">
       <strong>{title}</strong>
+      {!body?.details?.length && body?.message && body.message !== title ? <div>{body.message}</div> : null}
       {body?.details?.length ? (
         <ul>
           {body.details.map((d, i) => (
