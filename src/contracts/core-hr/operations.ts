@@ -262,6 +262,22 @@ export const operations = {
     success: { status: 201, description: "Owning employee profile after the action (or replayed result)", schema: S.EmployeeDetailSchema },
     errors: [400, ...AUTH_ERRORS, 404, 409, 422],
   },
+  createReverseEnd: {
+    operationId: "createReverseEnd",
+    method: "post",
+    path: "/api/v1/core-hr/employments/{id}/reverse-end",
+    summary: "Reverse End Employment",
+    description:
+      "Exact reversal or no reversal (C-54): HR_ADMIN only (employment.correct), mandatory reversal reason, expected_revision and Idempotency-Key. Operates only on the Active End Event (422 NO_ACTIVE_END_EVENT otherwise, including legacy end dates without an event: use a period correction). Restores end_date to the End event's previous_end_date (open, a planned date, or a historical date) and the closed assignment's exact previous effective_to; adds an end_reversed event referencing the original end event, which stays unchanged. Blocked with 409 END_EFFECT_CHANGED when the closed assignment changed since, END_STATE_INCONSISTENT when the period no longer matches the End event, LATER_PERIOD_EXISTS / LATER_LIFECYCLE_EVENT when later history depends on it, END_ALREADY_REVERSED, PERIOD_OVERLAP or WORK_EMAIL_IN_USE. Audit: employment.end.reverse and assignment.restore, same request ID and reason.",
+    tag: "Employments",
+    auth: true,
+    permission: "employment.correct",
+    pathParams: S.IdPathSchema,
+    body: S.ReverseEndCreateSchema,
+    idempotencyKey: "required",
+    success: { status: 201, description: "Owning employee profile after the reversal (or replayed result)", schema: S.EmployeeDetailSchema },
+    errors: [400, ...AUTH_ERRORS, 404, 409, 422],
+  },
   createPeriodCorrection: {
     operationId: "createPeriodCorrection",
     method: "post",

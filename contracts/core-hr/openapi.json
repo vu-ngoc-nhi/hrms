@@ -1024,6 +1024,126 @@
         }
       }
     },
+    "/api/v1/core-hr/employments/{id}/reverse-end": {
+      "post": {
+        "operationId": "createReverseEnd",
+        "summary": "Reverse End Employment",
+        "description": "Exact reversal or no reversal (C-54): HR_ADMIN only (employment.correct), mandatory reversal reason, expected_revision and Idempotency-Key. Operates only on the Active End Event (422 NO_ACTIVE_END_EVENT otherwise, including legacy end dates without an event: use a period correction). Restores end_date to the End event's previous_end_date (open, a planned date, or a historical date) and the closed assignment's exact previous effective_to; adds an end_reversed event referencing the original end event, which stays unchanged. Blocked with 409 END_EFFECT_CHANGED when the closed assignment changed since, END_STATE_INCONSISTENT when the period no longer matches the End event, LATER_PERIOD_EXISTS / LATER_LIFECYCLE_EVENT when later history depends on it, END_ALREADY_REVERSED, PERIOD_OVERLAP or WORK_EMAIL_IN_USE. Audit: employment.end.reverse and assignment.restore, same request ID and reason.\n\nRequired permission: `employment.correct`.",
+        "tags": [
+          "Employments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReverseEndCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Owning employee profile after the reversal (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/core-hr/employments/{id}/period-corrections": {
       "post": {
         "operationId": "createPeriodCorrection",
@@ -3416,6 +3536,111 @@
             "type": "boolean",
             "description": "True when the period has an end event that has not been reversed (Active End Event). A legacy end date may exist without any event."
           },
+          "active_end_event": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "effective_date": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "end_reason": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "enum": [
+                              "VOLUNTARY_RESIGNATION",
+                              "EMPLOYER_INITIATED_END",
+                              "PLANNED_TERM_COMPLETED",
+                              "MUTUAL_AGREEMENT",
+                              "PROBATION_NOT_PASSED",
+                              "OTHER",
+                              "RELATIONSHIP_CHANGE"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "label"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "previous_end_date": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "End date before End Employment (null = the period was open). Reverse End Employment restores it."
+                  },
+                  "closed_assignment": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "previous_effective_to": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "previous_effective_to"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Assignment End Employment closed and its exact previous effective_to (null = it was open-ended)."
+                  }
+                },
+                "required": [
+                  "effective_date",
+                  "end_reason",
+                  "previous_end_date",
+                  "closed_assignment"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Active End Event (C-51) with the structural data a reversal restores; never notes or reasons."
+          },
           "cancelled_at": {
             "anyOf": [
               {
@@ -3481,6 +3706,7 @@
           "period_lifecycle",
           "events",
           "has_active_end_event",
+          "active_end_event",
           "cancelled_at",
           "employee_type",
           "work_email",
@@ -4387,6 +4613,28 @@
           "expected_revision",
           "end_date",
           "end_reason_code"
+        ],
+        "additionalProperties": false
+      },
+      "ReverseEndCreate": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Mandatory reversal reason (not the End Reason). Stored on the end_reversed event and in audit; never shown in history."
+          }
+        },
+        "required": [
+          "expected_revision",
+          "reason"
         ],
         "additionalProperties": false
       },

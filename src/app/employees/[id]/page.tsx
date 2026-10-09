@@ -13,6 +13,7 @@ import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
 import { EndEmploymentForm } from "./EndEmploymentForm";
 import { InitialAssignmentForm } from "./InitialAssignmentForm";
 import { PeriodCorrectionForm } from "./PeriodCorrectionForm";
+import { ReverseEndForm } from "./ReverseEndForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
 
 type Ref = { id: string; code: string; name: string } | null;
@@ -43,6 +44,12 @@ type Detail = {
     period_lifecycle: string | null;
     events: { event_type: string; effective_date: string; recorded_at: string; end_reason: { code: string; label: string } | null }[];
     has_active_end_event: boolean;
+    active_end_event: {
+      effective_date: string;
+      end_reason: { code: string; label: string } | null;
+      previous_end_date: string | null;
+      closed_assignment: { id: string; previous_effective_to: string | null } | null;
+    } | null;
     cancelled_at: string | null;
     employee_type: Ref;
     work_email: string | null;
@@ -229,6 +236,21 @@ export default function EmployeeDetailPage() {
               assignments={e.assignments}
               today={d.status_as_of}
               canBackdate={Boolean(session.can("employment.correct"))}
+              revision={d.revision}
+              onSaved={(updated) => {
+                setD(updated);
+                setNotice(t("profileEdit.saved"));
+              }}
+            />
+          )}
+          {!e.cancelled_at && e.active_end_event && session?.can("employment.correct") && (
+            <ReverseEndForm<Detail>
+              key={`${e.id}-${d.revision}-reverse`}
+              employmentId={e.id}
+              activeEnd={e.active_end_event}
+              currentEnd={e.end_date}
+              assignments={e.assignments}
+              today={d.status_as_of}
               revision={d.revision}
               onSaved={(updated) => {
                 setD(updated);

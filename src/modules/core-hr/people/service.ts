@@ -375,6 +375,26 @@ async function replay(principal: Principal, storedHmac: string, requestHmac: str
 }
 
 // ---------------- Detail ----------------
+// Structural data of the Active End Event only (what a reversal restores); never its note.
+function activeEndView(
+  ev: {
+    effectiveDate: Date;
+    endReason: { code: string; label: string } | null;
+    previousEndDate: Date | null;
+    closedAssignmentId: string | null;
+    closedAssignmentPreviousEffectiveTo: Date | null;
+  } | null,
+) {
+  if (!ev) return null;
+  return {
+    effective_date: fromDbDate(ev.effectiveDate),
+    end_reason: ev.endReason ? { code: ev.endReason.code as EndReasonCode, label: ev.endReason.label } : null,
+    previous_end_date: fromDbDate(ev.previousEndDate),
+    closed_assignment: ev.closedAssignmentId
+      ? { id: ev.closedAssignmentId, previous_effective_to: fromDbDate(ev.closedAssignmentPreviousEffectiveTo) }
+      : null,
+  };
+}
 const assignmentInclude = {
   department: true,
   jobTitle: true,
@@ -428,6 +448,7 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
       end_reason: ev.endReason ? { code: ev.endReason.code as EndReasonCode, label: ev.endReason.label } : null,
     })),
     has_active_end_event: activeEndEventOf(e.events) !== null,
+    active_end_event: activeEndView(activeEndEventOf(e.events)),
     employee_type: ref(e.employeeType),
     work_email: e.workEmail,
     record_source: e.recordSource,

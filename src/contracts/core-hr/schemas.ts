@@ -244,6 +244,18 @@ export const EmploymentSchema = reg(
     has_active_end_event: z
       .boolean()
       .describe("True when the period has an end event that has not been reversed (Active End Event). A legacy end date may exist without any event."),
+    active_end_event: z
+      .object({
+        effective_date: isoDate(),
+        end_reason: z.object({ code: EndReasonCodeSchema, label: z.string() }).nullable(),
+        previous_end_date: isoDate().nullable().describe("End date before End Employment (null = the period was open). Reverse End Employment restores it."),
+        closed_assignment: z
+          .object({ id: z.uuid(), previous_effective_to: isoDate().nullable() })
+          .nullable()
+          .describe("Assignment End Employment closed and its exact previous effective_to (null = it was open-ended)."),
+      })
+      .nullable()
+      .describe("The Active End Event (C-51) with the structural data a reversal restores; never notes or reasons."),
     cancelled_at: isoDateTime()
       .nullable()
       .describe("Set when this planned period was cancelled before it began. Cancelled periods stay in history but have no operational effect; Cancelled is not an employment status."),
@@ -450,6 +462,15 @@ export const EndEmploymentCreateSchema = reg(
   "End Employment (C-50): ends a non-cancelled period that has not ended and has no Active End Event.",
 );
 
+export const ReverseEndCreateSchema = reg(
+  "ReverseEndCreate",
+  z.strictObject({
+    expected_revision: z.int().min(1).describe("Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."),
+    reason: z.string().min(1).max(1000).describe("Mandatory reversal reason (not the End Reason). Stored on the end_reversed event and in audit; never shown in history."),
+  }),
+  "Reverse End Employment (C-54): exact reversal of the Active End Event or no reversal.",
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -489,6 +510,7 @@ export type AssignmentChangeInput = z.infer<typeof AssignmentChangeCreateSchema>
 export type InitialAssignmentInput = z.infer<typeof InitialAssignmentCreateSchema>;
 export type PeriodCorrectionInput = z.infer<typeof PeriodCorrectionCreateSchema>;
 export type EndEmploymentInput = z.infer<typeof EndEmploymentCreateSchema>;
+export type ReverseEndInput = z.infer<typeof ReverseEndCreateSchema>;
 export type AssignmentCorrectionInput = z.infer<typeof AssignmentCorrectionCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;
