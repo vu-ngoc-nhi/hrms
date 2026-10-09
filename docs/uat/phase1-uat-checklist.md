@@ -1,7 +1,6 @@
 # Mini HRS — Core HR Phase 1 UAT Checklist
 
-- Milestone: **Core HR Phase 1 — Feature Complete**; phase: *Phase 1 Integration & UAT Hardening* (2026-10-09).
-- Status: **ready for internal UAT with known limitations. Not production ready.**
+- Milestone: **Core HR Phase 1 — UAT Ready With Known Limitations** (2026-10-09). **Not production ready.**
 - Environment: local/UAT build with the development test identity (not Microsoft Entra ID). **Use synthetic data only** — never real employee data (C-03).
 - Roles: **HR Admin** (HR_ADMIN), **HR Editor** (HR_EDITOR), **API Docs** (API_DOCS_READER). Sign in from the login page with the matching test account.
 - "Today" means the business date in Asia/Ho_Chi_Minh. End dates are inclusive. Status is computed: **Pre-start / Active / Ended**; **Cancelled** is a history badge, not a status.
@@ -87,19 +86,39 @@ How to use: run each scenario in order with a new synthetic person; tick a step 
 | 8.2 | Double-click Save on any action | Recorded once |
 | 8.3 | Any refused business rule | Clear English message with the reason and a Request ID |
 
-## 9. Roles
+## 9. Employee list and filters
 
 | # | Step | Expected result |
 |---|---|---|
-| 9.1 | API Docs account | Cannot see or change HR data |
-| 9.2 | HR Editor | No "Correct …", "Reverse End Employment", "Clear Work Email"; past-dated business events refused |
-| 9.3 | HR Admin | All actions available, including past dates and corrections |
+| 9.1 | Look at the Department column for an Active, a Pre-start and an Ended employee | Active: department of today's assignment; Pre-start: first assignment of the upcoming period; Ended: last assignment of the latest ended period; no employment / only cancelled periods: empty |
+| 9.2 | Filter Department = the department shown for an Ended employee | The Ended employee is included (the filter matches the displayed department; it is not "active only") |
+| 9.3 | Same filter plus Employment Status = Active | The Ended employee is excluded (status restricts the lifecycle) |
+| 9.4 | Person currently in ENG with a planned future period in QA | Shown and filtered as ENG until the future period starts |
+| 9.5 | Person whose only periods are cancelled | Status *No Employment Record*; not matched by any Department |
+
+## 10. Roles
+
+| # | Step | Expected result |
+|---|---|---|
+| 10.1 | API Docs account | Cannot see or change HR data |
+| 10.2 | HR Editor | No "Correct …", "Reverse End Employment", "Clear Work Email"; past-dated business events refused |
+| 10.3 | HR Admin | All actions available, including past dates and corrections |
+
+## Key UAT validation topic: PV-25
+
+**Effective Employment Period entered by mistake / void effective period (PV-25)** is the highest operational-priority open item. Today an *effective* Initial Employment or Rehire entered for the wrong person or date has no simple safe recovery workflow (Cancel Planned Period only works before the start date). During UAT, please record:
+
+- how often this happens and in which situations (wrong person, wrong date, duplicate entry);
+- how HR expects to fix it and who should be allowed to;
+- whether the period may have been used by other processes before the mistake is noticed.
+
+PV-24 (Reverse Relationship Change after it became effective) stays important; record actual occurrences so it can be prioritised by real need.
 
 ## Known Phase 1 limitations (expected, not defects)
 
 - No automatic **Reverse Relationship Change** once the new period has started (PV-24).
 - No same-day **Cancel Planned Period**: a period starting today is already effective (C-69).
-- No **Reverse Rehire** and no way to void an effective period entered by mistake (PV-25).
+- No **Reverse Rehire** and no way to void an effective period entered by mistake (PV-25 — key UAT validation topic).
 - No automatic repair of manager references to periods that were cancelled or ended (C-73; reported by the integrity scan).
 - No **Assignment** hard delete (C-46) and no generic **Employment Period** delete.
 - Relationship Change requires a known current Employee Type (C-68).
@@ -110,3 +129,4 @@ How to use: run each scenario in order with a new synthetic person; tick a step 
 ## Support tools for UAT
 
 - `npm run integrity:scan` — read-only consistency scan of the local database (ids only, no personal data).
+- `npm run test:integrity-baseline` — rebuilds the local test database with valid synthetic data only and requires a clean scan (0 errors, 0 warnings).

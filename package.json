@@ -21,7 +21,8 @@
     "openapi:write": "tsx scripts/write-openapi.ts",
     "integrity:scan": "tsx scripts/integrity-scan.ts",
     "test": "APP_ENV=test vitest run",
-    "test:watch": "APP_ENV=test vitest"
+    "test:watch": "APP_ENV=test vitest",
+    "test:integrity-baseline": "APP_ENV=test vitest run --config vitest.integrity-baseline.config.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

@@ -10,6 +10,8 @@ export default defineConfig({
     environment: "node",
     globalSetup: ["tests/global-setup.ts"],
     fileParallelism: false, // các file dùng chung một DB kiểm thử
+    // The clean integrity baseline runs separately on its own fresh database (vitest.integrity-baseline.config.ts).
+    exclude: ["**/node_modules/**", "tests/baseline/**"],
     testTimeout: 30_000,
     hookTimeout: 120_000,
     env: {
