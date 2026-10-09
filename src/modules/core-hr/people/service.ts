@@ -16,7 +16,7 @@ import {
   operationalPeriods,
 } from "../employments/queries";
 import { activeEndEventOf } from "../employments/lifecycle-events";
-import { assignmentOn, employmentStatus, referenceDate, representativeEmployment } from "../employments/status";
+import { employmentStatus, representativeAssignment, representativeEmployment } from "../employments/status";
 import { completenessView, missingOperationalItems, type OperationalInput } from "./completeness";
 import { normalizePersonalEmail, validateDateOfBirth, validateFullName, validateMobilePhone, validateWorkEmail } from "./validation";
 
@@ -476,9 +476,10 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
     .map((e) => ({ startDate: e.start_date, endDate: e.end_date, e }));
   const rep = representativeEmployment(dates, today);
   const repAssignment = rep
-    ? assignmentOn(
+    ? representativeAssignment(
+        rep,
         rep.e.assignments.map((a) => ({ effectiveFrom: a.effective_from, effectiveTo: a.effective_to, a })),
-        referenceDate(rep, today),
+        today,
       )?.a ?? null
     : null;
 
@@ -556,87 +557,96 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
   }
   if (q.employment_status === "no_employment") and.push({ employments: { none: anyOperational } });
   if (q.department_id) {
-    // Department of the assignment effective today, or — only for someone who has NOT started yet (no current
-    // period) — the first assignment of a future planned period. A person with a current period is never matched
-    // through a later planned period (e.g. a planned Rehire or Relationship Change), so filter and display agree.
-    and.push({
-      OR: [
-        {
-          employments: {
-            some: operationalEmploymentWhere({
-              assignments: { some: { departmentId: q.department_id, effectiveFrom: { lte: t }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: t } }] } },
-            }),
-          },
-        },
-        {
-          AND: [
-            { employments: { none: activeCond } },
-            {
-              employments: {
-                some: operationalEmploymentWhere({
-                  startDate: { gt: t },
-                  assignments: { some: { departmentId: q.department_id, effectiveFrom: { gt: t } } },
-                }),
-              },
-            },
-          ],
-        },
-      ],
-    });
+    // Candidates only (anyone with an operational assignment in this department); the actual match uses the same
+    // representative-assignment rule as the displayed row (C-76), applied below before paging.
+    and.push({ employments: { some: operationalEmploymentWhere({ assignments: { some: { departmentId: q.department_id } } }) } });
   }
   const where = and.length ? { AND: and } : {};
-  const [rows, total] = await Promise.all([
-    db().person.findMany({
-      where,
-      orderBy: [{ employeeCode: "asc" }, { id: "asc" }],
-      skip: (q.page - 1) * q.page_size,
-      take: q.page_size,
-      // List rows only need operational periods (cancelled periods have no operational effect).
-      include: {
-        employments: {
-          where: operationalEmploymentWhere(),
-          include: { employeeType: true, assignments: { include: assignmentInclude } },
-        },
-      },
-    }),
-    db().person.count({ where }),
-  ]);
-
-  const data: EmployeeListItem[] = rows.map((p) => {
-    const dates = p.employments.map((e) => ({ startDate: fromDbDate(e.startDate), endDate: fromDbDate(e.endDate), e }));
-    const rep = representativeEmployment(dates, today);
-    const a = rep
-      ? assignmentOn(
-          rep.e.assignments.map((x) => ({ effectiveFrom: fromDbDate(x.effectiveFrom), effectiveTo: fromDbDate(x.effectiveTo), x })),
-          referenceDate(rep, today),
-        )?.x ?? null
-      : null;
-    const status = employmentStatus(dates, today);
-    const type = rep?.e.employeeType ?? null;
-    const facts: OperationalInput = {
-      fullName: p.fullName,
-      personalEmail: p.personalEmail,
-      employmentStatus: status,
-      period: rep && {
-        startDate: rep.startDate,
-        workEmail: rep.e.workEmail,
-        employeeType: type && { requiresWorkEmail: type.requiresWorkEmail },
-        departmentId: a?.departmentId ?? null,
-        jobTitleId: a?.jobTitleId ?? null,
-      },
-    };
-    return {
-      id: p.id,
-      employee_code: p.employeeCode,
-      full_name: p.fullName,
-      employment_status: status,
-      operational_completeness: completenessView(facts).operational.status,
-      department: a ? ref(a.department) : null,
-      job_title: a ? jobTitleRef(a.jobTitle) : null,
-      employee_type: ref(type),
-      job_level: a ? ref(a.jobLevel) : null,
-      work_email: rep?.e.workEmail ?? null,
-    };
-  });
+  // List rows only need operational periods (cancelled periods have no operational effect).
+  const include = {
+    employments: {
+      where: operationalEmploymentWhere(),
+      include: { employeeType: true, assignments: { include: assignmentInclude } },
+    },
+  };
+  const orderBy = [{ employeeCode: "asc" as const }, { id: "asc" as const }];
+  let data: EmployeeListItem[];
+  let total: number;
+  if (q.department_id) {
+    // MVP scale (hundreds of people): filter the candidates with the display rule, then page in memory.
+    const matched = (await db().person.findMany({ where, orderBy, include }))
+      .map((p) => toListItem(p, today))
+      .filter((item) => item.department?.id === q.department_id);
+    total = matched.length;
+    data = matched.slice((q.page - 1) * q.page_size, q.page * q.page_size);
+  } else {
+    const [rows, count] = await Promise.all([
+      db().person.findMany({ where, orderBy, skip: (q.page - 1) * q.page_size, take: q.page_size, include }),
+      db().person.count({ where }),
+    ]);
+    data = rows.map((p) => toListItem(p, today));
+    total = count;
+  }
   return { data, total, page: q.page, page_size: q.page_size, status_as_of: today };
+}
+
+type ListPerson = {
+  id: string;
+  employeeCode: string;
+  fullName: string;
+  personalEmail: string | null;
+  employments: {
+    startDate: Date;
+    endDate: Date | null;
+    workEmail: string | null;
+    employeeType: { id: string; code: string; name: string; requiresWorkEmail: boolean } | null;
+    assignments: {
+      effectiveFrom: Date;
+      effectiveTo: Date | null;
+      departmentId: string;
+      jobTitleId: string;
+      department: { id: string; code: string; name: string };
+      jobTitle: { id: string; code: string; nameEn: string; nameVi: string | null };
+      jobLevel: { id: string; code: string; name: string } | null;
+    }[];
+  }[];
+};
+
+// One list row: representative period + representative assignment (C-76), the same rule as the Department filter.
+function toListItem(p: ListPerson, today: string): EmployeeListItem {
+  const dates = p.employments.map((e) => ({ startDate: fromDbDate(e.startDate), endDate: fromDbDate(e.endDate), e }));
+  const rep = representativeEmployment(dates, today);
+  const a = rep
+    ? representativeAssignment(
+        rep,
+        rep.e.assignments.map((x) => ({ effectiveFrom: fromDbDate(x.effectiveFrom), effectiveTo: fromDbDate(x.effectiveTo), x })),
+        today,
+      )?.x ?? null
+    : null;
+  const status = employmentStatus(dates, today);
+  const type = rep?.e.employeeType ?? null;
+  const facts: OperationalInput = {
+    fullName: p.fullName,
+    personalEmail: p.personalEmail,
+    employmentStatus: status,
+    period: rep && {
+      startDate: rep.startDate,
+      workEmail: rep.e.workEmail,
+      employeeType: type && { requiresWorkEmail: type.requiresWorkEmail },
+      departmentId: a?.departmentId ?? null,
+      jobTitleId: a?.jobTitleId ?? null,
+    },
+  };
+  return {
+    id: p.id,
+    employee_code: p.employeeCode,
+    full_name: p.fullName,
+    employment_status: status,
+    operational_completeness: completenessView(facts).operational.status,
+    department: a ? ref(a.department) : null,
+    job_title: a ? jobTitleRef(a.jobTitle) : null,
+    employee_type: ref(type),
+    job_level: a ? ref(a.jobLevel) : null,
+    work_email: rep?.e.workEmail ?? null,
+  };
 }

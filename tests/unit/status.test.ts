@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignmentOn, employmentStatus } from "@/modules/core-hr/employments/status";
+import { assignmentOn, employmentStatus, representativeAssignment } from "@/modules/core-hr/employments/status";
 import { completenessView, operationalItems, type OperationalInput } from "@/modules/core-hr/people/completeness";
 
 describe("Employment status by date (employment end date is INCLUSIVE)", () => {
@@ -63,3 +63,23 @@ describe("Operational completeness (MVP rule, PV-03 email rule)", () => {
     expect(missing(base({ personalEmail: "x@example.test" }, { workEmail: null, employeeType: null }))).toEqual(["work_email", "employee_type"]);
   });
 });
+
+describe("representativeAssignment (C-76)", () => {
+  const rows = [
+    { id: 2, effectiveFrom: "2026-07-01", effectiveTo: null },
+    { id: 1, effectiveFrom: "2026-01-05", effectiveTo: "2026-07-01" },
+  ];
+  it("active period: the assignment effective today", () => {
+    expect(representativeAssignment({ startDate: "2026-01-05", endDate: null }, rows, "2026-03-01")?.id).toBe(1);
+  });
+  it("pre-start period: the first assignment, even when it starts after the period start", () => {
+    expect(representativeAssignment({ startDate: "2026-01-01", endDate: null }, rows, "2025-12-01")?.id).toBe(1);
+  });
+  it("ended period: the last assignment", () => {
+    expect(representativeAssignment({ startDate: "2026-01-05", endDate: "2026-09-30" }, [{ ...rows[0], effectiveTo: "2026-08-01" }, rows[1]], "2026-12-01")?.id).toBe(2);
+  });
+  it("no assignment: null", () => {
+    expect(representativeAssignment({ startDate: "2026-01-05", endDate: null }, [], "2026-03-01")).toBeNull();
+  });
+});
+

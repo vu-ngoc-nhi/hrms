@@ -206,6 +206,7 @@
             "in": "query",
             "required": false,
             "schema": {
+              "description": "Matches the Department shown in the row (C-76): active → assignment effective today; pre-start → first assignment of the upcoming period; ended → last assignment of the latest ended period. Combine with employment_status to restrict the lifecycle.",
               "type": "string",
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"

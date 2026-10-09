@@ -22,16 +22,23 @@ export function representativeEmployment<T extends EmploymentDates>(employments:
   return ended[0] ?? null;
 }
 
-// Reference date used to pick the assignment of the representative period.
-export function referenceDate(e: EmploymentDates, asOf: string): string {
-  if (e.startDate > asOf) return e.startDate;
-  if (e.endDate !== null && e.endDate < asOf) return e.endDate;
-  return asOf;
-}
-
 export type AssignmentDates = { effectiveFrom: string; effectiveTo: string | null };
 
 // effective_from is inclusive, effective_to is exclusive.
 export function assignmentOn<T extends AssignmentDates>(assignments: T[], date: string): T | null {
   return assignments.find((a) => a.effectiveFrom <= date && (a.effectiveTo === null || a.effectiveTo > date)) ?? null;
+}
+
+/**
+ * Representative assignment of the representative period (C-76) — the single rule used by the list row, the list
+ * Department filter and operational completeness:
+ *  - active period: the assignment effective on `asOf`;
+ *  - upcoming (pre-start) period: its first assignment;
+ *  - ended period: its last assignment.
+ */
+export function representativeAssignment<T extends AssignmentDates>(period: EmploymentDates, assignments: readonly T[], asOf: string): T | null {
+  const ordered = [...assignments].sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? -1 : a.effectiveFrom > b.effectiveFrom ? 1 : 0));
+  if (period.startDate > asOf) return ordered[0] ?? null;
+  if (period.endDate !== null && period.endDate < asOf) return ordered.at(-1) ?? null;
+  return assignmentOn(ordered, asOf);
 }

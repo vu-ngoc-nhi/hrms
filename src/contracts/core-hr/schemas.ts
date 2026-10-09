@@ -571,7 +571,12 @@ export const EmployeeListSchema = reg(
 export const EmployeeListQuerySchema = z.strictObject({
   ...pageFields,
   search: z.string().max(100).optional(),
-  department_id: z.uuid().optional(),
+  department_id: z
+    .uuid()
+    .optional()
+    .describe(
+      "Matches the Department shown in the row (C-76): active → assignment effective today; pre-start → first assignment of the upcoming period; ended → last assignment of the latest ended period. Combine with employment_status to restrict the lifecycle.",
+    ),
   employment_status: EmploymentStatusSchema.optional(),
 });
 
