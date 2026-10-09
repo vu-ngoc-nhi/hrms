@@ -114,6 +114,13 @@ export const en = {
     impactOpen: "A new assignment starts on {from}.",
     save: "Save Assignment Change",
   },
+  initialAssignment: {
+    open: "Add Initial Assignment",
+    title: "Add Initial Assignment",
+    help: "Records the first assignment of this employment period. Choose the date it actually started; earlier history is not invented and the assignment does not have to start on the period start date.",
+    backdatedNote: "This date is in the past: it is recorded as Initial Data Capture and needs a reason.",
+    save: "Save Initial Assignment",
+  },
   workEmail: {
     edit: "Edit Work Email",
     correct: "Correct Work Email",

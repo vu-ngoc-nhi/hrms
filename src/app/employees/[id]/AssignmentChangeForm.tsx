@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import { useAssignmentOptions, type Option } from "./useAssignmentOptions";
 
-type Option = { id: string; label: string };
 type Current = {
   effective_from: string;
   department: { id: string; name: string };
@@ -32,12 +32,6 @@ export function AssignmentChangeForm<T>({
   onSaved: (updated: T) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [opts, setOpts] = useState<{ departments: Option[]; jobTitles: Option[]; levels: Option[]; managers: Option[] }>({
-    departments: [],
-    jobTitles: [],
-    levels: [],
-    managers: [],
-  });
   const [form, setForm] = useState({
     effective_date: minDate ?? new Date().toISOString().slice(0, 10),
     department_id: current?.department.id ?? "",
@@ -50,23 +44,7 @@ export function AssignmentChangeForm<T>({
   const [error, setError] = useState<ApiCallError | null>(null);
   const attempt = useRef<{ key: string; payload: string } | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const list = (path: string) =>
-      api<{ data: { id: string; code: string; name?: string; name_en?: string }[] }>(`/api/v1/core-hr/${path}?page_size=100`).then((r) =>
-        r.data.data.map((x) => ({ id: x.id, label: `${x.name ?? x.name_en} (${x.code})` })),
-      );
-    Promise.all([
-      list("departments"),
-      list("job-titles"),
-      list("job-levels"),
-      api<{ data: { id: string; employee_code: string; full_name: string }[] }>(
-        "/api/v1/core-hr/employees?employment_status=active&page_size=100",
-      ).then((r) => r.data.data.filter((x) => x.id !== personId).map((x) => ({ id: x.id, label: `${x.full_name} (${x.employee_code})` }))),
-    ])
-      .then(([departments, jobTitles, levels, managers]) => setOpts({ departments, jobTitles, levels, managers }))
-      .catch((e) => setError(e));
-  }, [open, personId]);
+  const opts = useAssignmentOptions(open, personId, setError);
 
   if (!open) {
     return (

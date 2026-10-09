@@ -59,13 +59,14 @@ describe("Cancelled planned periods (operational vs history)", () => {
 
   it("do not appear as Pre-start or in department filters; appear as no employment", async () => {
     const list = async (qs: string) =>
-      (await call(listRoute, { path: `/api/v1/core-hr/employees?page_size=100&${qs}`, user: "editor" })).body.data.map(
+      // Search by name so the assertion does not depend on how many profiles other test files created.
+      (await call(listRoute, { path: `/api/v1/core-hr/employees?page_size=100&search=Test%20Cancelled%20Planned&${qs}`, user: "editor" })).body.data.map(
         (x: { id: string }) => x.id,
       );
     expect(await list("employment_status=not_started")).not.toContain(cancelledPersonId);
     expect(await list("employment_status=no_employment")).toContain(cancelledPersonId);
     expect(await list(`department_id=${ids.d.QA}`)).not.toContain(cancelledPersonId);
-    const row = (await call(listRoute, { path: "/api/v1/core-hr/employees?page_size=100", user: "editor" })).body.data.find(
+    const row = (await call(listRoute, { path: "/api/v1/core-hr/employees?page_size=100&search=Test%20Cancelled%20Planned", user: "editor" })).body.data.find(
       (x: { id: string }) => x.id === cancelledPersonId,
     );
     expect(row).toMatchObject({ employment_status: "no_employment", department: null, employee_type: null, work_email: null });

@@ -9,9 +9,10 @@ import { call } from "../helpers";
 describe("Development demo seed", () => {
   it("runs on a freshly migrated database and yields the expected statuses and completeness", async () => {
     await seedDemoProfiles(db());
-    const all = await call(listRoute, { path: "/api/v1/core-hr/employees?page_size=100", user: "admin" });
     for (const [name, expected] of Object.entries(DEMO_EXPECTATIONS)) {
-      const row = all.body.data.find((x: { full_name: string }) => x.full_name === name);
+      // Search by name: the shared test database also holds profiles created by other test files.
+      const found = await call(listRoute, { path: `/api/v1/core-hr/employees?page_size=100&search=${encodeURIComponent(name)}`, user: "admin" });
+      const row = found.body.data.find((x: { full_name: string }) => x.full_name === name);
       expect(row, name).toBeDefined();
       expect(row.employment_status, name).toBe(expected.status);
       expect(row.operational_completeness, name).toBe(expected.completeness);

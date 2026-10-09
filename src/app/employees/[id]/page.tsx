@@ -9,6 +9,7 @@ import { formatDate, t, tMaybe } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import { ProfileEditForm } from "./ProfileEditForm";
 import { AssignmentChangeForm } from "./AssignmentChangeForm";
+import { InitialAssignmentForm } from "./InitialAssignmentForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
 
 type Ref = { id: string; code: string; name: string } | null;
@@ -195,7 +196,22 @@ export default function EmployeeDetailPage() {
                 }}
               />
             )}
-          {!e.cancelled_at && e.period_lifecycle !== "ended" && session?.can("employment.manage") && (
+          {!e.cancelled_at && e.assignments.length === 0 && session?.can("employment.manage") && (
+            <InitialAssignmentForm<Detail>
+              key={`${e.id}-${d.revision}-initial`}
+              employmentId={e.id}
+              personId={d.id}
+              periodStart={e.start_date}
+              periodEnd={e.end_date}
+              today={d.status_as_of}
+              revision={d.revision}
+              onSaved={(updated) => {
+                setD(updated);
+                setNotice(t("profileEdit.saved"));
+              }}
+            />
+          )}
+          {!e.cancelled_at && e.period_lifecycle !== "ended" && e.assignments.length > 0 && session?.can("employment.manage") && (
             <AssignmentChangeForm<Detail>
               key={`${e.id}-${d.revision}`}
               employmentId={e.id}

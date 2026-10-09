@@ -349,6 +349,27 @@ export const AssignmentChangeCreateSchema = reg(
   "A genuine organizational change: closes the applicable assignment at effective_date and creates a new effective-dated assignment. Omitted fields keep their current values. Never changes Employee Type.",
 );
 
+export const InitialAssignmentCreateSchema = reg(
+  "InitialAssignmentCreate",
+  z.strictObject({
+    expected_revision: z.int().min(1).describe("Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."),
+    effective_date: isoDate().describe(
+      "First day of the initial assignment; must fall within the employment period. A past date is allowed as Initial Data Capture (PV-19).",
+    ),
+    reason: z
+      .string()
+      .min(1)
+      .max(1000)
+      .optional()
+      .describe("Required when effective_date is in the past (backdated Initial Data Capture); not required otherwise (C-41)."),
+    department_id: z.uuid(),
+    job_title_id: z.uuid(),
+    job_level_id: z.uuid().nullable().optional(),
+    manager_person_id: z.uuid().nullable().optional(),
+  }),
+  "Records the FIRST assignment of a non-cancelled employment period that has no assignment rows (C-41). Catalog values must be active.",
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -385,5 +406,6 @@ export type EmployeeCreateInput = z.infer<typeof EmployeeCreateSchema>;
 export type EmployeeUpdateInput = z.infer<typeof EmployeeUpdateSchema>;
 export type WorkEmailUpdateInput = z.infer<typeof WorkEmailUpdateSchema>;
 export type AssignmentChangeInput = z.infer<typeof AssignmentChangeCreateSchema>;
+export type InitialAssignmentInput = z.infer<typeof InitialAssignmentCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;

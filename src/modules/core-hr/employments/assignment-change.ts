@@ -6,21 +6,26 @@
 // assignment already starts on or after the effective date, because changing it would rewrite planned/recorded history.
 import { randomUUID } from "node:crypto";
 import type { AssignmentChangeInput, EmployeeDetail } from "@/contracts/core-hr/schemas";
-import { addDays, fromDbDate, toDbDate, todayInVietnam } from "@/lib/dates";
-import { db, pgErrorInfo, type Tx } from "@/lib/db";
+import { fromDbDate, toDbDate, todayInVietnam } from "@/lib/dates";
+import { pgErrorInfo, type Tx } from "@/lib/db";
 import { ApiError, type ErrorDetail } from "@/lib/http/errors";
 import { recordAudit, type StructuralChange } from "@/modules/audit/audit";
 import type { Principal } from "@/modules/identity/authenticate";
-import { claimIdempotencyKey, requestFingerprint } from "@/modules/idempotency/idempotency";
 import { bumpPersonRevision } from "../people/revision";
-import { checkActive, getEmployee } from "../people/service";
+import { checkActive } from "../people/service";
+import { personIdForAssignment, rule, runIdempotentCommand } from "./command";
 import { assertEffectiveDateAllowed } from "./effective-date-policy";
 import { currentEmploymentWhere, loadWritableEmployment } from "./queries";
 
 const OPERATION = "createAssignmentChange";
 
-const rule = (code: string, message: string, details?: ErrorDetail[]) =>
-  new ApiError(422, "BUSINESS_RULE_VIOLATION", message, details ?? [{ code, message }]);
+export const assignmentTimelineConflict = (error: unknown) => {
+  const info = pgErrorInfo(error);
+  if (info.sqlState === "23P01" || info.constraint === "job_assignment_within_employment") {
+    return rule("ASSIGNMENT_TIMELINE_CONFLICT", "The change would make assignments overlap or fall outside the employment period.");
+  }
+  return undefined;
+};
 
 export async function createAssignmentChange(
   principal: Principal,
@@ -29,31 +34,23 @@ export async function createAssignmentChange(
   idempotencyKey: string,
   requestId: string,
 ): Promise<{ replayed: boolean; body: EmployeeDetail }> {
-  const requestHmac = requestFingerprint(OPERATION, { employmentId, ...input });
-  const prior = await db().idempotencyRecord.findUnique({
-    where: { actorUserId_operation_idempotencyKey: { actorUserId: principal.userId, operation: OPERATION, idempotencyKey } },
-  });
-  if (prior) return replay(principal, prior.requestHmac, requestHmac, prior.resourceId);
-
   const reason = input.reason.trim();
-  if (!reason) throw rule("REASON_REQUIRED", "A reason is required for an Assignment Change.");
   const today = todayInVietnam();
-  // C-25: HR_EDITOR today or later; a past effective date requires employment.correct (HR_ADMIN).
-  assertEffectiveDateAllowed(principal, "business_event", input.effective_date, today);
-
   const newAssignmentId = randomUUID();
-  let personId: string;
-  try {
-    personId = await db().$transaction(async (tx) => {
-      // Claim the key first: a concurrent request with the same key waits here and then replays the stored result.
-      const claim = await claimIdempotencyKey(tx, {
-        actorUserId: principal.userId,
-        operation: OPERATION,
-        key: idempotencyKey,
-        requestHmac,
-        resourceId: newAssignmentId,
-      });
-      if (!claim.claimed) throw new ReplayDetected(claim.requestHmac, claim.resourceId);
+  return runIdempotentCommand({
+    principal,
+    operation: OPERATION,
+    idempotencyKey,
+    payload: { employmentId, ...input },
+    resourceId: newAssignmentId,
+    personIdForResource: personIdForAssignment,
+    precheck: () => {
+      if (!reason) throw rule("REASON_REQUIRED", "A reason is required for an Assignment Change.");
+      // C-25: HR_EDITOR today or later; a past effective date requires employment.correct (HR_ADMIN).
+      assertEffectiveDateAllowed(principal, "business_event", input.effective_date, today);
+    },
+    mapError: assignmentTimelineConflict,
+    execute: async (tx) => {
       const period = await loadWritableEmployment(tx, employmentId); // 404, or 409 when cancelled
       const start = fromDbDate(period.startDate);
       const end = fromDbDate(period.endDate);
@@ -71,6 +68,10 @@ export async function createAssignmentChange(
       }
 
       const assignments = await tx.jobAssignment.findMany({ where: { employmentId }, orderBy: { effectiveFrom: "asc" } });
+      // C-41: the first assignment of a period is recorded with Add Initial Assignment, never with Assignment Change.
+      if (assignments.length === 0) {
+        throw rule("NO_ASSIGNMENT_YET", "This employment period has no assignment yet. Use Add Initial Assignment.");
+      }
       const laterOrSameDay = assignments.filter((a) => fromDbDate(a.effectiveFrom) >= d);
       if (laterOrSameDay.length) {
         throw rule(
@@ -83,10 +84,16 @@ export async function createAssignmentChange(
           })),
         );
       }
-      const previous =
-        assignments.find((a) => fromDbDate(a.effectiveFrom) < d && (a.effectiveTo === null || fromDbDate(a.effectiveTo) > d)) ?? null;
+      const previous = assignments.find((a) => fromDbDate(a.effectiveFrom) < d && (a.effectiveTo === null || fromDbDate(a.effectiveTo) > d));
+      // C-42: never open a row after a gap; a date not covered by any assignment is a timeline problem to correct first.
+      if (!previous) {
+        throw rule(
+          "NO_ASSIGNMENT_IN_EFFECT",
+          "No assignment is in effect on this date. Correct the assignment timeline through the historical correction workflow first.",
+        );
+      }
 
-      const next = await resolveValues(tx, input, previous, period.personId, d);
+      const next = await resolveAssignmentValues(tx, input, previous, period.personId, d);
       const changedFields: string[] = [];
       const structural: StructuralChange[] = [];
       const track = (name: string, field: StructuralChange["field"] | null, before: string | null, after: string | null) => {
@@ -94,29 +101,26 @@ export async function createAssignmentChange(
         changedFields.push(name);
         if (field) structural.push({ field, oldValue: before, newValue: after });
       };
-      track("assignment.department_id", "department_id", previous?.departmentId ?? null, next.departmentId);
-      track("assignment.job_title_id", "job_title_id", previous?.jobTitleId ?? null, next.jobTitleId);
-      track("assignment.job_level_id", "job_level_id", previous?.jobLevelId ?? null, next.jobLevelId);
+      track("assignment.department_id", "department_id", previous.departmentId, next.departmentId);
+      track("assignment.job_title_id", "job_title_id", previous.jobTitleId, next.jobTitleId);
+      track("assignment.job_level_id", "job_level_id", previous.jobLevelId, next.jobLevelId);
       // Manager: field name only, never old/new ids (C-24).
-      track("assignment.manager", null, previous?.managerEmploymentId ?? null, next.managerEmploymentId);
+      track("assignment.manager", null, previous.managerEmploymentId, next.managerEmploymentId);
       if (changedFields.length === 0) {
         throw rule("NO_CHANGE", "The requested assignment is the same as the assignment already in effect on that date.");
       }
 
       await bumpPersonRevision(tx, period.personId, input.expected_revision);
 
-      // New row inherits the previous row's closing date (e.g. the period end), or the period end if there is none.
-      const newEffectiveTo = previous ? previous.effectiveTo : end !== null ? toDbDate(addDays(end, 1)) : null;
-      if (previous) {
-        await tx.jobAssignment.update({ where: { id: previous.id }, data: { effectiveTo: toDbDate(d) } });
-        structural.push({ field: "assignment.effective_to", oldValue: fromDbDate(previous.effectiveTo), newValue: d });
-      }
+      // The new row inherits the previous row's closing date (e.g. the period end).
+      await tx.jobAssignment.update({ where: { id: previous.id }, data: { effectiveTo: toDbDate(d) } });
+      structural.push({ field: "assignment.effective_to", oldValue: fromDbDate(previous.effectiveTo), newValue: d });
       await tx.jobAssignment.create({
         data: {
           id: newAssignmentId,
           employmentId,
           effectiveFrom: toDbDate(d),
-          effectiveTo: newEffectiveTo,
+          effectiveTo: previous.effectiveTo,
           departmentId: next.departmentId,
           jobTitleId: next.jobTitleId,
           jobLevelId: next.jobLevelId,
@@ -142,23 +146,15 @@ export async function createAssignmentChange(
         tx,
       );
       return period.personId;
-    });
-  } catch (error) {
-    if (error instanceof ReplayDetected) return replay(principal, error.storedHmac, requestHmac, error.resourceId);
-    const info = pgErrorInfo(error);
-    if (info.sqlState === "23P01" || info.constraint === "job_assignment_within_employment") {
-      throw rule("ASSIGNMENT_TIMELINE_CONFLICT", "The change would make assignments overlap or fall outside the employment period.");
-    }
-    throw error;
-  }
-  return { replayed: false, body: await getEmployee(principal, personId) };
+    },
+  });
 }
 
 type Values = { departmentId: string; jobTitleId: string; jobLevelId: string | null; managerEmploymentId: string | null };
 
-async function resolveValues(
+export async function resolveAssignmentValues(
   tx: Tx,
-  input: AssignmentChangeInput,
+  input: Pick<AssignmentChangeInput, "department_id" | "job_title_id" | "job_level_id" | "manager_person_id">,
   previous: { departmentId: string; jobTitleId: string; jobLevelId: string | null; managerEmploymentId: string | null } | null,
   personId: string,
   onDate: string,
@@ -191,21 +187,4 @@ async function resolveValues(
   }
   if (errors.length) throw new ApiError(422, "BUSINESS_RULE_VIOLATION", "The request violates a business rule.", errors);
   return { departmentId: departmentId!, jobTitleId: jobTitleId!, jobLevelId, managerEmploymentId };
-}
-
-class ReplayDetected extends Error {
-  constructor(
-    public readonly storedHmac: string,
-    public readonly resourceId: string,
-  ) {
-    super("idempotent replay");
-  }
-}
-
-async function replay(principal: Principal, storedHmac: string, requestHmac: string, assignmentId: string) {
-  if (storedHmac !== requestHmac) {
-    throw new ApiError(409, "IDEMPOTENCY_KEY_REUSED", "This Idempotency-Key was already used with a different payload.");
-  }
-  const assignment = await db().jobAssignment.findUniqueOrThrow({ where: { id: assignmentId }, include: { employment: true } });
-  return { replayed: true, body: await getEmployee(principal, assignment.employment.personId) };
 }
