@@ -154,6 +154,7 @@ export function NewPeriodForm<T>({
       <p className="muted small">{t("newPeriod.notCopied")}</p>
       {continuousTypeChange && <p className="alert small">{t("rehire.relationshipChangeReminder")}</p>}
       {mode === "initial" && backdated && <p className="alert small">{t("initialEmployment.backdatedNote")}</p>}
+      {form.start_date === today && <p className="alert small">{t("sameDay.note")}</p>}
       <label>
         {t("profileEdit.reason")}
         {reasonRequired ? " *" : ""}

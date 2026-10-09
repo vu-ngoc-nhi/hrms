@@ -89,7 +89,7 @@ export const en = {
     employeeType: "Employee Type",
     cancelledBadge: "Cancelled",
     eventType: {
-      start: "Started",
+      start: "Start of employment",
       suspend: "Suspended",
       resume: "Resumed",
       end: "End of employment",
@@ -103,6 +103,7 @@ export const en = {
     manager: "Line Manager",
     noAssignments: "No assignments yet.",
     actions: "Actions",
+    saved: "Changes saved.",
   },
   gender: { male: "Male", female: "Female", other: "Other" },
   assignmentChange: {
@@ -149,8 +150,17 @@ export const en = {
     impactAssignment: "The assignment in effect since {from} ends on {to}.",
     impactNoAssignment: "No assignment needs to change.",
     laterNotAllowed: "End Employment cannot move the planned end date later. Use Correct Period for that.",
+    preStartGuidance:
+      "This period has not started yet. If it should never start, use Cancel Planned Period instead. If only the expected end is known, a planned end date is enough. End Employment records a lifecycle business action.",
     blocked: "An assignment starts after this end date ({list}). Correct it first; it is never changed automatically.",
     save: "Save End Employment",
+  },
+  sameDay: {
+    note: "A period starting today becomes effective immediately: it can no longer be cancelled as a planned period. Check the details before saving.",
+  },
+  guidance: {
+    cancelledRelationshipChange:
+      "The planned relationship change was cancelled, but the previous Employment Period is still ended. Review whether Reverse End Employment is required.",
   },
   newPeriod: {
     plannedEnd: "Planned End Date (optional)",

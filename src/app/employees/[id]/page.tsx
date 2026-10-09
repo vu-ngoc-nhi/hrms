@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t, tMaybe } from "@/i18n";
+import { addDays } from "@/lib/dates";
 import { api, ApiCallError } from "@/lib/client/api";
 import { ProfileEditForm } from "./ProfileEditForm";
 import { AssignmentChangeForm } from "./AssignmentChangeForm";
@@ -80,6 +81,13 @@ export default function EmployeeDetailPage() {
   const op = d.completeness.operational;
   // S4.8: non-cancelled periods decide between Add Initial Employment Period and Rehire (latest by chronology).
   const realPeriods = d.employments.filter((e) => !e.cancelled_at);
+  // C-72: an Active End Event with RELATIONSHIP_CHANGE whose successor (starting the next day) was cancelled and that
+  // has no non-cancelled successor. Guidance only — the reversal stays an explicit HR_ADMIN action.
+  const needsRelationshipChangeReview = (e: Detail["employments"][number]) =>
+    !e.cancelled_at &&
+    e.active_end_event?.end_reason?.code === "RELATIONSHIP_CHANGE" &&
+    !realPeriods.some((o) => o.start_date > e.start_date) &&
+    d.employments.some((o) => o.cancelled_at && o.start_date === addDays(e.active_end_event!.effective_date, 1));
   const latest = realPeriods.reduce<(typeof realPeriods)[number] | null>((a, e) => (a === null || e.start_date >= a.start_date ? e : a), null);
   // Historical corrections: HR_ADMIN only (employment.correct), never on cancelled periods.
   const canCorrect = (e: Detail["employments"][number]) => !e.cancelled_at && Boolean(session?.can("employment.correct"));
@@ -179,7 +187,7 @@ export default function EmployeeDetailPage() {
             revision={d.revision}
             onSaved={(updated) => {
               setD(updated);
-              setNotice(t("profileEdit.saved"));
+              setNotice(t("detail.saved"));
             }}
           />
         ) : (
@@ -194,7 +202,7 @@ export default function EmployeeDetailPage() {
               revision={d.revision}
               onSaved={(updated) => {
                 setD(updated);
-                setNotice(t("profileEdit.saved"));
+                setNotice(t("detail.saved"));
               }}
             />
           )
@@ -220,6 +228,9 @@ export default function EmployeeDetailPage() {
             )}
           </div>
           {e.cancelled_at && <p className="muted small">{t("detail.cancelledNote")}</p>}
+          {needsRelationshipChangeReview(e) && session?.can("employment.correct") && (
+            <p className="alert small">{t("guidance.cancelledRelationshipChange")}</p>
+          )}
           <dl className="kv">
             <dt>{t("detail.startDate")}</dt>
             <dd>{formatDate(e.start_date)}</dd>
@@ -247,7 +258,7 @@ export default function EmployeeDetailPage() {
                 revision={d.revision}
                 onSaved={(updated) => {
                   setD(updated);
-                  setNotice(t("profileEdit.saved"));
+                  setNotice(t("detail.saved"));
                 }}
               />
             )}
@@ -260,7 +271,7 @@ export default function EmployeeDetailPage() {
               revision={d.revision}
               onSaved={(updated) => {
                 setD(updated);
-                setNotice(t("profileEdit.saved"));
+                setNotice(t("detail.saved"));
               }}
             />
           )}
@@ -277,7 +288,7 @@ export default function EmployeeDetailPage() {
               revision={d.revision}
               onSaved={(updated) => {
                 setD(updated);
-                setNotice(t("profileEdit.saved"));
+                setNotice(t("detail.saved"));
               }}
             />
           )}
@@ -292,7 +303,7 @@ export default function EmployeeDetailPage() {
               revision={d.revision}
               onSaved={(updated) => {
                 setD(updated);
-                setNotice(t("profileEdit.saved"));
+                setNotice(t("detail.saved"));
               }}
             />
           )}
@@ -305,7 +316,7 @@ export default function EmployeeDetailPage() {
               revision={d.revision}
               onSaved={(updated) => {
                 setD(updated);
-                setNotice(t("profileEdit.saved"));
+                setNotice(t("detail.saved"));
               }}
             />
           )}
@@ -320,7 +331,7 @@ export default function EmployeeDetailPage() {
               revision={d.revision}
               onSaved={(updated) => {
                 setD(updated);
-                setNotice(t("profileEdit.saved"));
+                setNotice(t("detail.saved"));
               }}
             />
           )}
@@ -335,7 +346,7 @@ export default function EmployeeDetailPage() {
               revision={d.revision}
               onSaved={(updated) => {
                 setD(updated);
-                setNotice(t("profileEdit.saved"));
+                setNotice(t("detail.saved"));
               }}
             />
           )}
@@ -349,7 +360,7 @@ export default function EmployeeDetailPage() {
               minDate={session.can("employment.correct") ? undefined : d.status_as_of}
               onSaved={(updated) => {
                 setD(updated);
-                setNotice(t("profileEdit.saved"));
+                setNotice(t("detail.saved"));
               }}
             />
           )}
@@ -415,7 +426,7 @@ export default function EmployeeDetailPage() {
                     onSaved={(updated) => {
                       setD(updated);
                       setCorrectingRow(null);
-                      setNotice(t("profileEdit.saved"));
+                      setNotice(t("detail.saved"));
                     }}
                     onClose={() => setCorrectingRow(null)}
                   />

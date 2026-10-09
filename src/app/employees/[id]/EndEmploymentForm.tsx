@@ -85,6 +85,7 @@ export function EndEmploymentForm<T>({
     <form onSubmit={save} className="card" style={{ marginTop: 12 }}>
       <h2>{t("endEmployment.title")}</h2>
       <p className="muted small">{t("endEmployment.help")}</p>
+      {startDate > today && <p className="alert small">{t("endEmployment.preStartGuidance")}</p>}
       <dl className="kv">
         <dt>{t("detail.employeeType")}</dt>
         <dd>{employeeType ?? "—"}</dd>

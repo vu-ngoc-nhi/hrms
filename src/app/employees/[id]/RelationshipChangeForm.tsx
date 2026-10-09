@@ -193,6 +193,7 @@ export function RelationshipChangeForm<T>({
         </label>
       </div>
       {ended && <p className="muted small">{t("relationshipChange.endedNote", { date: formatDate(period.end_date) })}</p>}
+      {form.start_date === today && <p className="alert small">{t("sameDay.note")}</p>}
 
       <fieldset style={{ border: "none", padding: 0, margin: "12px 0 0" }}>
         <legend className="small">
