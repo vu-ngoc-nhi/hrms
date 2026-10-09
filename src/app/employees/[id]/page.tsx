@@ -14,6 +14,7 @@ import { EndEmploymentForm } from "./EndEmploymentForm";
 import { InitialAssignmentForm } from "./InitialAssignmentForm";
 import { NewPeriodForm } from "./NewPeriodForm";
 import { PeriodCorrectionForm } from "./PeriodCorrectionForm";
+import { RelationshipChangeForm } from "./RelationshipChangeForm";
 import { ReverseEndForm } from "./ReverseEndForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
 
@@ -270,6 +271,21 @@ export default function EmployeeDetailPage() {
               startDate={e.start_date}
               currentEnd={e.end_date}
               assignments={e.assignments}
+              today={d.status_as_of}
+              canBackdate={Boolean(session.can("employment.correct"))}
+              revision={d.revision}
+              onSaved={(updated) => {
+                setD(updated);
+                setNotice(t("profileEdit.saved"));
+              }}
+            />
+          )}
+          {e.id === latest?.id && !e.has_active_end_event && e.employee_type && session?.can("employment.manage") && (
+            <RelationshipChangeForm<Detail>
+              key={`${e.id}-${d.revision}-relationship`}
+              employmentId={e.id}
+              personId={d.id}
+              period={{ ...e, employee_type: e.employee_type }}
               today={d.status_as_of}
               canBackdate={Boolean(session.can("employment.correct"))}
               revision={d.revision}

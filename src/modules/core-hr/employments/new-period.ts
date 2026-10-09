@@ -19,10 +19,10 @@ import { assertEffectiveDateAllowed } from "./effective-date-policy";
 import { correctionDbError } from "./period-correction";
 import { operationalEmploymentWhere } from "./queries";
 
-type PeriodFields = { start_date: string; end_date?: string; employee_type_id?: string; work_email?: string };
+export type PeriodFields = { start_date: string; end_date?: string; employee_type_id?: string; work_email?: string };
 
 /** Validation shared by both actions that does not need the database. */
-function checkFields(input: PeriodFields): { workEmail: string | null } {
+export function checkFields(input: PeriodFields): { workEmail: string | null } {
   const issues = { errors: [] as ErrorDetail[], warnings: [] as ErrorDetail[] };
   const workEmail = input.work_email ? validateWorkEmail(input.work_email, issues, "work_email") : null;
   if (input.end_date !== undefined && input.end_date < input.start_date) {
@@ -38,7 +38,7 @@ async function lockPerson(tx: Tx, personId: string, expectedRevision: number) {
 }
 
 /** Inserts the new period and its `start` event, then audits it (no assignment, no End event). */
-async function insertPeriod(
+export async function insertPeriod(
   tx: Tx,
   a: { id: string; personId: string; input: PeriodFields; workEmail: string | null; principal: Principal; requestId: string; action: string; reason: string | null },
 ) {

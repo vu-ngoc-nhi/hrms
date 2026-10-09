@@ -1264,6 +1264,126 @@
         }
       }
     },
+    "/api/v1/core-hr/employments/{id}/relationship-change": {
+      "post": {
+        "operationId": "createRelationshipChange",
+        "summary": "Relationship Change (continuous transition to a different Employee Type)",
+        "description": "Applies to the person's latest non-cancelled period (422 NOT_LATEST_PERIOD) without an Active End Event (422 ACTIVE_END_EVENT_EXISTS). The new Employee Type must differ (422 SAME_EMPLOYEE_TYPE). The current period ends on start_date − 1: an open end date is set, a future planned end date is replaced (earlier or later), an already-ended period only allows start_date = end date + 1 (422 GAP_USE_REHIRE / HISTORICAL_END_MISMATCH). Assignments starting on or after start_date block it (422 FUTURE_ASSIGNMENT_OUTSIDE_END); the applicable assignment closes at start_date. Writes an end event with the system End Reason RELATIONSHIP_CHANGE and reversal metadata, a new period (same person and Employee Code) with one start event, the submitted Work Email only, and an optional submitted Initial Assignment. HR_EDITOR today or later; backdated requires HR_ADMIN. Reason, expected_revision and Idempotency-Key required. No automatic reversal in Phase 1. Audit: employment.relationship_change (old and new period), assignment.close, assignment.initial — same request ID.\n\nRequired permission: `employment.manage`.",
+        "tags": [
+          "Employments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelationshipChangeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Employee profile after the action (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/core-hr/employments/{id}/reverse-end": {
       "post": {
         "operationId": "createReverseEnd",
@@ -4969,6 +5089,100 @@
         "required": [
           "expected_revision",
           "start_date",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "RelationshipChangeCreate": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Revision of the person profile; stale values return 409 REVISION_CONFLICT."
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "description": "First day of the new period (the transition date). The current period ends the day before."
+          },
+          "employee_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "New Employee Type (active); must differ from the current period's type."
+          },
+          "end_date": {
+            "description": "Optional planned last day of the NEW period (≥ start_date). It does not create an End event.",
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "work_email": {
+            "description": "Work Email of the new period, only when explicitly chosen (e.g. 'keep current'); never copied automatically.",
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Mandatory Relationship Change reason; never shown in the generic history."
+          },
+          "initial_assignment": {
+            "description": "Optional explicitly confirmed Initial Assignment of the new period, effective from start_date. Omitted → none is created (never copied).",
+            "type": "object",
+            "properties": {
+              "department_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "job_title_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "job_level_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "manager_person_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "department_id",
+              "job_title_id"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "expected_revision",
+          "start_date",
+          "employee_type_id",
           "reason"
         ],
         "additionalProperties": false

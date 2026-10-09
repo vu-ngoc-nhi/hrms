@@ -294,6 +294,22 @@ export const operations = {
     success: { status: 201, description: "Employee profile after the action (or replayed result)", schema: S.EmployeeDetailSchema },
     errors: [400, ...AUTH_ERRORS, 404, 409, 422],
   },
+  createRelationshipChange: {
+    operationId: "createRelationshipChange",
+    method: "post",
+    path: "/api/v1/core-hr/employments/{id}/relationship-change",
+    summary: "Relationship Change (continuous transition to a different Employee Type)",
+    description:
+      "Applies to the person's latest non-cancelled period (422 NOT_LATEST_PERIOD) without an Active End Event (422 ACTIVE_END_EVENT_EXISTS). The new Employee Type must differ (422 SAME_EMPLOYEE_TYPE). The current period ends on start_date − 1: an open end date is set, a future planned end date is replaced (earlier or later), an already-ended period only allows start_date = end date + 1 (422 GAP_USE_REHIRE / HISTORICAL_END_MISMATCH). Assignments starting on or after start_date block it (422 FUTURE_ASSIGNMENT_OUTSIDE_END); the applicable assignment closes at start_date. Writes an end event with the system End Reason RELATIONSHIP_CHANGE and reversal metadata, a new period (same person and Employee Code) with one start event, the submitted Work Email only, and an optional submitted Initial Assignment. HR_EDITOR today or later; backdated requires HR_ADMIN. Reason, expected_revision and Idempotency-Key required. No automatic reversal in Phase 1. Audit: employment.relationship_change (old and new period), assignment.close, assignment.initial — same request ID.",
+    tag: "Employments",
+    auth: true,
+    permission: "employment.manage",
+    pathParams: S.IdPathSchema,
+    body: S.RelationshipChangeCreateSchema,
+    idempotencyKey: "required",
+    success: { status: 201, description: "Employee profile after the action (or replayed result)", schema: S.EmployeeDetailSchema },
+    errors: [400, ...AUTH_ERRORS, 404, 409, 422],
+  },
   createReverseEnd: {
     operationId: "createReverseEnd",
     method: "post",

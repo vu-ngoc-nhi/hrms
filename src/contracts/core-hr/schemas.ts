@@ -508,6 +508,32 @@ export const RehireCreateSchema = reg(
   "Rehire (C-61): a NEW period after the latest non-cancelled period, which must have an end date. Nothing is copied from the previous relationship.",
 );
 
+export const RelationshipChangeCreateSchema = reg(
+  "RelationshipChangeCreate",
+  z.strictObject({
+    expected_revision: z.int().min(1).describe("Revision of the person profile; stale values return 409 REVISION_CONFLICT."),
+    start_date: isoDate().describe("First day of the new period (the transition date). The current period ends the day before."),
+    employee_type_id: z.uuid().describe("New Employee Type (active); must differ from the current period's type."),
+    end_date: isoDate().optional().describe("Optional planned last day of the NEW period (≥ start_date). It does not create an End event."),
+    work_email: z
+      .email()
+      .max(254)
+      .optional()
+      .describe("Work Email of the new period, only when explicitly chosen (e.g. 'keep current'); never copied automatically."),
+    reason: z.string().min(1).max(1000).describe("Mandatory Relationship Change reason; never shown in the generic history."),
+    initial_assignment: z
+      .strictObject({
+        department_id: z.uuid(),
+        job_title_id: z.uuid(),
+        job_level_id: z.uuid().nullable().optional(),
+        manager_person_id: z.uuid().nullable().optional(),
+      })
+      .optional()
+      .describe("Optional explicitly confirmed Initial Assignment of the new period, effective from start_date. Omitted → none is created (never copied)."),
+  }),
+  "Relationship Change (C-63 to C-66): continuous transition of the latest period to a different Employee Type.",
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -550,6 +576,7 @@ export type EndEmploymentInput = z.infer<typeof EndEmploymentCreateSchema>;
 export type ReverseEndInput = z.infer<typeof ReverseEndCreateSchema>;
 export type InitialEmploymentInput = z.infer<typeof InitialEmploymentCreateSchema>;
 export type RehireInput = z.infer<typeof RehireCreateSchema>;
+export type RelationshipChangeInput = z.infer<typeof RelationshipChangeCreateSchema>;
 export type AssignmentCorrectionInput = z.infer<typeof AssignmentCorrectionCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;
