@@ -2,7 +2,7 @@
 
 - Status: **Design approved (decisions C-21 to C-29 and PV-19, 2026-10-09), including the Cancel Planned Period data model (§9). Not implemented.**
 - Implementation slices (§11): **approved 2026-10-09 (C-33), order revised by C-39.** S4.0–S4.5 implemented. PV-20 resolved (C-30, C-31, C-32); Reverse End Employment behaviour approved (C-38), schema pending (PV-21, §13).
-- Pre-S4.6 decisions (2026-10-09): C-34 Idempotency-Key semantics, C-35 Add Initial Assignment, C-36 Work Email clearing, C-37 lifecycle event scope, M-11 aggregate revision, C-40 S4.6 scope. **S4.6 contract (§12) is a proposal awaiting approval (PV-23); not implemented.**
+- Pre-S4.6 decisions (2026-10-09): C-34 Idempotency-Key semantics, C-35 Add Initial Assignment, C-36 Work Email clearing, C-37 lifecycle event scope, M-11 aggregate revision, C-40 S4.6 scope. **S4.6 contract (§12) approved 2026-10-09 (C-48) with C-41 to C-47; S4.5A and S4.6 authorized.**
 - Decision IDs refer to `docs/decision-register.md`. Nothing here changes Pending Validation / Pending Legal Review items.
 
 ## 1. Scope
@@ -173,6 +173,7 @@ Each slice is implemented, tested and committed on its own; every slice ends wit
 | **S4.3 Profile edit** | HR keeps personal/profile data current | None | `PATCH /employees/{id}` (`expected_revision`) | Edit form with before/after review; reason field for name/DOB | `employees.update`, `employees.write_personal` | Field names; reason for name/DOB; no raw values | S4.1 | No |
 | **S4.4 Work Email update** | IT-provisioned addresses recorded | None | `PATCH /employments/{id}/work-email` | Inline edit on the period card | Non-ended: `employment.manage`; ended: `employment.correct` + reason (C-30); cancelled: rejected | Field name only (+ reason when ended) | S4.1 | No (C-30) |
 | **S4.5 Assignment change** | Transfers/promotions with history | None | `POST /employments/{id}/assignment-changes` (implemented) | "New assignment" dialog with timeline preview | `employment.manage`; past date → HR_ADMIN | Reason; old/new dept/title/level ids and dates | S4.1, S4.2 | No |
+| **S4.5A Add Initial Assignment** (C-41) | First assignment of a period that has none, without misusing Assignment Change | None | `POST /employments/{id}/initial-assignment` (`expected_revision`, `Idempotency-Key`); Assignment Change returns `422 NO_ASSIGNMENT_YET` on a period without assignments | "Add initial assignment" on non-cancelled periods without assignments | `employment.manage`; past date allowed (Initial Data Capture), reason required when backdated | Reason when backdated; structural values | S4.5 | No (C-41) |
 | **S4.6 Historical corrections** (C-40; excludes Reverse End Employment) | Fix entry mistakes without fake history | None (one column-level grant only if §12.10 O2 option (a) is chosen) | `POST /employments/{id}/period-corrections` (type, start date, end date date → date); `POST /assignments/{id}/corrections`; Work Email clearing on the existing PATCH (§12) | "Correct" actions and "Clear Work Email" visible only to HR_ADMIN | `employment.correct` | Reason; old/new structural values; one audit event per modified record | S4.1, S4.2 | **Contract approval (PV-23)** |
 | **S4.7 End Employment** | Explicit end with structured reason | Forward migration: End Reason reference data (`selectable` flag), `end_reason_code` + note on the `end` event, **and the effect data needed for a later reversal** (C-38; schema PV-21, §13) | `POST /employments/{id}/end` | End dialog (reason list, note mandatory for OTHER) | `employment.manage`; past date → HR_ADMIN | Reason code + note; old/new end date | S4.1, S4.5, S4.6 | PV-21 schema choice |
 | **S4.7R Reverse End Employment** (C-38) | Undo a mistaken End Employment without Rehire | `end_reversed` event type + link (with S4.7 migration) | `POST /employments/{id}/reverse-end` (`expected_revision`, reason, `Idempotency-Key`) | "Reverse End Employment" on ended periods, HR_ADMIN only | `employment.correct` | Reason; old/new end date and assignment effective_to | S4.7 passing | No (C-38) |
@@ -195,9 +196,9 @@ Each slice is implemented, tested and committed on its own; every slice ends wit
 - **Q2 → C-31, C-38:** a mistaken End Employment is undone by the admin-only **Reverse End Employment** action (not Rehire, not a PATCH clearing `end_date`), preserving the original end event. Implemented as S4.7R after End Employment (C-39); schema PV-21 (§13).
 - **Q3 → C-32:** **Add Initial Employment Period** is its own action, separate from Rehire.
 
-## 12. S4.6 implementation contract — PROPOSED 2026-10-09, awaiting approval (PV-23)
+## 12. S4.6 implementation contract — APPROVED 2026-10-09 (C-48)
 
-Scope per C-40. Nothing here is implemented. Open points that need a decision are listed in §12.10.
+Scope per C-40. The open points of §12.10 were decided as C-42 to C-46; where the decisions refine the original proposal, the decision wins (notably: the last Assignment moves with a corrected end date only when it was aligned with the old end date; an existing lifecycle event date is synced; inactive catalog values are allowed only in corrections).
 
 ### 12.1 Common rules (every S4.6 write)
 
@@ -261,6 +262,8 @@ Same value (including null → null): 200 no-op, no audit, no bump (a stale revi
 
 ### 12.6 Not in S4.6
 
+(Add Initial Assignment approved as C-41 and implemented as S4.5A.)
+
 - End Employment (S4.7) and Reverse End Employment (S4.7R).
 - **Add Initial Assignment (PV-22, proposed as a small slice before S4.6):** `POST /employments/{id}/initial-assignment`, `Idempotency-Key`, `employment.manage`; eligible only when the non-cancelled period has no assignment rows; `effective_date` within the period (default: period start); `effective_date` before today = Initial Data Capture (reason mandatory, HR_EDITOR allowed), otherwise no reason; `change_reason = 'initial_assignment'`; audit `assignment.initial` with structural values; no lifecycle event. Assignment Change would then reject a period with no assignments (422 `NO_ASSIGNMENT_YET`, pointing to Add Initial Assignment) and, defensively, a date with no assignment in effect (422 `NO_ASSIGNMENT_IN_EFFECT`). Today `hrms_dev` has no non-cancelled period without assignments.
 
@@ -283,7 +286,7 @@ None for §12.3–§12.5: `audit_field_change` already allows every needed field
 - No `employment_event` row is written by any S4.6 action (C-37); the coverage invariant holds after every successful correction.
 - OpenAPI regenerated and contract test green; English-only messages.
 
-### 12.10 Open points (decide before implementation)
+### 12.10 Open points — decided 2026-10-09 (O1 → C-42, O2 → C-43 option (a), O3 → C-44, O4 → C-45, O5 → C-46)
 
 | # | Question | Recommendation |
 |---|---|---|
@@ -293,9 +296,11 @@ None for §12.3–§12.5: `audit_field_change` already allows every needed field
 | O4 | May an end date move from the past to a future date (Ended → Active with a known end)? | Yes: it is still date → date; reopening to no end date stays Reverse End Employment |
 | O5 | Removing an assignment row that should never have existed? | Out of S4 (no deletion); revisit with a separate decision if HR needs it |
 
-## 13. PV-21 — schema options for End Employment effect data and Reverse End Employment (for S4.7 / S4.7R)
+## 13. PV-21 — schema for End Employment effect data and Reverse End Employment (for S4.7 / S4.7R)
 
-Behaviour is approved (C-38); only the storage is open. With C-28 (End Employment is blocked when any assignment would fall outside the end date) and §12.2, End Employment changes exactly two things: the period's end date and at most one assignment (the row covering the end date). Reversal therefore needs one assignment id and two previous values.
+**Decided 2026-10-09 (C-47): Option A without `previous_end_date`** — `closed_assignment_id`, `closed_assignment_previous_effective_to` (only on `end`), `reverses_event_id` (only on `end_reversed`, unique). Migration ships with S4.7. The analysis below is kept for context.
+
+Behaviour is approved (C-38). With C-28 (End Employment is blocked when any assignment would fall outside the end date) and §12.2, End Employment changes exactly two things: the period's end date and at most one assignment (the row covering the end date). Reversal therefore needs one assignment id and two previous values.
 
 **Option A — explicit nullable columns on `employment_event` (recommended, smallest).** One forward migration in S4.7:
 - `end_reason_code` (FK to the End Reason reference data) and `end_note` — already planned for S4.7 (§10);
