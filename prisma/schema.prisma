@@ -1,0 +1,210 @@
+// Prisma Client description only. The source of truth for the database structure is the SQL in
+// prisma/migrations (exclusion constraints, triggers, deferrable FKs and GRANTs cannot be expressed here).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AppUser {
+  id            String        @id @default(uuid()) @db.Uuid
+  entraTenantId String        @map("entra_tenant_id") @db.Uuid
+  entraObjectId String        @map("entra_object_id") @db.Uuid
+  displayName   String        @map("display_name")
+  isEnabled     Boolean       @default(true) @map("is_enabled")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime      @default(now()) @map("updated_at") @db.Timestamptz
+  roles         AppUserRole[] @relation("UserRoles")
+
+  @@unique([entraTenantId, entraObjectId], map: "app_user_entra_identity_uq")
+  @@map("app_user")
+}
+
+model AppUserRole {
+  userId    String   @map("user_id") @db.Uuid
+  roleCode  String   @map("role_code")
+  grantedAt DateTime @default(now()) @map("granted_at") @db.Timestamptz
+  grantedBy String?  @map("granted_by") @db.Uuid
+  user      AppUser  @relation("UserRoles", fields: [userId], references: [id])
+
+  @@id([userId, roleCode])
+  @@map("app_user_role")
+}
+
+model Department {
+  id          String          @id @default(uuid()) @db.Uuid
+  code        String
+  name        String
+  isActive    Boolean         @default(true) @map("is_active")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime        @default(now()) @map("updated_at") @db.Timestamptz
+  assignments JobAssignment[]
+
+  @@map("department")
+}
+
+model JobTitle {
+  id          String          @id @default(uuid()) @db.Uuid
+  code        String
+  nameEn      String          @map("name_en")
+  nameVi      String?         @map("name_vi")
+  isActive    Boolean         @default(true) @map("is_active")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime        @default(now()) @map("updated_at") @db.Timestamptz
+  assignments JobAssignment[]
+
+  @@map("job_title")
+}
+
+model EmployeeType {
+  id                String       @id @default(uuid()) @db.Uuid
+  code              String
+  name              String
+  requiresWorkEmail Boolean      @default(true) @map("requires_work_email")
+  isActive          Boolean      @default(true) @map("is_active")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime     @default(now()) @map("updated_at") @db.Timestamptz
+  employments       Employment[]
+
+  @@map("employee_type")
+}
+
+model JobLevel {
+  id          String          @id @default(uuid()) @db.Uuid
+  code        String
+  name        String
+  sortOrder   Int?            @map("sort_order")
+  isActive    Boolean         @default(true) @map("is_active")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime        @default(now()) @map("updated_at") @db.Timestamptz
+  assignments JobAssignment[]
+
+  @@map("job_level")
+}
+
+model Person {
+  id            String       @id @default(uuid()) @db.Uuid
+  employeeCode  String       @map("employee_code")
+  fullName      String       @map("full_name")
+  gender        String?
+  dateOfBirth   DateTime?    @map("date_of_birth") @db.Date
+  personalEmail String?      @map("personal_email")
+  mobilePhone   String?      @map("mobile_phone")
+  profileState  String?      @map("profile_state") // deprecated, not used
+  revision      Int          @default(1)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime     @default(now()) @map("updated_at") @db.Timestamptz
+  createdBy     String       @map("created_by") @db.Uuid
+  employments   Employment[]
+
+  @@map("person")
+}
+
+model EmployeeCodeRegistry {
+  code     String   @id
+  personId String   @map("person_id") @db.Uuid
+  source   String
+  issuedAt DateTime @default(now()) @map("issued_at") @db.Timestamptz
+  issuedBy String   @map("issued_by") @db.Uuid
+
+  @@map("employee_code_registry")
+}
+
+model ExternalIdentity {
+  id                 String    @id @default(uuid()) @db.Uuid
+  personId           String    @map("person_id") @db.Uuid
+  system             String
+  externalId         String    @map("external_id")
+  validFrom          DateTime? @map("valid_from") @db.Date
+  validTo            DateTime? @map("valid_to") @db.Date
+  verificationSource String    @map("verification_source")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([system, externalId], map: "external_identity_system_external_uq")
+  @@map("external_identity")
+}
+
+model Employment {
+  id                 String            @id @default(uuid()) @db.Uuid
+  personId           String            @map("person_id") @db.Uuid
+  startDate          DateTime          @map("start_date") @db.Date
+  endDate            DateTime?         @map("end_date") @db.Date
+  workEmail          String?           @map("work_email")
+  employeeTypeId     String?           @map("employee_type_id") @db.Uuid
+  recordSource       String            @default("form") @map("record_source")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  createdBy          String            @map("created_by") @db.Uuid
+  person             Person            @relation(fields: [personId], references: [id])
+  employeeType       EmployeeType?     @relation(fields: [employeeTypeId], references: [id])
+  events             EmploymentEvent[]
+  assignments        JobAssignment[]   @relation("AssignmentEmployment")
+  managedAssignments JobAssignment[]   @relation("AssignmentManager")
+
+  @@map("employment")
+}
+
+model EmploymentEvent {
+  id            String     @id @default(uuid()) @db.Uuid
+  employmentId  String     @map("employment_id") @db.Uuid
+  eventType     String     @map("event_type")
+  effectiveDate DateTime   @map("effective_date") @db.Date
+  reason        String?
+  recordedAt    DateTime   @default(now()) @map("recorded_at") @db.Timestamptz
+  recordedBy    String     @map("recorded_by") @db.Uuid
+  employment    Employment @relation(fields: [employmentId], references: [id])
+
+  @@map("employment_event")
+}
+
+model JobAssignment {
+  id                  String      @id @default(uuid()) @db.Uuid
+  employmentId        String      @map("employment_id") @db.Uuid
+  effectiveFrom       DateTime    @map("effective_from") @db.Date
+  effectiveTo         DateTime?   @map("effective_to") @db.Date
+  departmentId        String      @map("department_id") @db.Uuid
+  jobTitleId          String      @map("job_title_id") @db.Uuid
+  jobLevelId          String?     @map("job_level_id") @db.Uuid
+  managerEmploymentId String?     @map("manager_employment_id") @db.Uuid
+  recordSource        String      @default("form") @map("record_source")
+  changeReason        String      @map("change_reason")
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  createdBy           String      @map("created_by") @db.Uuid
+  employment          Employment  @relation("AssignmentEmployment", fields: [employmentId], references: [id])
+  managerEmployment   Employment? @relation("AssignmentManager", fields: [managerEmploymentId], references: [id])
+  department          Department  @relation(fields: [departmentId], references: [id])
+  jobTitle            JobTitle    @relation(fields: [jobTitleId], references: [id])
+  jobLevel            JobLevel?   @relation(fields: [jobLevelId], references: [id])
+
+  @@map("job_assignment")
+}
+
+model AuditEvent {
+  id            BigInt   @id @default(autoincrement())
+  occurredAt    DateTime @default(now()) @map("occurred_at") @db.Timestamptz
+  actorUserId   String?  @map("actor_user_id") @db.Uuid
+  action        String
+  outcome       String
+  entityType    String   @map("entity_type")
+  entityId      String?  @map("entity_id") @db.Uuid
+  requestId     String   @map("request_id")
+  changedFields String[] @default([]) @map("changed_fields")
+
+  @@map("audit_event")
+}
+
+model IdempotencyRecord {
+  actorUserId    String   @map("actor_user_id") @db.Uuid
+  operation      String
+  idempotencyKey String   @map("idempotency_key")
+  requestHmac    String   @map("request_hmac")
+  resourceId     String   @map("resource_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz
+
+  @@id([actorUserId, operation, idempotencyKey])
+  @@map("idempotency_record")
+}

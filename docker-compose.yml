@@ -1,0 +1,23 @@
+# LOCAL DEVELOPMENT/TEST ONLY.
+# The password below is a PUBLIC, disposable development-only value. It is NOT a secret and must NEVER be reused
+# for staging or production. The database is bound to 127.0.0.1 only and must not be exposed on other interfaces.
+services:
+  db:
+    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    container_name: hrms-core-hr-db
+    environment:
+      POSTGRES_USER: hrms_owner
+      POSTGRES_PASSWORD: hrms_local_dev_only
+      POSTGRES_DB: hrms_dev
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - ./docker/db-init:/docker-entrypoint-initdb.d:ro
+      - hrms_core_hr_pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hrms_owner -d hrms_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  hrms_core_hr_pg:

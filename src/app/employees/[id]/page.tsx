@@ -1,0 +1,168 @@
+"use client";
+
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ErrorBox } from "@/components/ErrorBox";
+import { formatDate, t, tMaybe } from "@/i18n";
+import { api, ApiCallError } from "@/lib/client/api";
+
+type Ref = { id: string; code: string; name: string } | null;
+type Assignment = {
+  id: string;
+  effective_from: string;
+  effective_to: string | null;
+  department: { name: string };
+  job_title: { name_en: string };
+  job_level: Ref;
+  manager: { person_id: string; employee_code: string; full_name: string } | null;
+};
+type Detail = {
+  employee_code: string;
+  full_name: string;
+  employment_status: string;
+  status_as_of: string;
+  completeness: {
+    operational: { status: "complete" | "incomplete"; rule_version: string; items: { code: string; satisfied: boolean }[] };
+  };
+  personal?: { gender: string | null; date_of_birth: string | null; personal_email: string | null; mobile_phone: string | null };
+  employments: {
+    id: string;
+    start_date: string;
+    end_date: string | null;
+    employee_type: Ref;
+    work_email: string | null;
+    assignments: Assignment[];
+  }[];
+};
+
+export default function EmployeeDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const [d, setD] = useState<Detail | null>(null);
+  const [error, setError] = useState<ApiCallError | null>(null);
+
+  useEffect(() => {
+    api<Detail>(`/api/v1/core-hr/employees/${id}`)
+      .then((r) => setD(r.data))
+      .catch((e) => setError(e));
+  }, [id]);
+
+  if (error) return <ErrorBox error={error} />;
+  if (!d) return <p className="muted">{t("app.loading")}</p>;
+  const op = d.completeness.operational;
+
+  return (
+    <>
+      <p>
+        <Link href="/employees">{t("detail.back")}</Link>
+      </p>
+      <div className="spread">
+        <h1>
+          {d.full_name} <span className="muted">· {d.employee_code}</span>
+        </h1>
+        <div className="row">
+          <span className={`badge ${d.employment_status === "active" ? "ok" : ""}`}>
+            {tMaybe(`employmentStatus.${d.employment_status}`) ?? d.employment_status}
+          </span>
+          <span className={`badge ${op.status === "complete" ? "ok" : "warn"}`}>
+            {t("completeness.operationalTitle")}: {t(`completeness.${op.status}`)}
+          </span>
+        </div>
+      </div>
+      <p className="muted small">{t("detail.statusNote", { date: formatDate(d.status_as_of) })}</p>
+
+      <div className="grid2">
+        <section className="card">
+          <h2>{t("completeness.operationalTitle")}</h2>
+          <ul>
+            {op.items.map((i) => (
+              <li key={i.code}>
+                {i.satisfied ? "✓" : "✗"} {tMaybe(`completeness.items.${i.code}`) ?? i.code}
+              </li>
+            ))}
+          </ul>
+          <p className="muted small">{t("completeness.ruleNote", { version: op.rule_version })}</p>
+          <p className="muted small">
+            {t("completeness.hrTitle")}: {t("completeness.hrNotDefined")} · {t("completeness.legalTitle")}: {t("completeness.legalPending")}
+          </p>
+        </section>
+        <section className="card">
+          <h2>{t("detail.personalTitle")}</h2>
+          {d.personal ? (
+            <dl className="kv">
+              <dt>{t("detail.gender")}</dt>
+              <dd>{d.personal.gender ? tMaybe(`gender.${d.personal.gender}`) ?? d.personal.gender : "—"}</dd>
+              <dt>{t("detail.dateOfBirth")}</dt>
+              <dd>{formatDate(d.personal.date_of_birth)}</dd>
+              <dt>{t("detail.mobilePhone")}</dt>
+              <dd>{d.personal.mobile_phone ?? "—"}</dd>
+              <dt>{t("detail.personalEmail")}</dt>
+              <dd>{d.personal.personal_email ?? "—"}</dd>
+            </dl>
+          ) : (
+            <p className="muted">{t("detail.personalHidden")}</p>
+          )}
+          <p className="muted small">{t("detail.sensitiveNotice")}</p>
+        </section>
+      </div>
+
+      <h2>{t("detail.employmentTitle")}</h2>
+      {d.employments.length === 0 && <p className="muted">{t("detail.noEmployment")}</p>}
+      {d.employments.map((e) => (
+        <section key={e.id} className="card" style={{ marginBottom: 12 }}>
+          <dl className="kv">
+            <dt>{t("detail.startDate")}</dt>
+            <dd>{formatDate(e.start_date)}</dd>
+            <dt>{t("detail.endDate")}</dt>
+            <dd>{e.end_date ? formatDate(e.end_date) : t("detail.notDetermined")}</dd>
+            <dt>{t("detail.employeeType")}</dt>
+            <dd>{e.employee_type?.name ?? "—"}</dd>
+            <dt>{t("detail.workEmail")}</dt>
+            <dd>{e.work_email ?? "—"}</dd>
+          </dl>
+          <div className="table-wrap" style={{ marginTop: 12 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>{t("detail.effectiveFrom")}</th>
+                  <th>{t("detail.effectiveTo")}</th>
+                  <th>{t("employees.columns.department")}</th>
+                  <th>{t("employees.columns.jobTitle")}</th>
+                  <th>{t("detail.jobLevel")}</th>
+                  <th>{t("detail.manager")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {e.assignments.map((a) => (
+                  <tr key={a.id}>
+                    <td>{formatDate(a.effective_from)}</td>
+                    <td>{a.effective_to ? formatDate(a.effective_to) : "—"}</td>
+                    <td>{a.department.name}</td>
+                    <td>{a.job_title.name_en}</td>
+                    <td>{a.job_level?.name ?? "—"}</td>
+                    <td>
+                      {a.manager ? (
+                        <Link href={`/employees/${a.manager.person_id}`}>
+                          {a.manager.full_name} ({a.manager.employee_code})
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {e.assignments.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="muted">
+                      {t("detail.noAssignments")}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}

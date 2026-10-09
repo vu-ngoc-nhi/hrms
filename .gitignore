@@ -1,0 +1,71 @@
+# ---- Dependencies ----
+node_modules/
+
+# ---- Build output / generated code (reproducible: `npm run build`, `npm run db:generate`) ----
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+*.tsbuildinfo
+src/generated/
+
+# ---- Test / coverage output ----
+coverage/
+test-results/
+playwright-report/
+
+# ---- Environment files and secrets (.env.example stays versioned) ----
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.der
+id_rsa*
+id_ed25519*
+
+# ---- Local database files and Docker/runtime state (Postgres data lives in a Docker named volume) ----
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+.docker/
+docker-compose.override.yml
+
+# ---- Logs and temporary files ----
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+tmp/
+temp/
+*.tmp
+*.tmp.ts
+*.swp
+*.swo
+
+# ---- OS files ----
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ---- IDE-local configuration ----
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.code-workspace
+
+# ---- Claude / local tool runtime files (CLAUDE.md and the shared preview launch config stay versioned) ----
+.claude/*
+!.claude/launch.json
+CLAUDE.local.md
