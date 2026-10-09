@@ -10,6 +10,7 @@ import { api, ApiCallError } from "@/lib/client/api";
 import { ProfileEditForm } from "./ProfileEditForm";
 import { AssignmentChangeForm } from "./AssignmentChangeForm";
 import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
+import { CancelPlannedForm } from "./CancelPlannedForm";
 import { EndEmploymentForm } from "./EndEmploymentForm";
 import { InitialAssignmentForm } from "./InitialAssignmentForm";
 import { NewPeriodForm } from "./NewPeriodForm";
@@ -288,6 +289,19 @@ export default function EmployeeDetailPage() {
               period={{ ...e, employee_type: e.employee_type }}
               today={d.status_as_of}
               canBackdate={Boolean(session.can("employment.correct"))}
+              revision={d.revision}
+              onSaved={(updated) => {
+                setD(updated);
+                setNotice(t("profileEdit.saved"));
+              }}
+            />
+          )}
+          {!e.cancelled_at && e.start_date > d.status_as_of && session?.can("employment.manage") && (
+            <CancelPlannedForm<Detail>
+              key={`${e.id}-${d.revision}-cancel`}
+              employmentId={e.id}
+              period={e}
+              blockedBy={e.has_active_end_event ? "active_end" : realPeriods.some((o) => o.start_date > e.start_date) ? "later_period" : null}
               revision={d.revision}
               onSaved={(updated) => {
                 setD(updated);

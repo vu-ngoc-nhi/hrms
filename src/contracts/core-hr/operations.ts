@@ -310,6 +310,22 @@ export const operations = {
     success: { status: 201, description: "Employee profile after the action (or replayed result)", schema: S.EmployeeDetailSchema },
     errors: [400, ...AUTH_ERRORS, 404, 409, 422],
   },
+  createCancelPlanned: {
+    operationId: "createCancelPlanned",
+    method: "post",
+    path: "/api/v1/core-hr/employments/{id}/cancel-planned",
+    summary: "Cancel Planned Period",
+    description:
+      "A future period (start_date after today, Asia/Ho_Chi_Minh) will not take effect: 422 PERIOD_ALREADY_STARTED otherwise. Only the latest non-cancelled period (409 LATER_PERIOD_EXISTS) without an Active End Event (422 ACTIVE_END_EVENT_EXISTS — reverse the End first). HR_EDITOR and HR_ADMIN (employment.manage); reason, expected_revision and Idempotency-Key required. Sets cancelled_at and adds one cancel_planned_start event dated with the planned start; nothing is deleted or cleared (dates, Employee Type, Work Email, assignments and events stay as history; the Work Email is no longer reserved). Cancelled is a record disposition, not a status. Already cancelled: 409 EMPLOYMENT_PERIOD_READ_ONLY. Audit: employment.cancel_planned.",
+    tag: "Employments",
+    auth: true,
+    permission: "employment.manage",
+    pathParams: S.IdPathSchema,
+    body: S.CancelPlannedCreateSchema,
+    idempotencyKey: "required",
+    success: { status: 201, description: "Employee profile after the cancellation (or replayed result)", schema: S.EmployeeDetailSchema },
+    errors: [400, ...AUTH_ERRORS, 404, 409, 422],
+  },
   createReverseEnd: {
     operationId: "createReverseEnd",
     method: "post",

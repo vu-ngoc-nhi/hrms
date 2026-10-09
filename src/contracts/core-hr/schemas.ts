@@ -534,6 +534,15 @@ export const RelationshipChangeCreateSchema = reg(
   "Relationship Change (C-63 to C-66): continuous transition of the latest period to a different Employee Type.",
 );
 
+export const CancelPlannedCreateSchema = reg(
+  "CancelPlannedCreate",
+  z.strictObject({
+    expected_revision: z.int().min(1).describe("Revision of the person profile; stale values return 409 REVISION_CONFLICT."),
+    reason: z.string().min(1).max(1000).describe("Mandatory cancellation reason; stored on the cancellation event and in audit, never shown in history."),
+  }),
+  "Cancel Planned Period (C-70): the future period will not take effect; it stays in history with all its data.",
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -577,6 +586,7 @@ export type ReverseEndInput = z.infer<typeof ReverseEndCreateSchema>;
 export type InitialEmploymentInput = z.infer<typeof InitialEmploymentCreateSchema>;
 export type RehireInput = z.infer<typeof RehireCreateSchema>;
 export type RelationshipChangeInput = z.infer<typeof RelationshipChangeCreateSchema>;
+export type CancelPlannedInput = z.infer<typeof CancelPlannedCreateSchema>;
 export type AssignmentCorrectionInput = z.infer<typeof AssignmentCorrectionCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;

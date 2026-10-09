@@ -47,12 +47,13 @@ export function historyFlags(row: { cancelledAt: Date | null }): { cancelled_at:
 // checking the marker itself.
 export const EMPLOYMENT_READ_ONLY = "EMPLOYMENT_PERIOD_READ_ONLY";
 
+export const employmentReadOnly = () =>
+  new ApiError(409, EMPLOYMENT_READ_ONLY, "This employment period was cancelled and is read-only history.", [
+    { field: "employment_id", code: EMPLOYMENT_READ_ONLY, message: "Cancelled employment periods cannot be changed." },
+  ]);
+
 export function assertEmploymentWritable(row: { id: string; cancelledAt: Date | null }): void {
-  if (row.cancelledAt !== null) {
-    throw new ApiError(409, EMPLOYMENT_READ_ONLY, "This employment period was cancelled and is read-only history.", [
-      { field: "employment_id", code: EMPLOYMENT_READ_ONLY, message: "Cancelled employment periods cannot be changed." },
-    ]);
-  }
+  if (row.cancelledAt !== null) throw employmentReadOnly();
 }
 
 /** Loads a period (or 404) and rejects it when it is cancelled. Use inside the write transaction. */
@@ -61,4 +62,13 @@ export async function loadWritableEmployment(client: Tx | Db, employmentId: stri
   if (!row) throw notFound("Employment period not found.");
   assertEmploymentWritable(row);
   return row;
+}
+
+/**
+ * Sets the cancellation marker (S4.10, C-70) — the only write of `cancelled_at`. Conditional on the period still being
+ * non-cancelled, so a concurrent cancellation can never set it twice; nothing else on the period is changed.
+ */
+export async function markEmploymentCancelled(tx: Tx, employmentId: string, at: Date): Promise<void> {
+  const { count } = await tx.employment.updateMany({ where: { id: employmentId, cancelledAt: null }, data: { cancelledAt: at } });
+  if (count !== 1) throw employmentReadOnly();
 }

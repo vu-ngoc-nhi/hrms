@@ -208,6 +208,18 @@ export const en = {
       "For the audit history: once the new period has started, Phase 1 has no automatic Relationship Change reversal. Check the dates and types before saving.",
     save: "Save Relationship Change",
   },
+  cancelPlanned: {
+    open: "Cancel Planned Period",
+    title: "Cancel Planned Period",
+    help: "This period has not started yet and will not take effect. It stays in the employment history with its data; its planned assignments remain for traceability but have no operational effect, and its Work Email is no longer reserved.",
+    plannedStart: "Planned Start Date",
+    plannedEnd: "Planned End Date",
+    assignments: "Planned Assignments",
+    blockedActiveEnd: "This period has an End Employment. Reverse End Employment first, then cancel the period.",
+    blockedLater: "A later employment period exists. Only the latest planned period can be cancelled.",
+    reason: "Cancellation Reason",
+    save: "Cancel Planned Period",
+  },
   reverseEnd: {
     open: "Reverse End Employment",
     title: "Reverse End Employment",

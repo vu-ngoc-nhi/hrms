@@ -1384,6 +1384,126 @@
         }
       }
     },
+    "/api/v1/core-hr/employments/{id}/cancel-planned": {
+      "post": {
+        "operationId": "createCancelPlanned",
+        "summary": "Cancel Planned Period",
+        "description": "A future period (start_date after today, Asia/Ho_Chi_Minh) will not take effect: 422 PERIOD_ALREADY_STARTED otherwise. Only the latest non-cancelled period (409 LATER_PERIOD_EXISTS) without an Active End Event (422 ACTIVE_END_EVENT_EXISTS — reverse the End first). HR_EDITOR and HR_ADMIN (employment.manage); reason, expected_revision and Idempotency-Key required. Sets cancelled_at and adds one cancel_planned_start event dated with the planned start; nothing is deleted or cleared (dates, Employee Type, Work Email, assignments and events stay as history; the Work Email is no longer reserved). Cancelled is a record disposition, not a status. Already cancelled: 409 EMPLOYMENT_PERIOD_READ_ONLY. Audit: employment.cancel_planned.\n\nRequired permission: `employment.manage`.",
+        "tags": [
+          "Employments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelPlannedCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Employee profile after the cancellation (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/core-hr/employments/{id}/reverse-end": {
       "post": {
         "operationId": "createReverseEnd",
@@ -5183,6 +5303,28 @@
           "expected_revision",
           "start_date",
           "employee_type_id",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "CancelPlannedCreate": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Revision of the person profile; stale values return 409 REVISION_CONFLICT."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Mandatory cancellation reason; stored on the cancellation event and in audit, never shown in history."
+          }
+        },
+        "required": [
+          "expected_revision",
           "reason"
         ],
         "additionalProperties": false
