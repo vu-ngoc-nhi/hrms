@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button } from "@/components/ui";
+import { Button, EmptyState } from "@/components/ui";
 import { formatDate, t } from "@/i18n";
 import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
 import { PeriodWorkflow, actionLabel } from "./PeriodWorkflow";
@@ -46,7 +46,7 @@ function DateRows({ w }: { w: DateWording }) {
     case "takes_effect":
       return (
         <div>
-          <dt>{t("assignmentTab.effectiveDate")}</dt>
+          <dt>{t("assignmentTab.takesEffectOn")}</dt>
           <dd>{formatDate(w.date)}</dd>
         </div>
       );
@@ -100,19 +100,19 @@ function AssignmentCard({ v, ctx, showPeriod }: { v: AssignmentView; ctx: TabCon
   const previous = rows[rows.findIndex((r) => r.id === v.assignment.id) - 1] ?? null;
   const fromDate = formatDate(v.assignment.effective_from);
   const notes: ReactNode[] = [];
-  if (v.label === "upcoming") notes.push(t("assignmentTab.takesEffectNote", { date: fromDate }));
+  if (v.label === "upcoming") notes.push(t("assignmentTab.notInEffectYet"));
   if (v.changesOn) notes.push(t("assignmentTab.changesOnNote", { date: formatDate(v.changesOn) }));
   if (v.label === "last") notes.push(t("assignmentTab.lastNote"));
   if (v.disposition) notes.push(t(v.disposition === "voided" ? "assignmentTab.voidedNote" : "assignmentTab.cancelledNote"));
 
   return (
-    <article className={`card assignment-card ${v.label}`} aria-labelledby={`asg-${v.assignment.id}`}>
+    <article className={`card assignment-card ${v.disposition ?? v.label}`} aria-labelledby={`asg-${v.assignment.id}`}>
       <header className="period-head">
         <h3 id={`asg-${v.assignment.id}`}>
           {a.jobTitle}
           <span className="period-type"> · {a.department}</span>
         </h3>
-        <span className={`badge period-label ${v.label}`}>{t(`assignmentTab.label.${v.label}`)}</span>
+        <span className={`badge period-label ${v.disposition ?? v.label}`}>{v.label === "not_operational" ? t(`employment.label.${v.disposition ?? "voided"}`) : t(`assignmentTab.label.${v.label}`)}</span>
       </header>
       {showPeriod && <p className="period-note lead">{periodContext(d, v.period, v.periodNumber)}</p>}
       <dl className="info-grid">
@@ -248,7 +248,9 @@ export function AssignmentTab({ ctx }: { ctx: TabContext }) {
   const nothing = !s.current.length && !s.upcoming.length && !s.history.length && !s.emptyPeriods.length;
   return (
     <div className="employment-tab">
-      {nothing && <p className="muted">{t(ctx.d.employments.length ? "assignmentTab.noOperational" : "assignmentTab.noEmployment")}</p>}
+      {nothing && (
+        <EmptyState title={t("employmentStatus.no_employment")}>{t(ctx.d.employments.length ? "detail.onlyDisposedRecords" : "detail.noEmploymentRecorded")}</EmptyState>
+      )}
       <Section title={t("assignmentTab.currentTitle")}>{[...s.current.map(card), ...empty("current")]}</Section>
       <Section title={s.upcoming.length > 1 ? t("assignmentTab.upcomingTitlePlural") : t("assignmentTab.upcomingTitle")}>
         {[...s.upcoming.map(card), ...empty("upcoming")]}

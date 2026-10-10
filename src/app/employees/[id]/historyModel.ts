@@ -9,7 +9,7 @@ import { assignmentSections, type FieldChange } from "./assignmentModel";
 
 export type HistoryKind =
   | "employment_started"
-  | "employee_rehired"
+  | "new_period_started"
   | "relationship_changed"
   | "employment_ended"
   | "end_reversed"
@@ -51,7 +51,7 @@ export type HistoryEntry = {
 // effect, the period ends, an End is reversed; dispositions are listed last (as the API lists the void event last).
 const RANK: Record<HistoryKind, number> = {
   employment_started: 0,
-  employee_rehired: 0,
+  new_period_started: 0,
   relationship_changed: 0,
   assignment_added: 1,
   assignment_changed: 2,
@@ -117,9 +117,10 @@ export function historyEntries(d: Detail): HistoryEntry[] {
               previousEnd: pred.end_date,
             });
           } else {
-            // A later operational period that is not a Relationship Change can only come from Rehire (S4.8).
-            const rehire = !voided && firstOperational !== undefined && p.id !== firstOperational.id;
-            const previousEnd = rehire
+            // A later operational period that is not a proven Relationship Change. The API has no explicit Rehire
+            // marker, so it is shown neutrally as a new Employment Period (never inferred as "rehired").
+            const later = !voided && firstOperational !== undefined && p.id !== firstOperational.id;
+            const previousEnd = later
               ? (operational
                   .filter((o) => o.start_date < p.start_date && o.end_date)
                   .map((o) => o.end_date!)
@@ -130,7 +131,7 @@ export function historyEntries(d: Detail): HistoryEntry[] {
               ...base,
               key,
               date: ev.effective_date,
-              kind: rehire ? "employee_rehired" : "employment_started",
+              kind: later ? "new_period_started" : "employment_started",
               status: voided ? "voided" : ev.effective_date > today ? "planned" : null,
               previousEnd,
             });

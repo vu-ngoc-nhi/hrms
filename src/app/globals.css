@@ -262,16 +262,17 @@ tbody tr:hover td { background: var(--color-surface-2); }
 .form-actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-top: var(--space-4); }
 .review h3 { font-size: var(--font-size-sm); margin: 0 0 var(--space-1); }
 .personal-card .card-header { margin-bottom: var(--space-4); }
+.personal-card .card-header h2 { font-size: var(--font-size-base); } /* card titles share one size across the detail tabs */
 .personal-card > p.small:last-child { margin: var(--space-4) 0 0; }
 @media (max-width: 720px) { .info-grid, .form-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* Employment tab (UI-5): sections and one card per Employment Period. Lifecycle labels are text badges with soft
-   colours; red stays an action accent. Cancelled / Voided records are muted (Voided also dashed) — not statuses. */
+   colours; red stays an action accent. Current = normal surface, Upcoming = INFO accent (D-UI-12), Historical =
+   neutral, Cancelled = muted, Voided = muted + dashed (exceptional, not operational) — dispositions, not statuses. */
 .employment-section + .employment-section { margin-top: var(--space-5); }
 .employment-section > h2 { margin: 0 0 var(--space-3); }
 .period-list { display: grid; gap: var(--space-3); }
 .period-card { margin: 0; }
-.period-card.current { border-left: 3px solid var(--color-success-border); }
 .period-card.upcoming { border-left: 3px solid var(--color-info-border); }
 .period-card.cancelled, .period-card.voided { background: var(--color-surface-2); }
 .period-card.voided { border-style: dashed; }
@@ -297,14 +298,13 @@ tbody tr:hover td { background: var(--color-surface-2); }
 /* Assignment tab (UI-6): same card language as Employment; upcoming = INFO (D-UI-12); records of cancelled/voided
    periods muted and labelled "Not operational". */
 .assignment-card { margin: 0; }
-.assignment-card.current { border-left: 3px solid var(--color-success-border); }
 .assignment-card.upcoming { border-left: 3px solid var(--color-info-border); }
-.assignment-card.not_operational { background: var(--color-surface-2); border-style: dashed; }
-.assignment-card.not_operational .info-grid dd { color: var(--color-text-2); }
+.assignment-card.cancelled, .assignment-card.voided { background: var(--color-surface-2); }
+.assignment-card.voided { border-style: dashed; }
+.assignment-card.cancelled .info-grid dd, .assignment-card.voided .info-grid dd { color: var(--color-text-2); }
 .assignment-card.empty { border-style: dashed; }
 .assignment-empty { margin: 0; }
 .badge.period-label.last { background: var(--color-neutral-subtle); color: var(--color-text); }
-.badge.period-label.not_operational { background: transparent; color: var(--color-text-2); border: 1px dashed var(--color-border-strong); }
 .change-summary strong { color: var(--color-text); }
 /* History tab (UI-7): one compact vertical timeline grouped by effective date (most recent first). */
 .timeline { list-style: none; margin: var(--space-4) 0 0; padding: 0; }

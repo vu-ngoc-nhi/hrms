@@ -116,10 +116,12 @@ describe("Recovery, Rehire and Relationship Change", () => {
     expect(historyEntryTitle(reversedEnd)).toBe("Employment scheduled to end"); // tense follows the date, not the badge
   });
 
-  it("Rehire: the later period's start reads 'Employee rehired' with the previous end; periods stay separate", () => {
+  it("a later period (e.g. after Rehire) is a neutral 'New Employment Period started' — Rehire is never inferred", () => {
     const e = historyEntries(detail([ended("2021-03-01", "2024-06-30", "VOLUNTARY_RESIGNATION"), period("2025-03-03", null)]));
-    const rehire = e.find((x) => x.kind === "employee_rehired")!;
-    expect(rehire).toMatchObject({ date: "2025-03-03", periodNumber: 2, previousEnd: "2024-06-30" });
+    const later = e.find((x) => x.kind === "new_period_started")!;
+    expect(later).toMatchObject({ date: "2025-03-03", periodNumber: 2, previousEnd: "2024-06-30" });
+    expect(historyEntryTitle(later)).toBe("New Employment Period started");
+    expect(e.map((x) => historyEntryTitle(x)).join(" ")).not.toMatch(/rehire/i);
     expect(e.find((x) => x.kind === "employment_ended")).toMatchObject({ periodNumber: 1, date: "2024-06-30" });
   });
 
@@ -127,7 +129,7 @@ describe("Recovery, Rehire and Relationship Change", () => {
     const pred = ended("2025-02-03", "2026-01-04", "RELATIONSHIP_CHANGE", { employee_type: CONTRACTOR });
     const succ = period("2026-01-05", null);
     const e = historyEntries(detail([pred, succ]));
-    expect(e.filter((x) => x.kind === "employment_ended" || x.kind === "employment_started" || x.kind === "employee_rehired")).toEqual([
+    expect(e.filter((x) => x.kind === "employment_ended" || x.kind === "employment_started" || x.kind === "new_period_started")).toEqual([
       expect.objectContaining({ kind: "employment_started", periodNumber: 1 }),
     ]);
     expect(e.find((x) => x.kind === "relationship_changed")).toMatchObject({ date: "2026-01-05", fromType: "Service Contractor", toType: "Employee", previousEnd: "2026-01-04", periodNumber: 2 });
@@ -187,7 +189,7 @@ describe("Privacy and wording", () => {
   });
 
   it("every title is business language from the catalogue (no technical codes)", () => {
-    const all: HistoryKind[] = ["employment_started", "employee_rehired", "relationship_changed", "employment_ended", "end_reversed", "period_cancelled", "period_voided", "assignment_added", "assignment_changed", "other"];
+    const all: HistoryKind[] = ["employment_started", "new_period_started", "relationship_changed", "employment_ended", "end_reversed", "period_cancelled", "period_voided", "assignment_added", "assignment_changed", "other"];
     for (const kind of all) {
       for (const status of [null, "planned"] as const) {
         const label = historyEntryTitle({ key: "k", date: TODAY, kind, status, future: status === "planned", periodNumber: 1, periodType: null, eventType: "suspend_unknown_code" });

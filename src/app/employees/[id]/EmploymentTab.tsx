@@ -126,7 +126,7 @@ function PeriodCard({ v, ctx }: { v: PeriodView; ctx: TabContext }) {
         </p>
       )}
       {needsRelationshipChangeReview && can("employment.correct") && <p className="alert warning small">{t("guidance.cancelledRelationshipChange")}</p>}
-      {!recorded && !v.hasAssignment && <p className="period-note">{t("employment.noAssignment")}</p>}
+      {!recorded && !v.hasAssignment && <p className="period-note">{t("detail.noAssignmentYet")}</p>}
 
       <section className="period-lifecycle" aria-label={t("employment.lifecycleTitle", { n: v.number })}>
         <h4>{t("employment.lifecycleHeading")}</h4>
@@ -201,7 +201,7 @@ export function EmploymentTab({ ctx }: { ctx: TabContext }) {
     <div className="employment-tab">
       {none && onlyRecords && (
         <EmptyState title={t("employmentStatus.no_employment")}>
-          {ctx.d.employments.length ? t("employment.noOperationalBody") : t("employment.noEmploymentBody")}
+          {ctx.d.employments.length ? t("detail.onlyDisposedRecords") : t("detail.noEmploymentRecorded")}
         </EmptyState>
       )}
       <Section title={t("employment.currentTitle")} views={s.current} ctx={ctx} />

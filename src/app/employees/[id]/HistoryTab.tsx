@@ -16,8 +16,8 @@ export function historyEntryTitle(e: HistoryEntry): string {
   switch (e.kind) {
     case "employment_started":
       return t(planned ? "history.title.employmentStarts" : "history.title.employmentStarted");
-    case "employee_rehired":
-      return t("history.title.rehired");
+    case "new_period_started":
+      return t(planned ? "history.title.newPeriodStarts" : "history.title.newPeriodStarted");
     case "relationship_changed":
       return t("history.title.relationshipChanged");
     case "employment_ended":
@@ -43,8 +43,8 @@ function Description({ e, showPeriod }: { e: HistoryEntry; showPeriod: boolean }
     case "employment_started":
       if (e.periodType && !showPeriod) lines.push(e.periodType); // otherwise named by the period context line
       break;
-    case "employee_rehired":
-      lines.push(t("history.desc.rehired", { n: e.periodNumber, type: e.periodType ?? "—" }));
+    case "new_period_started":
+      lines.push(t("history.desc.newPeriod", { n: e.periodNumber, type: e.periodType ?? "—" }));
       if (e.previousEnd) lines.push(t("history.desc.previousEnded", { date: formatDate(e.previousEnd) }));
       break;
     case "relationship_changed":
@@ -131,7 +131,7 @@ export function HistoryTab({ d }: { d: Detail }) {
                     {e.status && <span className={`badge period-label ${e.status === "planned" ? "upcoming" : e.status}`}>{t(`history.status.${e.status}`)}</span>}
                   </div>
                   <Description e={e} showPeriod={showPeriod} />
-                  {showPeriod && e.kind !== "employee_rehired" && <div className="timeline-context">{t("history.periodContext", { n: e.periodNumber, type: e.periodType ?? "—" })}</div>}
+                  {showPeriod && e.kind !== "new_period_started" && <div className="timeline-context">{t("history.periodContext", { n: e.periodNumber, type: e.periodType ?? "—" })}</div>}
                 </li>
               ))}
             </ul>

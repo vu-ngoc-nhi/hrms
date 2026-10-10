@@ -21,6 +21,16 @@ function ManagerValue({ manager }: { manager: AssignmentSummary["manager"] }) {
   );
 }
 
+/** One label-above-value pair (same field styling as the Personal, Employment and Assignment tabs). */
+function Info({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
 function EmploymentCard({ o, status }: { o: Overview; status: string }) {
   const e = o.employment;
   const title = t(`overview.employmentTitle.${e.kind}`);
@@ -28,14 +38,12 @@ function EmploymentCard({ o, status }: { o: Overview; status: string }) {
     return (
       <section className="card" aria-labelledby="ov-employment">
         <h2 id="ov-employment">{title}</h2>
-        <dl className="kv">
-          <dt>{t("overview.employmentStatus")}</dt>
-          <dd>
+        <dl className="info-grid">
+          <Info label={t("overview.employmentStatus")}>
             <StatusBadge kind="employment" code="no_employment" />
-          </dd>
+          </Info>
         </dl>
-        <p className="muted small">{t("overview.noEmploymentBody")}</p>
-        {e.hasDisposedRecords && <p className="muted small">{t("overview.disposedNote")}</p>}
+        <p className="muted small">{t(e.hasDisposedRecords ? "detail.onlyDisposedRecords" : "detail.noEmploymentRecorded")}</p>
       </section>
     );
   }
@@ -43,32 +51,18 @@ function EmploymentCard({ o, status }: { o: Overview; status: string }) {
   return (
     <section className={e.kind === "pre_start" ? "card upcoming" : "card"} aria-labelledby="ov-employment">
       <h2 id="ov-employment">{title}</h2>
-      <dl className="kv">
-        <dt>{t("overview.employmentStatus")}</dt>
-        <dd>
+      <dl className="info-grid">
+        <Info label={t("overview.employmentStatus")}>
           <StatusBadge kind="employment" code={status} />
-        </dd>
-        <dt>{t("overview.employeeType")}</dt>
-        <dd>{e.employeeType ?? "—"}</dd>
-        <dt>{t("overview.startDate")}</dt>
-        <dd>{formatDate(e.startDate)}</dd>
-        {e.endDate && (
-          <>
-            <dt>{e.plannedEnd ? t("overview.plannedEnd") : t("overview.endDate")}</dt>
-            <dd>{formatDate(e.endDate)}</dd>
-          </>
-        )}
-        {e.endDate && reason && (
-          <>
-            <dt>{t("overview.endReason")}</dt>
-            <dd>{reason}</dd>
-          </>
-        )}
+        </Info>
+        <Info label={t("overview.employeeType")}>{e.employeeType ?? "—"}</Info>
+        <Info label={t("overview.startDate")}>{formatDate(e.startDate)}</Info>
+        {e.endDate && <Info label={e.plannedEnd ? t("overview.plannedEnd") : t("overview.endDate")}>{formatDate(e.endDate)}</Info>}
+        {e.endDate && reason && <Info label={t("overview.endReason")}>{reason}</Info>}
       </dl>
       {e.kind === "pre_start" && <p className="muted small">{t("overview.preStartNote", { date: formatDate(e.startDate) })}</p>}
       {e.previousEnd && <p className="muted small">{t("overview.previousEnd", { date: formatDate(e.previousEnd) })}</p>}
       {e.kind === "ended" && e.endDate && <p className="muted small">{t("overview.endedNote", { date: formatDate(e.endDate) })}</p>}
-      <p className="muted small">{t("overview.periodNote")}</p>
     </section>
   );
 }
@@ -77,7 +71,7 @@ function AssignmentCard({ o }: { o: Overview }) {
   const v = o.assignment;
   const title = t(`overview.assignmentTitle.${v.kind}`);
   if (v.kind === "none") {
-    const body = v.reason === "no_employment" ? "overview.noEmploymentAssignment" : v.reason === "no_assignment" ? "overview.noAssignment" : "overview.noneInEffect";
+    const body = v.reason === "no_employment" ? "overview.noEmploymentAssignment" : v.reason === "no_assignment" ? "detail.noAssignmentYet" : "overview.noneInEffect";
     return (
       <section className="card" aria-labelledby="ov-assignment">
         <h2 id="ov-assignment">{title}</h2>
@@ -86,24 +80,21 @@ function AssignmentCard({ o }: { o: Overview }) {
     );
   }
   const a = v.assignment;
+  // Same date wording as the Assignment tab: Effective since (current) / Takes effect on (upcoming) / Effective from (last).
+  const dateLabel = v.kind === "current" ? "assignmentTab.effectiveSince" : v.kind === "upcoming" ? "assignmentTab.takesEffectOn" : "assignmentTab.effectiveFrom";
   return (
     <section className={v.kind === "upcoming" ? "card upcoming" : "card"} aria-labelledby="ov-assignment">
       <h2 id="ov-assignment">{title}</h2>
-      <dl className="kv">
-        <dt>{t("overview.department")}</dt>
-        <dd>{a.department}</dd>
-        <dt>{t("overview.jobTitle")}</dt>
-        <dd>{a.jobTitle}</dd>
-        <dt>{t("overview.level")}</dt>
-        <dd>{a.level ?? "—"}</dd>
-        <dt>{t("overview.manager")}</dt>
-        <dd>
+      <dl className="info-grid">
+        <Info label={t("overview.department")}>{a.department}</Info>
+        <Info label={t("overview.jobTitle")}>{a.jobTitle}</Info>
+        <Info label={t("overview.level")}>{a.level ?? "—"}</Info>
+        <Info label={t("overview.manager")}>
           <ManagerValue manager={a.manager} />
-        </dd>
-        <dt>{t("overview.effectiveDate")}</dt>
-        <dd>{formatDate(a.effectiveFrom)}</dd>
+        </Info>
+        <Info label={t(dateLabel)}>{formatDate(a.effectiveFrom)}</Info>
       </dl>
-      {v.kind === "upcoming" && <p className="muted small">{t("overview.upcomingAssignmentNote", { date: formatDate(a.effectiveFrom) })}</p>}
+      {v.kind === "upcoming" && <p className="muted small">{t("assignmentTab.notInEffectYet")}</p>}
       {v.kind === "last" && v.periodEnd && <p className="muted small">{t("overview.lastAssignmentNote", { date: formatDate(v.periodEnd) })}</p>}
     </section>
   );
@@ -220,13 +211,10 @@ export function OverviewTab({ o, status, statusAsOf }: { o: Overview; status: st
 
       <section className="card" aria-labelledby="ov-identity">
         <h2 id="ov-identity">{t("overview.identityTitle")}</h2>
-        <dl className="kv">
-          <dt>{t("overview.fullName")}</dt>
-          <dd>{o.identity.fullName}</dd>
-          <dt>{t("overview.employeeCode")}</dt>
-          <dd>{o.identity.employeeCode}</dd>
-          <dt>{t("overview.workEmail")}</dt>
-          <dd>{o.identity.workEmail ?? "—"}</dd>
+        <dl className="info-grid">
+          <Info label={t("overview.fullName")}>{o.identity.fullName}</Info>
+          <Info label={t("overview.employeeCode")}>{o.identity.employeeCode}</Info>
+          <Info label={t("overview.workEmail")}>{o.identity.workEmail ?? "—"}</Info>
         </dl>
       </section>
 
@@ -253,7 +241,9 @@ export function OverviewTab({ o, status, statusAsOf }: { o: Overview; status: st
             </div>
           )
         )}
-        <p className="muted small">{t("completeness.ruleNote", { version: o.health.ruleVersion })}</p>
+        <p className="muted small" title={o.health.ruleVersion}>
+          {t("overview.ruleNote")}
+        </p>
         <p className="muted small">{t("overview.statusAsOf", { date: formatDate(statusAsOf) })}</p>
       </section>
     </div>
