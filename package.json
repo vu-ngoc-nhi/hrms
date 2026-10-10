@@ -22,6 +22,7 @@
     "integrity:scan": "tsx scripts/integrity-scan.ts",
     "access": "tsx scripts/access-admin.ts",
     "access:provision-local": "tsx scripts/access-provision-local.ts",
+    "demo:prepare": "tsx scripts/demo-prepare.ts",
     "test": "APP_ENV=test vitest run",
     "test:watch": "APP_ENV=test vitest",
     "test:integrity-baseline": "APP_ENV=test vitest run --config vitest.integrity-baseline.config.ts",
