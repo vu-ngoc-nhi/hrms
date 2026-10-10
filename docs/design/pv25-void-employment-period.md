@@ -234,7 +234,7 @@ Implementation (migration, API, UI, tests) starts only after explicit approval o
 
 ## 16. Implementation notes (2026-10-10, C-86)
 
-Implemented as designed. Open questions closed: Q1 yes (void event listed last); Q2 — the predecessor of a Relationship Change whose successor was cancelled is **not routinely voidable**: normal recovery stays *Cancel successor → Reverse End*; Void is evaluated only when HR confirms the predecessor itself was entered in error, and the preview returns the warning `RELATIONSHIP_CHANGE_PREDECESSOR`; Q3 yes (warning only); Q4 out of scope (separate backlog, not started).
+Implemented as designed. Open questions closed: Q1 yes (void event listed last); Q2 — a Relationship Change predecessor is **not forbidden** from Void (warning, never an automatic blocker): for a genuine relationship the normal recovery stays *Cancel successor → Reverse End*; if HR independently confirms that the predecessor period itself was entered in error, it is evaluated under the normal Void rules once no blocking cross-period dependency remains; the preview returns the warning `RELATIONSHIP_CHANGE_PREDECESSOR`; Q3 yes (warning only); Q4 out of scope (separate backlog, not started).
 
 Engineering details added during implementation (no business rule changed):
 
@@ -246,4 +246,10 @@ Engineering details added during implementation (no business rule changed):
 | The new trigger messages carry `(constraint "…")` | The Prisma driver adapter does not expose the constraint name of a trigger-raised `check_violation` |
 | Event-insert trigger now reads (and locks) the period for every event type | Rejects any event after Void and a void event without the marker |
 | UI shows *Void Employment Period* (HR with `employment.correct`) only on the latest valid period once it is effective; earlier periods would always be blocked by `LATER_PERIOD_EXISTS`. The confirmation is built from the preview; if the POST fails, the error and a refreshed preview are shown. | Less noise; preview-driven |
+
+### Closure verification (2026-10-10)
+
+- Manager reference model: `job_assignment.manager_employment_id` (FK → `employment.id`) stores the manager's **Employment Period**, never a person id; the API takes `manager_person_id` and resolves it to the manager's operational period covering the assignment's effective date (`currentEmploymentWhere`). Valid periods of one person cannot overlap (exclusion constraint), so at most one period can support a manager relationship on a given date. The checker, the trigger and the integrity check therefore all match on the exact period id, a valid dependent period, and overlapping dates; references stored against another period of the same manager are never attributed to the voided period.
+- Copy fixes only: the `RELATIONSHIP_CHANGE_PREDECESSOR` warning (true whether the successor is still valid or was cancelled; distinguishes genuine vs erroneous; Reverse End is not presented as the only option), the UI corrective direction for `MANAGER_DEPENDENCY`, and "Planned end of employment" for a future End in the preview.
+- HR acceptance set: `docs/uat/pv25-hr-acceptance.md`.
 

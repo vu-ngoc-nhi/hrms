@@ -268,10 +268,11 @@ export const en = {
       LATER_PERIOD_EXISTS: "A later valid employment period exists. Only the latest valid period can be voided.",
       RELATIONSHIP_CHANGE_SUCCESSOR:
         "This period was created by a Relationship Change. Void cannot undo a Relationship Change; that workflow (PV-24) is not available yet.",
-      MANAGER_DEPENDENCY: "Other employees' assignments use this period as their manager. Correct those assignments first; they are never changed automatically.",
+      MANAGER_DEPENDENCY:
+        "Other employees' assignments use this period as their manager. Open each employee listed below and change their Line Manager first (Change Assignment for a current or future assignment, Correct for a past one); they are never changed automatically. Then use Check again.",
       MANAGER_REFERENCE_WITHOUT_OVERLAP: "Other employees' assignments reference this period as manager for dates outside it. This does not block Void but should be reviewed.",
       RELATIONSHIP_CHANGE_PREDECESSOR:
-        "This period was ended by a Relationship Change that did not take effect. If this period itself is genuine, do not void it: use Reverse End Employment to restore it. Void only if this period itself was entered in error.",
+        "This period was ended by a Relationship Change. If the original relationship was genuine, do not void it: the normal recovery is to cancel the new period (Cancel Planned Period, if it has not started) and then use Reverse End Employment on this period. Void applies only if HR has independently confirmed that this period itself was entered in error and the relationship it represents never existed; it is then evaluated under the normal Void rules, and any blocker must be resolved first.",
       DEPENDENCY_CHECK_FAILED: "A dependency check could not be completed, so Void is blocked. Try again later.",
     },
     refAssignment: "{code} · {name} — assignment from {from}",

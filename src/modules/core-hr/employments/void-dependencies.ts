@@ -62,9 +62,10 @@ const laterPeriod: VoidDependencyCheck = {
  * This period is the successor of a Relationship Change (deterministic, from lifecycle data — audit is never used):
  * the immediately preceding valid period ends exactly on start_date − 1 and its Active End Event has End Reason
  * RELATIONSHIP_CHANGE. Undoing an effective Relationship Change is PV-24, not Void.
- * The opposite side — this period was ENDED by a Relationship Change whose successor is no longer valid — does not
- * block (no valid cross-period dependency remains), but it is never treated as a routine case: the normal recovery for
- * a genuine predecessor is Cancel successor → Reverse End, so the preview warns explicitly.
+ * The opposite side — this period was ENDED by a Relationship Change — is never an automatic blocker by itself (a valid
+ * successor is already blocked by `later_period`). It is a warning: for a genuine relationship the normal recovery is
+ * Cancel successor → Reverse End; Void applies only when HR independently confirms this period itself was entered in
+ * error, under the normal eligibility rules.
  */
 const relationshipChange: VoidDependencyCheck = {
   key: "relationship_change_successor",
@@ -91,7 +92,7 @@ const relationshipChange: VoidDependencyCheck = {
       warnings.push({
         code: "RELATIONSHIP_CHANGE_PREDECESSOR",
         message:
-          "This period was ended by a Relationship Change whose new period is not valid. If this period itself is genuine, do not void it: use Reverse End Employment to restore it. Void it only if HR confirms that this period itself was entered in error.",
+          "This period was ended by a Relationship Change. If the original relationship was genuine, do not void it: the normal recovery is to cancel the new period (Cancel Planned Period, if it has not started) and then use Reverse End Employment on this period. Void applies only if HR has independently confirmed that this period itself was entered in error and the relationship it represents never existed; it is then evaluated under the normal Void rules, and any blocker must be resolved first.",
         references: [{ employment_id: period.id, end_date: fromDbDate(ownEnd.effectiveDate) }],
       });
     }

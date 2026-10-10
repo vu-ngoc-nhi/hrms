@@ -19,6 +19,8 @@ import { addDays, todayInVietnam } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { DEPENDENCY_CHECK_FAILED, evaluateVoidDependencies, VOID_DEPENDENCY_CHECKS } from "@/modules/core-hr/employments/void-dependencies";
 import { voidBlockedError } from "@/modules/core-hr/employments/void-period";
+import { en } from "@/i18n/messages/en";
+import { runIntegrityChecks } from "../../scripts/integrity-checks";
 import { call, catalogIds, key, userId, type TestUser } from "../helpers";
 
 // PV-25 Void Employment Period (design revision 2).
@@ -251,12 +253,16 @@ describe("Void — eligibility matrix", () => {
     const sr = await voidIt(successor);
     expect(sr.status).toBe(422);
     expect(sr.body.details[0].code).toBe("RELATIONSHIP_CHANGE_SUCCESSOR");
-    expect(blockerCodes(VoidEligibilitySchema.parse((await preview(p.employmentId)).body))).toEqual(["LATER_PERIOD_EXISTS"]);
+    const pred = VoidEligibilitySchema.parse((await preview(p.employmentId)).body);
+    expect(blockerCodes(pred)).toEqual(["LATER_PERIOD_EXISTS"]);
+    // The predecessor warning is shown too; its wording must stay true while the successor is still valid.
+    expect(pred.warnings.map((w) => w.code)).toEqual(["RELATIONSHIP_CHANGE_PREDECESSOR"]);
+    expect(pred.warnings[0].message).not.toMatch(/not valid|did not take effect/);
     expect((await voidIt(p)).status).toBe(409);
     expect((await db().employment.findUniqueOrThrow({ where: { id: successor.employmentId } })).voidedAt).toBeNull();
   });
 
-  it("a predecessor whose Relationship Change successor was cancelled is not routine: eligible, but with an explicit warning", async () => {
+  it("a predecessor whose Relationship Change successor was cancelled is not forbidden: eligible with a warning (genuine → Reverse End)", async () => {
     const p = await hired(addDays(today, -50), { type: ids.et.SERVICE_CONTRACTOR });
     const rc = await post(rcRoute, p.employmentId, p.personId, { start_date: addDays(today, 15), employee_type_id: ids.et.EMPLOYEE, reason: "Planned conversion" });
     expect(rc.status).toBe(201);
@@ -265,10 +271,42 @@ describe("Void — eligibility matrix", () => {
     const pv = VoidEligibilitySchema.parse((await preview(p.employmentId)).body);
     expect(pv.eligible).toBe(true);
     expect(pv.warnings.map((w) => w.code)).toEqual(["RELATIONSHIP_CHANGE_PREDECESSOR"]);
-    expect(pv.warnings[0].message).toContain("Reverse End Employment");
+    expectPredecessorGuidance(pv.warnings[0].message);
+    expectPredecessorGuidance(en.voidPeriod.findings.RELATIONSHIP_CHANGE_PREDECESSOR);
     // The normal recovery for a genuine predecessor stays available: Reverse End.
     expect((await post(reverseRoute, p.employmentId, p.personId, { reason: "Conversion withdrawn" })).status).toBe(201);
     expect(VoidEligibilitySchema.parse((await preview(p.employmentId)).body).warnings).toEqual([]);
+  });
+});
+
+// Approved rule (PV-25 closure): a warning, never an automatic blocker; it distinguishes a genuine relationship (Cancel
+// successor → Reverse End) from a period entered in error (normal Void rules) and does not present Reverse End as the
+// only possible action.
+function expectPredecessorGuidance(message: string) {
+  expect(message).toContain("If the original relationship was genuine");
+  expect(message).toContain("Cancel Planned Period");
+  expect(message).toContain("Reverse End Employment");
+  expect(message).toContain("entered in error and the relationship it represents never existed");
+  expect(message).toContain("normal Void rules");
+  expect(message).not.toMatch(/\bonly (option|action|way)\b/i);
+}
+
+describe("Void — Relationship Change predecessor confirmed as erroneous", () => {
+  it("may still be voided once no blocking cross-period dependency remains (the warning does not block)", async () => {
+    const p = await hired(addDays(today, -50), { type: ids.et.SERVICE_CONTRACTOR });
+    const rc = await post(rcRoute, p.employmentId, p.personId, { start_date: addDays(today, 15), employee_type_id: ids.et.EMPLOYEE, reason: "Planned conversion" });
+    expect(rc.status).toBe(201);
+    expect((await post(cancelRoute, rc.body.employments[1].id, p.personId, { reason: "Conversion withdrawn" })).status).toBe(201);
+    const pv = VoidEligibilitySchema.parse((await preview(p.employmentId)).body);
+    expect([pv.eligible, pv.blockers, pv.warnings.map((w) => w.code)]).toEqual([true, [], ["RELATIONSHIP_CHANGE_PREDECESSOR"]]);
+    const r = await voidIt(p, { reason: "HR confirmed the whole contractor period was entered for the wrong person" });
+    expect(r.status).toBe(201);
+    const d = EmployeeDetailSchema.parse(r.body);
+    expect(d.employment_status).toBe("no_employment");
+    expect(d.employments.map((e) => [Boolean(e.voided_at), Boolean(e.cancelled_at)])).toEqual([
+      [true, false],
+      [false, true],
+    ]);
   });
 });
 
@@ -290,6 +328,9 @@ describe("Void — manager dependency (design §4)", () => {
     const r = await voidIt(m);
     expect(r.status).toBe(422);
     expect(r.body.details[0].code).toBe("MANAGER_DEPENDENCY");
+    // Understandable corrective direction (API message and UI copy).
+    expect(r.body.details[0].message).toContain("Correct those assignments first (Assignment Change, or Historical Assignment Correction for past rows)");
+    expect(en.voidPeriod.findings.MANAGER_DEPENDENCY).toMatch(/change their Line Manager first \(Change Assignment .*Correct for a past one\).*Check again/);
     expect(r.body.details[1]).toMatchObject({ field: "assignment_id", code: "MANAGER_DEPENDENCY", message: expect.stringContaining(bCode) });
     expect(JSON.stringify(r.body.details)).not.toContain(pv.blockers[0].references[0].full_name!);
     expect((await db().employment.findUniqueOrThrow({ where: { id: m.employmentId } })).voidedAt).toBeNull();
@@ -346,6 +387,14 @@ describe("Void — manager dependency (design §4)", () => {
     // Nothing else was rewritten.
     expect((await period(b.employmentId)).assignments[0].managerEmploymentId).toBe(m.employmentId);
     expect((await period(later.employmentId)).assignments[0].managerEmploymentId).toBe(v.employmentId);
+    // Same semantics in the integrity scan: none of these harmless references is reported against the voided period.
+    await app.query("BEGIN READ ONLY");
+    try {
+      const findings = await runIntegrityChecks(app, today, [m.personId, b.personId, planned.personId, later.personId]);
+      expect(findings.filter((f) => f.check === "voided_period_referenced_as_manager")).toEqual([]);
+    } finally {
+      await app.query("ROLLBACK");
+    }
   });
 
   it("a blocker created after the preview is caught by the POST", async () => {

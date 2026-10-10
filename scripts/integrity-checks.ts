@@ -181,7 +181,9 @@ const CHECKS: Check[] = [
           WHERE e.id <> v.id AND e.recorded_at > v.recorded_at AND ${PERSON("p")}`,
   },
   {
-    // Design §4: a valid assignment of another period that uses a voided period as manager for dates within it.
+    // Design §4 — same semantics as the Void checker `manager_dependency` (void-dependencies.ts) and the trigger
+    // job_assignment_manager_not_voided: the reference is to this exact period id, the dependent period is valid, and
+    // [effective_from, effective_to) overlaps [start_date, end_date]. Non-overlapping references are not reported here.
     check: "voided_period_referenced_as_manager",
     severity: "error",
     sql: `SELECT p.person_id, p.id AS employment_id, a.id AS assignment_id, m.id AS manager_employment_id

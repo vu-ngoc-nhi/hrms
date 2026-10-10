@@ -21,6 +21,7 @@ type Reference = {
 type Finding = { code: string; message: string; references: Reference[] };
 type Eligibility = {
   evaluated_revision: number;
+  as_of: string;
   eligible: boolean;
   period: { start_date: string; end_date: string | null; employee_type: { code: string; name: string } | null };
   blockers: Finding[];
@@ -160,7 +161,11 @@ export function VoidPeriodForm<T>({ employmentId, onSaved }: { employmentId: str
               {t("voidPeriod.internalEvents")}:{" "}
               {internal.lifecycle_events.length
                 ? internal.lifecycle_events
-                    .map((ev) => `${tMaybe(`detail.eventType.${ev.event_type}`) ?? ev.event_type} (${formatDate(ev.effective_date)})`)
+                    .map((ev) => {
+                      // Same wording as the history: a future-dated End reads "Planned end of employment" (C-80).
+                      const key = ev.event_type === "end" && ev.effective_date > preview.as_of ? "end_planned" : ev.event_type;
+                      return `${tMaybe(`detail.eventType.${key}`) ?? ev.event_type} (${formatDate(ev.effective_date)})`;
+                    })
                     .join(", ")
                 : "—"}
             </li>

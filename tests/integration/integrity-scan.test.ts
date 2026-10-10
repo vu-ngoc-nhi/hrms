@@ -138,4 +138,38 @@ describe("Integrity scan (H4)", () => {
     expect(by("event_recorded_after_void")).toEqual([]);
     expect(findings.every((f) => !JSON.stringify(f).includes("Test Integrity"))).toBe(true);
   });
+
+  it("PV-25: voided_period_referenced_as_manager uses the Void checker's semantics — no false positives for harmless references", async () => {
+    // Manager with a genuine earlier period P1 and a period V that is (directly) voided.
+    const manager = await hired("Test Integrity VM Manager", "2020-01-06");
+    await db().$transaction([
+      db().employment.update({ where: { id: manager.employmentId }, data: { endDate: toDbDate("2021-12-31") } }),
+      db().jobAssignment.updateMany({ where: { employmentId: manager.employmentId }, data: { effectiveTo: toDbDate("2022-01-01") } }),
+    ]);
+    const v = await db().employment.create({ data: { personId: manager.personId, startDate: toDbDate(addDays(today, -60)), employeeTypeId: ids.et.EMPLOYEE, createdBy: admin } });
+
+    // (a) reference to the OTHER period P1 of the same manager, open-ended so it also spans V's dates → not V's dependency;
+    const toP1 = await hired("Test Integrity VM Ref P1", "2020-03-02");
+    await db().jobAssignment.updateMany({ where: { employmentId: toP1.employmentId }, data: { managerEmploymentId: manager.employmentId } });
+    // (b) reference to V for dates entirely before V (historical, no overlap) → harmless;
+    const before = await hired("Test Integrity VM Ref Before", "2023-01-02");
+    await db().$transaction([
+      db().employment.update({ where: { id: before.employmentId }, data: { endDate: toDbDate(addDays(today, -100)) } }),
+      db().jobAssignment.updateMany({ where: { employmentId: before.employmentId }, data: { effectiveTo: toDbDate(addDays(today, -99)), managerEmploymentId: v.id } }),
+    ]);
+    // (c) reference to V from a dependent period that was cancelled → ignored;
+    const cancelled = await hired("Test Integrity VM Ref Cancelled", addDays(today, 20));
+    await db().jobAssignment.updateMany({ where: { employmentId: cancelled.employmentId }, data: { managerEmploymentId: v.id } });
+    await app.query("UPDATE employment SET cancelled_at = now() WHERE id = $1", [cancelled.employmentId]);
+    // (d) overlapping reference to V from a valid period → the only real dependency.
+    const overlapping = await hired("Test Integrity VM Ref Overlap", addDays(today, -30));
+    await db().jobAssignment.updateMany({ where: { employmentId: overlapping.employmentId }, data: { managerEmploymentId: v.id } });
+
+    await app.query("UPDATE employment SET voided_at = now() WHERE id = $1", [v.id]);
+    await db().employmentEvent.create({ data: { employmentId: v.id, eventType: "employment_voided", effectiveDate: toDbDate(addDays(today, -60)), reason: "x", recordedBy: admin } });
+
+    const findings = await scan([manager, toP1, before, cancelled, overlapping].map((p) => p.personId));
+    expect(findings.filter((f) => f.check === "voided_period_referenced_as_manager").map((f) => f.ids.person_id)).toEqual([overlapping.personId]);
+  });
 });
+
