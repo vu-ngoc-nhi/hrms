@@ -178,6 +178,8 @@ Error codes: `404`, `409 EMPLOYMENT_PERIOD_READ_ONLY`, `422 PERIOD_NOT_EFFECTIVE
 
 UI concept: HR_ADMIN-only "Void Employment Period" on an eligible period → confirmation screen fed by the preview (definition from §1, internal records, consequences, blockers with the action to take, "Void cannot be undone"), mandatory reason → POST. If the POST returns a blocker that appeared after the preview, the screen shows it.
 
+**Authorization (C-85):** both operations declare `employment.correct` in the contract registry — no role-name checks, no new permission. A future split into `employment.void` is non-breaking (one registry change plus granting it to roles holding `employment.correct`).
+
 ## 10. Audit and concurrency rules
 
 - HR_ADMIN, `employment.correct`, mandatory reason (1–1000 chars, trimmed), actor, request ID, recorded timestamp — on the event and in one audit record `employment.void` (`changedFields: ["employment.voided", "employment_event.employment_voided"]`). No structural old/new values (`voided_at` stays outside the C-24 allow-list, like `cancelled_at`). No personal values.

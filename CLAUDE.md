@@ -65,6 +65,14 @@ Context: Mini HRS serves EmeSoft, a technical company of ~70–100 employees wit
 - DB for invariants, application services for workflows, UI for guidance; no business behaviour only in the frontend. No speculative frameworks for future modules — prefer a clear extension contract.
 - Apply the design review questions and anti-pattern list in the philosophy document to every significant workflow. The Business Decision Gate above still applies; never disguise a business-rule change as a refactor.
 
+## Access control principle (C-85, mandatory)
+Direction: `docs/design/access-control-direction.md`. Phase 1 roles (HR_ADMIN, HR_EDITOR, API_DOCS_READER) and permissions are the current baseline and are not changed without approval.
+- **Flexible role configuration, strict authorization enforcement.** Authorize by **permissions** (stable, code-controlled capabilities) — never by role names, individual users or organisational facts. Roles are bundles of permissions; effective permissions = union of enabled roles; no deny/precedence rules without a demonstrated need.
+- Organisational position (Department, Job Title, Level, Employee Type) may only *suggest* access; it never silently grants or revokes privileges.
+- Adding or replacing HR staff should need role assignment only — no code change, migration or deployment. Do not add new hard-coded role checks; declare the required permission on the operation and enforce it server-side; UI visibility is never a security boundary.
+- Do not create a new permission unless it represents a materially different authorization boundary EmeSoft is likely to assign differently; otherwise reuse the existing capability (e.g. Void Employment Period uses `employment.correct`).
+- Future access management must prevent privilege escalation, give disabled accounts no access, warn on sensitive grants and keep a separate security audit trail. No policy engines, ABAC builders, scope matrices or approval chains without a demonstrated EmeSoft risk; scope (self/team/department/all) stays an extension point only.
+
 ## Data and legal
 - Use synthetic data only. Never use real employee data in development, tests, fixtures, logs or AI tools; real data is a pre-production gate.
 - Do not invent legal conclusions or retention periods. Mark unresolved items `Pending Legal Review`.

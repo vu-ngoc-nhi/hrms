@@ -141,3 +141,18 @@ If a proposal adds significant complexity but cannot say which demonstrated risk
 ## 14. Desired product character
 
 Lightweight · predictable · forgiving of genuine human input mistakes · difficult to corrupt · easy to explain · fast for HR · technically disciplined.
+
+## 15. Access control (C-85)
+
+Details and the Phase 1 review: `docs/design/access-control-direction.md`.
+
+- **Flexible role configuration, strict authorization enforcement.**
+- Access control is configured through **roles and permissions**, not hard-coded to individual users or organisational job titles.
+- **Organisational position may suggest access, but must not silently determine security privileges.**
+- Adding or replacing HR staff should normally require **role assignment, not product change**.
+- Three layers: **Permission** (stable, code-controlled capability) → **Access Role** (configurable bundle of existing permissions) → **User Role Assignment** (one or more roles per account). Effective permissions = union of enabled roles; no deny/precedence rules without a demonstrated need.
+- Configurable: role definitions, role membership, assignments, enable/disable, optional suggested Position → Role mappings. Code-controlled: permission identifiers and semantics, server-side enforcement, security invariants, protected guardrails.
+- Guardrails: no privilege escalation; disabled accounts have no access; UI is never a security boundary; sensitive grants are warned and audited in a **separate security audit trail**, not in employee history.
+- Not at EmeSoft scale: policy engines, ABAC builders, allow/deny precedence, scope matrices, approval chains for role changes, automatic Job Title → access, user-created permission identifiers, external IAM provisioning. Scope (self/team/department/all) is an extension point only.
+- New permissions only for a materially different authorization boundary that EmeSoft is likely to assign differently; otherwise reuse the existing capability.
+
