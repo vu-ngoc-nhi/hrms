@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) and D-UI-15 … D-UI-16 (register C-97) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). **Employee Detail consistency review — completed** (§16). **UI-8 Add Employee implemented** (§17). Next slice (UI-9) not started.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) and D-UI-15 … D-UI-16 (register C-97) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). **Employee Detail consistency review — completed** (§16). **UI-8 Add Employee implemented** (§17). **UI-9 Workflow & action consolidation implemented** (§18). Next slice (UI-10) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -607,4 +607,69 @@ No duplicate-person warning or matching (D-UI-8): only the server's exact confli
 | Unit suite / typecheck / lint / build | 166/166 unit tests; typecheck, lint, production build pass. Frontend-only: DB/UAT suites not re-run |
 | Browser QA (synthetic data, HR Admin test identity) | A Personal; B Employment — Employee; C Employment — Service Contractor (Work Email hint differs, never required); D Assignment; E Review; F validation (Full Name, Department / Job Title pairing; server invalid Mobile → back to Personal, "Nothing was saved"); G success → Overview of **ES0032 "UI8 QA Pre-start (Synthetic)"** (Pre-start, Upcoming Assignment, Complete); H intentional no-assignment result **ES0033 "UI8 QA No Assignment (Synthetic)"** (Needs Attention, Add Initial Assignment). Exactly one person per save confirmed in `hrms_dev` (read-only check) |
 | Responsive / accessibility | 1440 / 1280 / ~900: four-step stepper, two-column fields; phone: two-column stepper, one-column fields, no horizontal scroll; labels associated, `aria-invalid` / `aria-describedby` on errors, focus management, state in text |
+
+## 18. UI-9 — Workflow & action consolidation (implemented 2026-10-11)
+
+Scope: Employee Detail action placement, one workflow surface, and HR-facing wording in workflow forms. No workflow business logic, API, eligibility rule or permission changed.
+
+### Pre-UI-9 cleanup (UI-8)
+
+- The Review-step checkbox "Only save if the record is complete" was removed from the wizard: incomplete creation and Needs Attention are valid outcomes. The API option `require_operational_completeness` is unchanged (simply not sent; unit-tested). Review now says: "Missing details do not block saving. Record Health on the employee's Overview shows anything still to complete." — no frontend completeness engine.
+- Privileged code input renamed **"Advanced: Employee Code override"** (copy only; still `employees.set_code`).
+
+### Final action ownership (D-UI-13, D-UI-16)
+
+| Place | Actions |
+|---|---|
+| **Header** | Primary (red): **Change Assignment**, or **Add Initial Assignment** when the representative period has none. **More actions** (short): Rehire / Plan Rehire or Add Initial Employment Period; Correct record → Correct Name or Date of Birth |
+| **Employment Period card** (every period, own actions only) | Business (secondary buttons): Change Assignment / Add Initial Assignment for a **non-representative** period, Edit Work Email, End Employment, Change Employment Relationship. **Correct record** menu: Correct Employment Period, Correct / Clear Work Email, Cancel Planned Period, Reverse End Employment; **Advanced** section: Void Employment Period (red text item, single menu with section labels — no submenus) |
+| **Assignment row** | **Correct** (ghost) only |
+| **Personal tab** | **Edit Personal Information** (secondary) |
+| **Empty Assignment card** | No button: "Use Add Initial Assignment at the top of the page." (representative period) or "Use Add Initial Assignment on Employment Period N in the Employment tab." (other periods) |
+
+Removed duplicates: the representative period's period actions in header More actions; its Add Initial Assignment on the Employment card and the empty Assignment card; Change Assignment on Assignment rows (moved to the non-representative period's card). Shared source: `headerActions` / `periodCardActions` in `detailModel.ts` over the existing `periodEligibility`.
+
+### Workflow surface
+
+One workflow at a time (`workflowModel.ts` → `WorkflowHost.tsx`), rendering the unchanged forms in launched mode:
+
+| Surface | Workflows |
+|---|---|
+| **Drawer** (right panel, 640 px; 720 px below 1100 px; full width on phones; internal scroll) | Change Assignment, Add Initial Assignment, Change Employment Relationship, Rehire / Plan Rehire, Add Initial Employment Period, Correct Employment Period, Correct Assignment, End Employment (reason, note and impact preview), Void (dependency preview can be long), Edit Personal Information, Correct Name or Date of Birth |
+| **Modal** | Edit / Correct / Clear Work Email, Cancel Planned Period, Reverse End Employment |
+
+Header of every surface: action title + context — "Employment Period N · <type> · from <date>", "Assignment effective from <date> · <Department> / <Job Title>", or "<Full Name> · <code>" — never an id. Data corrections (Correct Employment Period, Correct / Clear Work Email, Correct Assignment) show "Correct record: use this only to fix information that was recorded incorrectly."; business changes never do. Built on the UI-0 Modal (new `variant="drawer"`): focus moves to the first field, Tab is trapped, Escape and × close, focus returns to the launcher, the page behind is inert and does not scroll. Changed fields → closing with Escape / × asks "Close without saving?"; unchanged → closes at once; the form's own Cancel closes directly. No drafts.
+
+After success: the surface closes, the record refreshes, a short notice appears and the most relevant tab is shown (assignment workflows → Assignment, personal → Personal, others → Employment). Field-level and conflict errors stay inside the form (existing catalogue wording, no raw exception text, no silent retries).
+
+### Technical copy removed
+
+| Before | After |
+|---|---|
+| "End Date (inclusive)", "(last working day, inclusive)" | "End Date"; "<date> is the final date of the Employment Period." |
+| "The current assignment ends on the effective date and a new assignment starts that day"; "The assignment in effect since X ends on <next start>" | "The current assignment is replaced when the new assignment takes effect"; "…(in effect since X) is replaced when the new assignment takes effect on <date>" |
+| End / Reverse End preview "assignment ends on <exclusive end>" | "stays in effect through <last day>" (display shows the day before the stored exclusive boundary; stored semantics unchanged) |
+| "Line Manager" | "Manager" |
+| Relationship Change help | "This ends the current Employment Period and creates a new Employment Period…" |
+| Rehire help | "Create a new Employment Period for this employee. The person and the Employee Code stay the same." |
+| Cancel Planned / Reverse End help | "…not an End, a deletion or a Void…" / "…The End stays in the history, marked as reversed." |
+
+Void keeps its PV-25 statement ("Use Void only when this Employment Period was entered in error and the relationship never existed in reality.") with the existing preview; its confirm button is now the explicit danger style. No Unvoid.
+
+### Defects found and fixed during UI-9 QA
+
+- UI-0 Modal initial focus went to the × button (selector scoped only its first alternative) → first field now receives focus.
+- Pre-existing: Change Assignment proposed the **UTC** date as default Effective Date — early in the Vietnam morning that is yesterday (a silent backdate for HR_ADMIN). Now defaults to the Vietnam business date like the other workflows.
+- Drawer body stretched short content to the full height → `align-content: start`.
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| Unit `tests/unit/workflow-consolidation.test.ts` (15) | representative Add Initial Assignment appears once (header only); header has no period actions; non-representative / future period keeps Change / Add Initial Assignment; grouping with Void only in Advanced; capability visibility (HR_EDITOR, read-only); cancelled / voided expose nothing; one workflow at a time; Drawer / Modal classification; success tab; unsaved close confirmation; correction note only on data corrections; no "exclusive" in Change Assignment, no "inclusive" in End Employment, "End Date", no "Line Manager"; no role names |
+| Updated tests | `detail-overview.test.ts` header expectations (UI-9 ownership); `add-employee-wizard.test.ts` (completeness flag never sent) |
+| Unit suite / typecheck / lint / build | 181/181 unit tests; typecheck, lint, production build pass. Frontend-only: DB/UAT suites not re-run |
+| Visual QA (synthetic data) | A header with short More actions (DEMO001); B current period card actions (DEMO001); C future period card with its own Change Assignment (DEMO905 Period 2); D Change Assignment drawer; E Change Employment Relationship drawer; F End Employment drawer; G Rehire drawer (DEMO003); H Correct Employment Period with the correction note; I Correct Assignment from a history row (DEMO002); J Cancel Planned Period modal (DEMO905 Period 2); K Reverse End modal (DEMO903); L Void drawer with dependency preview and danger confirm (DEMO001, not submitted); M no assignment — one Add Initial Assignment on the page (ES0033); N HR Editor — business actions only, no Correct record menu |
+| End-to-end | Add Initial Assignment from the header on synthetic **ES0033** (UI-8 QA record): drawer closed, Assignment tab, "Changes saved.", header primary became Change Assignment |
+| Accessibility / responsive | focus to first field, Tab trap, Escape, focus return, unsaved confirmation, page scroll lock verified; drawer leaves half the page visible at 1440 / 1280, full width on phones with internal scroll; no horizontal page scroll |
 
