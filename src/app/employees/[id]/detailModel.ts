@@ -299,7 +299,7 @@ export type ActionId =
   | "relationship_change"
   | "rehire"
   | "initial_employment"
-  | "edit_profile"
+  | "correct_personal"
   | "correct_period"
   | "correct_work_email"
   | "clear_work_email"
@@ -338,7 +338,8 @@ export function headerActions(d: Detail, can: (permission: string) => boolean): 
   }
   if (manage && latest === null) daily.push("initial_employment");
   if (manage && latest?.end_date) daily.push("rehire");
-  if (can("employees.update")) correction.push("edit_profile");
+  // Full Name / recorded Date of Birth correction (C-23); normal personal updates live in the Personal tab (UI-4).
+  if (can("employees.update")) correction.push("correct_personal");
   if (target) {
     const e = periodEligibility(d, target, can);
     if (e.correctPeriod) correction.push("correct_period");

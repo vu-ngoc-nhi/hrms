@@ -16,8 +16,8 @@ import { InitialAssignmentForm } from "./InitialAssignmentForm";
 import { NewPeriodForm } from "./NewPeriodForm";
 import { OverviewTab } from "./OverviewTab";
 import { PeriodCorrectionForm } from "./PeriodCorrectionForm";
-import { ProfileEditForm } from "./ProfileEditForm";
-import { AssignmentTab, cancelBlockedBy, EmploymentTab, HistoryTab, periodHeading, PersonalTab, type TabContext } from "./RecordTabs";
+import { PersonalCorrectionForm, PersonalTab } from "./PersonalTab";
+import { AssignmentTab, cancelBlockedBy, EmploymentTab, HistoryTab, periodHeading, type TabContext } from "./RecordTabs";
 import { RelationshipChangeForm } from "./RelationshipChangeForm";
 import { ReverseEndForm } from "./ReverseEndForm";
 import { VoidPeriodForm } from "./VoidPeriodForm";
@@ -96,7 +96,7 @@ export default function EmployeeDetailPage() {
       relationship_change: t("detail.actionLabel.relationshipChange"),
       rehire: plannedRehire ? t("rehire.plan.open") : t("rehire.open"),
       initial_employment: t("initialEmployment.open"),
-      edit_profile: t("profileEdit.edit"),
+      correct_personal: t("personal.correct"),
       correct_period: t("detail.actionLabel.correctPeriod"),
       correct_work_email: t("workEmail.correct"),
       clear_work_email: t("workEmail.clear"),
@@ -119,15 +119,8 @@ export default function EmployeeDetailPage() {
     const lp = { onClose: close };
     const tp = target;
     switch (action) {
-      case "edit_profile":
-        return (
-          <ProfileEditForm
-            profile={d}
-            canEditPersonal={Boolean(can("employees.write_personal") && d.personal)}
-            onSaved={(updated) => saved(updated as unknown as Detail, t("profileEdit.saved"))}
-            onCancel={close}
-          />
-        );
+      case "correct_personal":
+        return <PersonalCorrectionForm<Detail> profile={d} can={can} onSaved={(u) => saved(u, t("personal.corrected"))} onCancel={close} />;
       case "initial_employment":
         return (
           <NewPeriodForm<Detail>
@@ -312,7 +305,7 @@ export default function EmployeeDetailPage() {
       <Tabs<TabId> idPrefix="employee" label={t("detail.sectionsLabel")} items={TABS.map((id) => ({ id, label: t(`detail.tabs.${id}`) }))} value={tab} onChange={setTab} />
       <div role="tabpanel" id={`panel-employee-${tab}`} aria-labelledby={`tab-employee-${tab}`} tabIndex={0} className="tab-panel">
         {tab === "overview" && <OverviewTab o={o} status={d.employment_status} statusAsOf={d.status_as_of} />}
-        {tab === "personal" && <PersonalTab d={d} />}
+        {tab === "personal" && <PersonalTab<Detail> profile={d} can={can} onSaved={(u) => saved(u, t("personal.saved"))} />}
         {tab === "employment" && <EmploymentTab ctx={ctx} />}
         {tab === "assignment" && <AssignmentTab ctx={ctx} />}
         {tab === "history" && <HistoryTab d={d} />}

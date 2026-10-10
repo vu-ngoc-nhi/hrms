@@ -208,14 +208,14 @@ describe("Header actions — same eligibility as before UI-3, by capability", ()
     const a = headerActions(detail([period("2026-01-05", null)]), HR_ADMIN);
     expect(a.primary).toBe("change_assignment");
     expect(a.daily).toEqual(["edit_work_email", "end_employment", "relationship_change"]);
-    expect(a.correction).toEqual(["edit_profile", "correct_period", "clear_work_email"]);
+    expect(a.correction).toEqual(["correct_personal", "correct_period", "clear_work_email"]);
     expect(a.advanced).toEqual(["void_period"]);
   });
 
   it("HR_EDITOR (no employment.correct): no corrections of the period and no Void", () => {
     const a = headerActions(detail([period("2026-01-05", null)]), HR_EDITOR);
     expect(a.primary).toBe("change_assignment");
-    expect(a.correction).toEqual(["edit_profile"]);
+    expect(a.correction).toEqual(["correct_personal"]);
     expect(a.advanced).toEqual([]);
   });
 
@@ -235,12 +235,12 @@ describe("Header actions — same eligibility as before UI-3, by capability", ()
     const a = headerActions(detail([period("2025-01-06", "2026-06-30", { active_end_event: endEvent("2026-06-30", "RESIGNATION"), has_active_end_event: true })]), HR_ADMIN);
     expect(a.primary).toBeNull();
     expect(a.daily).toEqual(["rehire"]);
-    expect(a.correction).toEqual(["edit_profile", "correct_period", "correct_work_email", "clear_work_email", "reverse_end"]);
+    expect(a.correction).toEqual(["correct_personal", "correct_period", "correct_work_email", "clear_work_email", "reverse_end"]);
   });
 
   it("No operational period: Add Initial Employment Period only", () => {
     const a = headerActions(detail([period("2026-03-02", null, { voided_at: "2026-10-05T03:00:00Z" })]), HR_ADMIN);
-    expect(a).toMatchObject({ target: null, primary: null, daily: ["initial_employment"], correction: ["edit_profile"], advanced: [] });
+    expect(a).toMatchObject({ target: null, primary: null, daily: ["initial_employment"], correction: ["correct_personal"], advanced: [] });
   });
 
   it("planned Relationship Change: header acts on the current period; the planned period keeps its own actions", () => {

@@ -114,8 +114,8 @@ button.link:hover { color: var(--color-primary); background: none; }
 
 /* ---------------- Forms ---------------- */
 label { display: grid; gap: var(--space-1); font-size: var(--font-size-sm); color: var(--color-text-2); }
-.field { display: grid; gap: var(--space-1); }
-.field-label { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text); }
+.field { display: grid; gap: var(--space-1); align-content: start; }
+.field-label { display: block; font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); color: var(--color-text); }
 .field-required { color: var(--color-primary); margin-left: 2px; }
 .field-hint { font-size: var(--font-size-xs); color: var(--color-text-2); }
 .field-error { font-size: var(--font-size-xs); color: var(--color-danger); }
@@ -251,6 +251,19 @@ tbody tr:hover td { background: var(--color-surface-2); }
 .health-missing { margin: var(--space-1) 0 0; padding-left: 18px; }
 @media (max-width: 1023px) { .overview-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 640px) { .change-item { grid-template-columns: 1fr; gap: var(--space-1); } }
+
+/* Personal tab (UI-4) and shared form layout: label above value, two columns on desktop, stacked when narrow. */
+.info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4) var(--space-6); margin: 0; }
+.info-grid dt { font-size: var(--font-size-xs); color: var(--color-text-2); margin-bottom: 2px; }
+.info-grid dd { margin: 0; overflow-wrap: anywhere; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin-bottom: var(--space-4); }
+.form-grid input, .form-grid select { width: 100%; }
+.form-grid input[readonly] { background: var(--color-surface-2); color: var(--color-text-2); }
+.form-actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; margin-top: var(--space-4); }
+.review h3 { font-size: var(--font-size-sm); margin: 0 0 var(--space-1); }
+.personal-card .card-header { margin-bottom: var(--space-4); }
+.personal-card > p.small:last-child { margin: var(--space-4) 0 0; }
+@media (max-width: 720px) { .info-grid, .form-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---------------- Filter bar (lists) ---------------- */
 .filter-bar {

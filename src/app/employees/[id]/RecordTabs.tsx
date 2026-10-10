@@ -16,7 +16,7 @@ import { VoidPeriodForm } from "./VoidPeriodForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
 import { isDisposed, operationalPeriods, periodEligibility, type Detail, type HistoryEvent, type Period } from "./detailModel";
 
-// UI-3: the pre-UI-3 Employee Detail content split into the Personal, Employment, Assignment and History tabs. Layout
+// UI-3: the pre-UI-3 Employee Detail content split into the Employment, Assignment and History tabs (Personal: UI-4). Layout
 // and wording inside these tabs are unchanged (they are refactored in UI-4 … UI-7). Workflows of the representative
 // period are opened from the header (Change Assignment / More actions); other periods keep their inline buttons.
 
@@ -47,29 +47,6 @@ function PeriodHeader({ d, e }: { d: Detail; e: Period }) {
         )
       )}
     </div>
-  );
-}
-
-export function PersonalTab({ d }: { d: Detail }) {
-  return (
-    <section className="card">
-      <h2>{t("detail.personalTitle")}</h2>
-      {d.personal ? (
-        <dl className="kv">
-          <dt>{t("detail.gender")}</dt>
-          <dd>{d.personal.gender ? tMaybe(`gender.${d.personal.gender}`) ?? d.personal.gender : "—"}</dd>
-          <dt>{t("detail.dateOfBirth")}</dt>
-          <dd>{formatDate(d.personal.date_of_birth)}</dd>
-          <dt>{t("detail.mobilePhone")}</dt>
-          <dd>{d.personal.mobile_phone ?? "—"}</dd>
-          <dt>{t("detail.personalEmail")}</dt>
-          <dd>{d.personal.personal_email ?? "—"}</dd>
-        </dl>
-      ) : (
-        <p className="muted">{t("detail.personalHidden")}</p>
-      )}
-      <p className="muted small">{t("detail.sensitiveNotice")}</p>
-    </section>
   );
 }
 
