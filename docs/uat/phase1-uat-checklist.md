@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UAT Checklist
 
-- Milestone: **Core HR Phase 1 — UAT Passed With Pre-Production Actions** (HR sign-off 2026-10-10; results in `phase1-uat-round1-results.md` and `phase1-uat-round2-results.md`). **Not production ready.** PV-25 (mandatory pre-production action) was resolved on 2026-10-10 by C-86 — *Void Employment Period*; see the pre-production verification section below.
+- Milestone: **Core HR Phase 1 — UAT Passed With Pre-Production Actions** (HR sign-off 2026-10-10; results in `phase1-uat-round1-results.md` and `phase1-uat-round2-results.md`). **Not production ready.** PV-25 — *Void Employment Period* — **Accepted / Closed** on 2026-10-10 (C-86 implementation, C-87 HR acceptance V-1 to V-5 PASS; `pv25-hr-acceptance.md`); it is no longer a pre-production blocker. Other Production Readiness gates remain separate.
 - Environment: local/UAT build with the development test identity (not Microsoft Entra ID). **Use synthetic data only** — never real employee data (C-03).
 - Roles: **HR Admin** (HR_ADMIN), **HR Editor** (HR_EDITOR), **API Docs** (API_DOCS_READER). Sign in from the login page with the matching test account.
 - "Today" means the business date in Asia/Ho_Chi_Minh. End dates are inclusive. Status is computed: **Pre-start / Active / Ended**; **Cancelled** is a history badge, not a status.
@@ -107,7 +107,7 @@ How to use: run each scenario in order with a new synthetic person; tick a step 
 | 10.2 | HR Editor | No "Correct …", "Reverse End Employment", "Clear Work Email"; past-dated business events refused |
 | 10.3 | HR Admin | All actions available, including past dates and corrections |
 
-## PV-25 Void Employment Period (resolved 2026-10-10, C-86) — pre-production verification
+## PV-25 Void Employment Period (Accepted / Closed 2026-10-10, C-86 / C-87) — pre-production verification
 
 During UAT, PV-25 was accepted as a known limitation (an *effective* period entered in error had no safe recovery). It is now implemented as **Void Employment Period** (HR Admin, `employment.correct`). Suggested verification by HR before production readiness (synthetic data only):
 
