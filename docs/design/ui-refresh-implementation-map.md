@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95). **UI-0 implemented** (§9). Next slice (UI-2) not started.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95). **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). Next slice (UI-3) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -155,4 +155,50 @@ Stages that need none of these decisions: UI-0, UI-3 (without tenure), UI-4, UI-
 | Visual QA (synthetic DEMO data, 1100 px viewport) | Login (white card, red buttons); shell + Employee List (white sidebar, red active item, red *Create Employee*); DEMO002 detail; existing Change Assignment form inside the new base styles; smoke login → Employees → Employee Detail after restart |
 
 Still expected before the final mockup (later slices): list columns/filters and semantic status badges in the list (UI-2); detail tabs, header actions and Overview (UI-3…UI-7); wizard (UI-8); modals/action menus for workflows (UI-9); Organization page title and tabs (UI-10, page title still "Catalogs"); Home (UI-1).
+
+## 10. UI-2 — Employee List (implemented 2026-10-10)
+
+Scope: the Employee List only (`/employees`), per D-UI-4. No business rule, status rule, completeness rule or permission changed.
+
+### Backend additions (additive, read-only)
+
+| Addition | Contract | Semantics |
+|---|---|---|
+| `start_date` on each list item | `EmployeeListItem.start_date: date \| null` | Start date of the **representative operational Employment Period** (same `representativeEmployment` used for status, Department and completeness): the Active period, else the nearest upcoming period, else the most recently ended period. Cancelled and Voided periods are never considered (shared `OPERATIONAL` filter). `null` when the person has no operational period. It is **not** a hire date, company seniority or tenure (D-UI-6): after a Rehire or Relationship Change it is the start of the period shown, not the first-ever start |
+| `employee_type_id` filter | `GET /employees?employee_type_id=<uuid>` | Matches the **Employee Type of the representative period** (the value shown in the row) — e.g. an Active Employee with a planned Relationship Change to Service Contractor still matches *Employee*. Malformed value → 400 `VALIDATION_FAILED`; unknown id → empty result |
+| `operational_completeness` filter | `GET /employees?operational_completeness=complete\|incomplete` | The authoritative operational completeness (C-78, rule `operational-mvp-2026-10-08.2`) computed by the same `completenessView` as Employee Detail; Manager is not a completeness item (M-04, D-UI-2). Invalid value → 400 |
+
+Filters combine with AND with search, Employment Status and Department; pagination and `total` are applied after all filters. OpenAPI regenerated (`contracts/core-hr/openapi.json`).
+
+### UI
+
+| Element | Implementation |
+|---|---|
+| Header | `PageHeader` "Employees" · "View and manage employee records."; red **+ Add Employee** only with `employees.create` (also in the zero-employee empty state) |
+| Filter area | One card (`role="search"`): Search (code or name, unchanged), Employment Status, Employee Type and Department (catalog-driven, include inactive values marked "(inactive)", shown only with `catalogs.read`), Record Completeness (All / Complete / Needs Attention); labels explicitly associated (`htmlFor`); **Clear filters** shown when any filter is active |
+| URL state | Canonical API parameter names only (`search`, `employment_status`, `employee_type_id`, `department_id`, `operational_completeness`, `page`); no aliases; unknown or malformed values are ignored; reload restores the view; `replaceState` (no history spam) |
+| Columns | Employee Code · Full Name · Employment Status (`StatusBadge`, semantic colours, red is never a status colour) · Employee Type · Department · Job Title · Work Email · Start Date |
+| Needs attention | Compact warning icon after the name (tooltip + screen-reader text "Needs attention") instead of a separate column |
+| Row navigation | Exactly one target per row: the Full Name link to Employee Detail |
+| Actions column | **Not rendered**: the only list-context action is opening the record (already the name link); no correction or lifecycle actions in the list |
+| States | Initial loading, inline "Loading…" while refreshing (previous rows stay, `aria-busy`), no-results empty state with Clear filters, zero-employee empty state, API error box, no-permission message |
+| Pagination | "Showing x–y of z" + Previous / Page n of m / Next |
+| Responsive | Code, name, status and date never wrap; descriptive columns may wrap. Work Email hidden below 1366 px viewport (still on Employee Detail). Below that the table scrolls inside its card; the page itself never scrolls horizontally |
+
+### Deferred (not built)
+
+Manager filter, Upcoming Changes filter (D-UI-4); Export (D-UI-5, Pending Legal Review); bulk edit; configurable columns; reports; Home data; duplicate detection.
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| Integration `tests/integration/list-ui2.test.ts` | Start Date: Active, Pre-start, Ended, no employment, Rehire active and planned, planned Relationship Change keeps the current period, Cancelled and Voided periods excluded (correct period after a Void). Employee Type: each type, representative type, combinations with status/department/completeness/search, malformed → 400, unknown → empty. Completeness: complete / incomplete, equals Employee Detail, Manager absence still complete, invalid → 400, pagination totals |
+| Unit `tests/unit/list-query.test.ts` | URL initialisation, aliases and malformed values ignored, round-trip, Clear filters, capabilities by permission (never role names) |
+| Full suite | `npm test`: 39 files, 434 tests pass; typecheck, lint, production build pass |
+| Integrity scan (`hrms_dev`, read-only) | 0 errors, 0 warnings |
+| Visual QA (synthetic DEMO data, HR Admin test identity) | A default list; B search `DEMO` (18); C Pre-start → DEMO101, DEMO901, DEMO904 (planned rehire); D Employee Type = Service Contractor → DEMO105, DEMO905; E Needs Attention → DEMO105, DEMO905, DEMO906 (voided only, Start Date "—"); F narrower laptop: table fits without horizontal scroll at 1440 / 1366 / 1280 px (email hidden at 1280), narrow pane 443 px scrolls inside the card only |
+| Smoke | Test login → Employees → Needs Attention + Service Contractor filters (URL updated, state restored after reload) → Clear filters (bare `/employees`, 49 rows, 3 pages) → page 2 → name link → Employee Detail, no console errors |
+
+Known pre-existing item (not UI-2): a `pg` DeprecationWarning ("client.query() when the client is already executing a query") appears in test output from existing assignment/relationship-change paths.
 
