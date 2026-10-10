@@ -8,6 +8,7 @@ import { POST as initialAssignmentRoute } from "@/app/api/v1/core-hr/employments
 import { POST as periodCorrectionRoute } from "@/app/api/v1/core-hr/employments/[id]/period-corrections/route";
 import { POST as rcRoute } from "@/app/api/v1/core-hr/employments/[id]/relationship-change/route";
 import { POST as reverseRoute } from "@/app/api/v1/core-hr/employments/[id]/reverse-end/route";
+import { POST as voidRoute } from "@/app/api/v1/core-hr/employments/[id]/void/route";
 import { PATCH as workEmailRoute } from "@/app/api/v1/core-hr/employments/[id]/work-email/route";
 import { POST as initialEmploymentRoute } from "@/app/api/v1/core-hr/employees/[id]/initial-employment/route";
 import { POST as rehireRoute } from "@/app/api/v1/core-hr/employees/[id]/rehire/route";
@@ -103,6 +104,20 @@ describe("Clean integrity baseline", () => {
     await ok(cancelRoute, gi.employments[0].id, g, { reason: "Offer withdrawn" }, "editor");
     await ok(initialEmploymentRoute, g, g, { start_date: addDays(today, 40), employee_type_id: ids.et.INTERN }, "editor");
 
+    // PV-25: an effective Initial Employment entered in error is voided and replaced (same dates, same Work Email).
+    const h = await hired("Baseline Voided Initial", addDays(today, -3), ids.et.EMPLOYEE, "baseline.void@example.test");
+    await ok(voidRoute, h.employmentId, h.personId, { reason: "Entered for the wrong person" });
+    const hi = await ok(initialEmploymentRoute, h.personId, h.personId, { start_date: addDays(today, -3), employee_type_id: ids.et.EMPLOYEE, work_email: "baseline.void@example.test", reason: "Correct period" });
+    await ok(initialAssignmentRoute, hi.employments[1].id, h.personId, { effective_date: addDays(today, -3), department_id: ids.d.ENG, job_title_id: ids.j.SE, reason: "Correct period" });
+
+    // PV-25: an erroneous Rehire voided; the previous End was also wrong and is reversed afterwards.
+    const k = await hired("Baseline Voided Rehire", "2023-05-02", ids.et.EMPLOYEE);
+    await ok(endRoute, k.employmentId, k.personId, { end_date: addDays(today, -15), end_reason_code: "VOLUNTARY_RESIGNATION" });
+    const kr = await ok(rehireRoute, k.personId, k.personId, { start_date: today, employee_type_id: ids.et.EMPLOYEE, reason: "Rehire" });
+    await ok(initialAssignmentRoute, kr.employments[1].id, k.personId, { effective_date: today, department_id: ids.d.ENG, job_title_id: ids.j.SE });
+    await ok(voidRoute, kr.employments[1].id, k.personId, { reason: "The person never left" });
+    await ok(reverseRoute, k.employmentId, k.personId, { reason: "The person never left" });
+
     // Full scan of the whole database, inside a READ ONLY transaction, nothing filtered.
     await app.query("BEGIN READ ONLY");
     try {
@@ -113,8 +128,8 @@ describe("Clean integrity baseline", () => {
     }
     // The baseline really covers every lifecycle shape (otherwise a clean result would prove little).
     const types = (await db().employmentEvent.groupBy({ by: ["eventType"], _count: true })).map((g) => g.eventType).sort();
-    expect(types).toEqual(["cancel_planned_start", "end", "end_reversed", "start"]);
+    expect(types).toEqual(["cancel_planned_start", "employment_voided", "end", "end_reversed", "start"]);
     expect(await db().employmentEvent.count({ where: { endReasonCode: "RELATIONSHIP_CHANGE" } })).toBeGreaterThan(0);
-    expect(await db().person.count()).toBe(19); // 12 demo profiles + 7 workflow profiles
+    expect(await db().person.count()).toBe(21); // 12 demo profiles + 9 workflow profiles
   });
 });

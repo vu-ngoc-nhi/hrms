@@ -30,15 +30,19 @@ describe("Database guarantees (H7)", () => {
     }
     // The newest migration's objects exist, which proves the full chain ran.
     expect(await q("SELECT count(*)::int AS n FROM end_reason")).toEqual([{ n: 7 }]);
-    expect(folders.at(-1)).toBe("20261011000000_end_employment");
+    expect(await q("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'employment' AND column_name = 'voided_at'")).toEqual([{ n: 1 }]);
+    expect(folders.at(-1)).toBe("20261012000000_void_employment_period");
   });
 
-  it("exclusion, CHECK and partial unique constraints exist (cancelled periods excluded where approved)", async () => {
+  it("exclusion, CHECK and partial unique constraints exist (cancelled and voided periods excluded where approved)", async () => {
     const defs = Object.fromEntries(
       (await q("SELECT conname, pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE connamespace = 'public'::regnamespace")).map((r) => [r.conname, r.def]),
     );
-    expect(defs.employment_no_overlap_ex).toContain("WHERE ((cancelled_at IS NULL))");
+    expect(defs.employment_no_overlap_ex).toContain("WHERE (((cancelled_at IS NULL) AND (voided_at IS NULL)))");
     expect(defs.employment_work_email_period_ex).toContain("cancelled_at IS NULL");
+    expect(defs.employment_work_email_period_ex).toContain("voided_at IS NULL");
+    expect(defs.employment_single_disposition_ck).toContain("(cancelled_at IS NULL) OR (voided_at IS NULL)");
+    expect(defs.employment_event_event_type_check).toContain("employment_voided");
     expect(defs.job_assignment_no_overlap_ex).toContain("EXCLUDE USING gist");
     expect(defs.job_assignment_dates_ck).toContain("effective_to > effective_from");
     for (const c of [
@@ -53,7 +57,7 @@ describe("Database guarantees (H7)", () => {
       expect(defs[c], c).toBeDefined();
     }
     const indexes = (await q("SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public'")).map((r) => r.indexname);
-    for (const i of ["employment_event_one_start_uq", "employment_event_one_cancel_uq", "employment_event_one_reversal_uq"]) expect(indexes).toContain(i);
+    for (const i of ["employment_event_one_start_uq", "employment_event_one_cancel_uq", "employment_event_one_reversal_uq", "employment_event_one_void_uq"]) expect(indexes).toContain(i);
   });
 
   it("integrity and immutability triggers exist", async () => {
@@ -64,6 +68,7 @@ describe("Database guarantees (H7)", () => {
       "employment_cancelled_is_terminal_trg",
       "employment_event_date_correction_scope_trg",
       "employment_event_lifecycle_rules_trg",
+      "job_assignment_manager_not_voided_trg",
     ]) {
       expect(triggers, t).toContain(t);
     }

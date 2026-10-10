@@ -27,6 +27,8 @@ const DOCUMENTED: Record<string, Permission | null> = {
   createRehire: "employment.manage", // past dates additionally need employment.correct
   createRelationshipChange: "employment.manage", // past dates additionally need employment.correct
   createCancelPlanned: "employment.manage",
+  getVoidEligibility: "employment.correct", // PV-25 / C-85: reuses employment.correct, no employment.void
+  createVoidEmployment: "employment.correct",
   listDepartments: "catalogs.read",
   createDepartment: "catalogs.manage",
   updateDepartment: "catalogs.manage",

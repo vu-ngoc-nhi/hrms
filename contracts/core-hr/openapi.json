@@ -1505,6 +1505,215 @@
         }
       }
     },
+    "/api/v1/core-hr/employments/{id}/void-eligibility": {
+      "get": {
+        "operationId": "getVoidEligibility",
+        "summary": "Void Employment Period — eligibility preview",
+        "description": "PV-25, read-only (no revision bump, no audit), evaluated as of today (Asia/Ho_Chi_Minh). Returns eligible, blockers and warnings with structured references, the internal records that are kept as history (they never block), consequence codes and evaluated_revision (send it as expected_revision). Blockers: EMPLOYMENT_PERIOD_READ_ONLY (cancelled/voided), PERIOD_NOT_EFFECTIVE (use Cancel Planned Period), LATER_PERIOD_EXISTS, RELATIONSHIP_CHANGE_SUCCESSOR (PV-24), MANAGER_DEPENDENCY (other employees' valid assignments overlapping this period), DEPENDENCY_CHECK_FAILED (fail closed). Warnings: MANAGER_REFERENCE_WITHOUT_OVERLAP, RELATIONSHIP_CHANGE_PREDECESSOR. employment.correct (HR_ADMIN) because it lists other employees' assignments. Informational only: the Void action re-evaluates everything.\n\nRequired permission: `employment.correct`.",
+        "tags": [
+          "Employments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Void eligibility of the period",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoidEligibility"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core-hr/employments/{id}/void": {
+      "post": {
+        "operationId": "createVoidEmployment",
+        "summary": "Void Employment Period",
+        "description": "PV-25: use only when this effective period was entered in error and the relationship never existed in reality (not for real employment that ended — use End Employment; not for planned periods — use Cancel Planned Period). employment.correct (HR_ADMIN); mandatory reason, expected_revision and Idempotency-Key. One transaction: re-evaluates every check of the preview (never trusts it), sets voided_at, adds one employment_voided event (effective_date = start_date, listed last in the period history) and audit employment.void. Nothing is deleted or cleared: assignments, Work Email value, dates, lifecycle events (including an Active End Event) stay as history; the period has no operational effect and its Work Email is no longer reserved. Voided is a record disposition, not a status; the period becomes read-only. No Unvoid. Errors: 404; 409 EMPLOYMENT_PERIOD_READ_ONLY; 422 PERIOD_NOT_EFFECTIVE; 409 LATER_PERIOD_EXISTS; 422 RELATIONSHIP_CHANGE_SUCCESSOR; 422 MANAGER_DEPENDENCY; 503 DEPENDENCY_CHECK_FAILED (fail closed); 422 REASON_REQUIRED; 409 REVISION_CONFLICT; 409 IDEMPOTENCY_KEY_REUSED.\n\nRequired permission: `employment.correct`.",
+        "tags": [
+          "Employments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoidEmploymentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Employee profile after the Void (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/core-hr/employments/{id}/reverse-end": {
       "post": {
         "operationId": "createReverseEnd",
@@ -3941,7 +4150,7 @@
                 "type": "null"
               }
             ],
-            "description": "Computed lifecycle of this period at status_as_of (not_started/active/ended). null when the period was cancelled: Cancelled is a record disposition, not a lifecycle status."
+            "description": "Computed lifecycle of this period at status_as_of (not_started/active/ended). null when the period was cancelled or voided: Cancelled and Voided are record dispositions, not lifecycle statuses."
           },
           "events": {
             "type": "array",
@@ -3961,8 +4170,10 @@
                     "resume",
                     "end",
                     "end_reversed",
-                    "cancel_planned_start"
-                  ]
+                    "cancel_planned_start",
+                    "employment_voided"
+                  ],
+                  "description": "employment_voided (PV-25) is the disposition of the whole period and is always listed last for its period."
                 },
                 "effective_date": {
                   "type": "string",
@@ -4031,7 +4242,7 @@
               ],
               "additionalProperties": false
             },
-            "description": "Recorded employment events in chronological order. Free-text notes and reasons are never exposed here."
+            "description": "Recorded employment events in chronological order (effective date, then recording time); an employment_voided event is listed after all other events of the period. Free-text notes and reasons are never exposed here."
           },
           "has_active_end_event": {
             "type": "boolean",
@@ -4155,6 +4366,19 @@
             ],
             "description": "Set when this planned period was cancelled before it began. Cancelled periods stay in history but have no operational effect; Cancelled is not an employment status."
           },
+          "voided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "PV-25: set when this effective period was voided because it was entered in error and the relationship never existed. Voided periods stay in history (all internal records kept) but have no operational effect; Voided is not an employment status."
+          },
           "employee_type": {
             "anyOf": [
               {
@@ -4209,6 +4433,7 @@
           "has_active_end_event",
           "active_end_event",
           "cancelled_at",
+          "voided_at",
           "employee_type",
           "work_email",
           "record_source",
@@ -5347,6 +5572,395 @@
         "required": [
           "expected_revision",
           "reason"
+        ],
+        "additionalProperties": false
+      },
+      "VoidEmploymentCreate": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Revision of the person profile (e.g. evaluated_revision from the eligibility preview); stale values return 409 REVISION_CONFLICT."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Mandatory: HR's explicit confirmation of why the period was entered in error. Stored on the void event and in audit, never shown in history."
+          }
+        },
+        "required": [
+          "expected_revision",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "VoidEligibility": {
+        "type": "object",
+        "properties": {
+          "employment_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "evaluated_revision": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Person revision at evaluation time; send it as expected_revision so a change in between yields 409 REVISION_CONFLICT."
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$",
+            "description": "Business date of the evaluation (Asia/Ho_Chi_Minh)."
+          },
+          "eligible": {
+            "type": "boolean",
+            "description": "True when no blocker exists. Informational only: the Void action re-evaluates everything."
+          },
+          "period": {
+            "type": "object",
+            "properties": {
+              "start_date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "end_date": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "employee_type": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "period_lifecycle": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "no_employment",
+                      "not_started",
+                      "active",
+                      "ended"
+                    ],
+                    "description": "Computed from employment periods at status_as_of. Value set is an MVP Decision."
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "null when the period is cancelled or voided."
+              }
+            },
+            "required": [
+              "start_date",
+              "end_date",
+              "employee_type",
+              "period_lifecycle"
+            ],
+            "additionalProperties": false
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "description": "Stable code. Blockers: EMPLOYMENT_PERIOD_READ_ONLY, PERIOD_NOT_EFFECTIVE, LATER_PERIOD_EXISTS, RELATIONSHIP_CHANGE_SUCCESSOR, MANAGER_DEPENDENCY, DEPENDENCY_CHECK_FAILED (fail closed), future module codes. Warnings: MANAGER_REFERENCE_WITHOUT_OVERLAP, RELATIONSHIP_CHANGE_PREDECESSOR."
+                },
+                "message": {
+                  "type": "string"
+                },
+                "references": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "employment_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "start_date": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "end_date": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "person_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "employee_code": {
+                        "type": "string"
+                      },
+                      "full_name": {
+                        "type": "string"
+                      },
+                      "assignment_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "effective_from": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "effective_to": {
+                        "description": "Exclusive.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "The dependent record: a period (employment_id, dates) or another employee's assignment (person, assignment dates)."
+                  }
+                }
+              },
+              "required": [
+                "code",
+                "message",
+                "references"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "description": "Stable code. Blockers: EMPLOYMENT_PERIOD_READ_ONLY, PERIOD_NOT_EFFECTIVE, LATER_PERIOD_EXISTS, RELATIONSHIP_CHANGE_SUCCESSOR, MANAGER_DEPENDENCY, DEPENDENCY_CHECK_FAILED (fail closed), future module codes. Warnings: MANAGER_REFERENCE_WITHOUT_OVERLAP, RELATIONSHIP_CHANGE_PREDECESSOR."
+                },
+                "message": {
+                  "type": "string"
+                },
+                "references": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "employment_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "start_date": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "end_date": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "person_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "employee_code": {
+                        "type": "string"
+                      },
+                      "full_name": {
+                        "type": "string"
+                      },
+                      "assignment_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "effective_from": {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      "effective_to": {
+                        "description": "Exclusive.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "The dependent record: a period (employment_id, dates) or another employee's assignment (person, assignment dates)."
+                  }
+                }
+              },
+              "required": [
+                "code",
+                "message",
+                "references"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "affected_internal_records": {
+            "type": "object",
+            "properties": {
+              "assignments": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "lifecycle_events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "event_type": {
+                      "type": "string",
+                      "enum": [
+                        "start",
+                        "suspend",
+                        "resume",
+                        "end",
+                        "end_reversed",
+                        "cancel_planned_start",
+                        "employment_voided"
+                      ]
+                    },
+                    "effective_date": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    }
+                  },
+                  "required": [
+                    "event_type",
+                    "effective_date"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "has_active_end_event": {
+                "type": "boolean"
+              },
+              "work_email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "planned_end_date": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The period end date when it is after as_of."
+              }
+            },
+            "required": [
+              "assignments",
+              "lifecycle_events",
+              "has_active_end_event",
+              "work_email",
+              "planned_end_date"
+            ],
+            "additionalProperties": false,
+            "description": "Records inside the period. They never block Void and are all kept unchanged as history."
+          },
+          "consequences": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "NO_OPERATIONAL_EFFECT",
+                "WORK_EMAIL_RELEASED",
+                "PERSON_HAS_NO_VALID_EMPLOYMENT",
+                "PREVIOUS_PERIOD_UNCHANGED",
+                "VOID_IS_PERMANENT"
+              ]
+            },
+            "description": "Stable codes the UI translates. PREVIOUS_PERIOD_UNCHANGED: an earlier period (and its End) is not touched; a wrong previous End needs a separate Reverse End Employment."
+          }
+        },
+        "required": [
+          "employment_id",
+          "evaluated_revision",
+          "as_of",
+          "eligible",
+          "period",
+          "blockers",
+          "warnings",
+          "affected_internal_records",
+          "consequences"
         ],
         "additionalProperties": false
       },

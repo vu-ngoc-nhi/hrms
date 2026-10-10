@@ -218,6 +218,8 @@ export const AssignmentSchema = reg(
 );
 export { END_REASON_CODES, SELECTABLE_END_REASON_CODES };
 export const EndReasonCodeSchema = z.enum(END_REASON_CODES);
+export const EMPLOYMENT_EVENT_TYPES = ["start", "suspend", "resume", "end", "end_reversed", "cancel_planned_start", "employment_voided"] as const;
+export type EmploymentEventType = (typeof EMPLOYMENT_EVENT_TYPES)[number];
 
 export const EmploymentSchema = reg(
   "Employment",
@@ -226,13 +228,15 @@ export const EmploymentSchema = reg(
     start_date: isoDate(),
     end_date: isoDate().nullable().describe("Inclusive."),
     period_lifecycle: EmploymentStatusSchema.nullable().describe(
-      "Computed lifecycle of this period at status_as_of (not_started/active/ended). null when the period was cancelled: Cancelled is a record disposition, not a lifecycle status.",
+      "Computed lifecycle of this period at status_as_of (not_started/active/ended). null when the period was cancelled or voided: Cancelled and Voided are record dispositions, not lifecycle statuses.",
     ),
     events: z
       .array(
         z.object({
           id: z.uuid(),
-          event_type: z.enum(["start", "suspend", "resume", "end", "end_reversed", "cancel_planned_start"]),
+          event_type: z
+            .enum(EMPLOYMENT_EVENT_TYPES)
+            .describe("employment_voided (PV-25) is the disposition of the whole period and is always listed last for its period."),
           effective_date: isoDate(),
           reverses_event_id: z.uuid().nullable().describe("end_reversed only: the end event it reverses (to pair them in history)."),
           recorded_at: isoDateTime(),
@@ -242,7 +246,9 @@ export const EmploymentSchema = reg(
             .describe("Structured End Reason of an end event (null otherwise or when none was recorded). Legal meaning: Pending Legal Review."),
         }),
       )
-      .describe("Recorded employment events in chronological order. Free-text notes and reasons are never exposed here."),
+      .describe(
+        "Recorded employment events in chronological order (effective date, then recording time); an employment_voided event is listed after all other events of the period. Free-text notes and reasons are never exposed here.",
+      ),
     has_active_end_event: z
       .boolean()
       .describe("True when the period has an end event that has not been reversed (Active End Event). A legacy end date may exist without any event."),
@@ -261,6 +267,11 @@ export const EmploymentSchema = reg(
     cancelled_at: isoDateTime()
       .nullable()
       .describe("Set when this planned period was cancelled before it began. Cancelled periods stay in history but have no operational effect; Cancelled is not an employment status."),
+    voided_at: isoDateTime()
+      .nullable()
+      .describe(
+        "PV-25: set when this effective period was voided because it was entered in error and the relationship never existed. Voided periods stay in history (all internal records kept) but have no operational effect; Voided is not an employment status.",
+      ),
     employee_type: CatalogRefSchema.nullable(),
     work_email: z.string().nullable(),
     record_source: z.string(),
@@ -545,6 +556,77 @@ export const CancelPlannedCreateSchema = reg(
   "Cancel Planned Period (C-70): the future period will not take effect; it stays in history with all its data.",
 );
 
+export const VoidEmploymentCreateSchema = reg(
+  "VoidEmploymentCreate",
+  z.strictObject({
+    expected_revision: z
+      .int()
+      .min(1)
+      .describe("Revision of the person profile (e.g. evaluated_revision from the eligibility preview); stale values return 409 REVISION_CONFLICT."),
+    reason: z
+      .string()
+      .min(1)
+      .max(1000)
+      .describe("Mandatory: HR's explicit confirmation of why the period was entered in error. Stored on the void event and in audit, never shown in history."),
+  }),
+  "Void Employment Period (PV-25): the effective period was entered in error and the relationship never existed in reality.",
+);
+
+const VoidReferenceSchema = z
+  .object({
+    employment_id: z.uuid().optional(),
+    start_date: isoDate().optional(),
+    end_date: isoDate().nullable().optional(),
+    person_id: z.uuid().optional(),
+    employee_code: z.string().optional(),
+    full_name: z.string().optional(),
+    assignment_id: z.uuid().optional(),
+    effective_from: isoDate().optional(),
+    effective_to: isoDate().nullable().optional().describe("Exclusive."),
+  })
+  .describe("The dependent record: a period (employment_id, dates) or another employee's assignment (person, assignment dates).");
+const VoidFindingSchema = z.object({
+  code: z
+    .string()
+    .describe(
+      "Stable code. Blockers: EMPLOYMENT_PERIOD_READ_ONLY, PERIOD_NOT_EFFECTIVE, LATER_PERIOD_EXISTS, RELATIONSHIP_CHANGE_SUCCESSOR, MANAGER_DEPENDENCY, DEPENDENCY_CHECK_FAILED (fail closed), future module codes. Warnings: MANAGER_REFERENCE_WITHOUT_OVERLAP, RELATIONSHIP_CHANGE_PREDECESSOR.",
+    ),
+  message: z.string(),
+  references: z.array(VoidReferenceSchema),
+});
+export const VOID_CONSEQUENCES = ["NO_OPERATIONAL_EFFECT", "WORK_EMAIL_RELEASED", "PERSON_HAS_NO_VALID_EMPLOYMENT", "PREVIOUS_PERIOD_UNCHANGED", "VOID_IS_PERMANENT"] as const;
+
+export const VoidEligibilitySchema = reg(
+  "VoidEligibility",
+  z.object({
+    employment_id: z.uuid(),
+    evaluated_revision: z.int().describe("Person revision at evaluation time; send it as expected_revision so a change in between yields 409 REVISION_CONFLICT."),
+    as_of: isoDate().describe("Business date of the evaluation (Asia/Ho_Chi_Minh)."),
+    eligible: z.boolean().describe("True when no blocker exists. Informational only: the Void action re-evaluates everything."),
+    period: z.object({
+      start_date: isoDate(),
+      end_date: isoDate().nullable(),
+      employee_type: z.object({ code: z.string(), name: z.string() }).nullable(),
+      period_lifecycle: EmploymentStatusSchema.nullable().describe("null when the period is cancelled or voided."),
+    }),
+    blockers: z.array(VoidFindingSchema),
+    warnings: z.array(VoidFindingSchema),
+    affected_internal_records: z
+      .object({
+        assignments: z.int(),
+        lifecycle_events: z.array(z.object({ event_type: z.enum(EMPLOYMENT_EVENT_TYPES), effective_date: isoDate() })),
+        has_active_end_event: z.boolean(),
+        work_email: z.string().nullable(),
+        planned_end_date: isoDate().nullable().describe("The period end date when it is after as_of."),
+      })
+      .describe("Records inside the period. They never block Void and are all kept unchanged as history."),
+    consequences: z
+      .array(z.enum(VOID_CONSEQUENCES))
+      .describe("Stable codes the UI translates. PREVIOUS_PERIOD_UNCHANGED: an earlier period (and its End) is not touched; a wrong previous End needs a separate Reverse End Employment."),
+  }),
+  "Void eligibility preview (PV-25): read-only; blockers, warnings, internal records kept and consequences.",
+);
+
 export const EmployeeListItemSchema = reg(
   "EmployeeListItem",
   z.object({
@@ -594,6 +676,8 @@ export type InitialEmploymentInput = z.infer<typeof InitialEmploymentCreateSchem
 export type RehireInput = z.infer<typeof RehireCreateSchema>;
 export type RelationshipChangeInput = z.infer<typeof RelationshipChangeCreateSchema>;
 export type CancelPlannedInput = z.infer<typeof CancelPlannedCreateSchema>;
+export type VoidEmploymentInput = z.infer<typeof VoidEmploymentCreateSchema>;
+export type VoidEligibility = z.infer<typeof VoidEligibilitySchema>;
 export type AssignmentCorrectionInput = z.infer<typeof AssignmentCorrectionCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;

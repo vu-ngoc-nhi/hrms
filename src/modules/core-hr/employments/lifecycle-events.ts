@@ -18,3 +18,12 @@ export function activeEndEventOf<E extends { id: string; eventType: string; reve
   const reversed = new Set(events.filter((e) => e.eventType === "end_reversed").map((e) => e.reversesEventId));
   return events.find((e) => e.eventType === "end" && !reversed.has(e.id)) ?? null;
 }
+
+/**
+ * History order of ONE period's events (already sorted by effective date, then recorded time): the PV-25
+ * `employment_voided` event is the disposition of the whole period and is listed after every other event, regardless
+ * of its effective date (= the period start). All other events keep their order.
+ */
+export function historyEventOrder<E extends { eventType: string }>(events: readonly E[]): E[] {
+  return [...events.filter((e) => e.eventType !== "employment_voided"), ...events.filter((e) => e.eventType === "employment_voided")];
+}

@@ -136,6 +136,8 @@ model Employment {
   workEmail          String?           @map("work_email")
   employeeTypeId     String?           @map("employee_type_id") @db.Uuid
   cancelledAt        DateTime?         @map("cancelled_at") @db.Timestamptz
+  /// PV-25: set when an effective period entered in error is voided (record disposition, terminal).
+  voidedAt           DateTime?         @map("voided_at") @db.Timestamptz
   recordSource       String            @default("form") @map("record_source")
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz
   createdBy          String            @map("created_by") @db.Uuid

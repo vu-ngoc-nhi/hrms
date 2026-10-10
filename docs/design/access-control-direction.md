@@ -87,7 +87,7 @@ Decision test — *is Void a materially more sensitive boundary that EmeSoft is 
 - Correction actions are already comparably impactful (period date corrections, Reverse End), so Void does not create a materially higher boundary than the existing `employment.correct` holders already have.
 - Splitting later is **non-breaking**: add `employment.void`, grant it to every role holding `employment.correct`, and change the single permission declared for the Void operation in the contract registry.
 
-**Implementation note for PV-25:** declare the permission only in the contract registry entries for the Void and preview operations (no role-name checks, no ad-hoc checks), so a future split touches one place.
+**Implementation note for PV-25:** declare the permission only in the contract registry entries for the Void and preview operations (no role-name checks, no ad-hoc checks), so a future split touches one place. *Implemented 2026-10-10 (C-86): `getVoidEligibility` and `createVoidEmployment` declare `employment.correct` in `src/contracts/core-hr/operations.ts` only; the permission matrix test covers both.*
 
 ## 12. Open business questions (not blocking PV-25)
 

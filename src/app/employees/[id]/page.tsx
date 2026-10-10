@@ -18,6 +18,7 @@ import { NewPeriodForm } from "./NewPeriodForm";
 import { PeriodCorrectionForm } from "./PeriodCorrectionForm";
 import { RelationshipChangeForm } from "./RelationshipChangeForm";
 import { ReverseEndForm } from "./ReverseEndForm";
+import { VoidPeriodForm } from "./VoidPeriodForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
 
 type Ref = { id: string; code: string; name: string } | null;
@@ -62,6 +63,7 @@ type Detail = {
       closed_assignment: { id: string; previous_effective_to: string | null } | null;
     } | null;
     cancelled_at: string | null;
+    voided_at: string | null;
     employee_type: Ref;
     work_email: string | null;
     assignments: Assignment[];
@@ -69,23 +71,35 @@ type Detail = {
 };
 
 type HistoryEvent = Detail["employments"][number]["events"][number];
+type Period = Detail["employments"][number];
+
+// Record dispositions (C-29 Cancelled, PV-25 Voided): history only, never operational, read-only.
+const disposed = (e: Period) => Boolean(e.cancelled_at || e.voided_at);
 
 // C-80 history readability (display only): reversed End events are marked and paired with their reversal; the current
 // End is distinguishable; a future-dated End reads "Planned end of employment". Order and data are unchanged.
-function EventLine({ ev, all, today }: { ev: HistoryEvent; all: HistoryEvent[]; today: string }) {
+// PV-25: on a voided period no End is shown as "Current end"; the void disposition (listed last) has no date of its own.
+function EventLine({ ev, all, today, voided }: { ev: HistoryEvent; all: HistoryEvent[]; today: string; voided: boolean }) {
   const reversed = ev.event_type === "end" && all.some((o) => o.reverses_event_id === ev.id);
   const label =
     ev.event_type === "end" && ev.effective_date > today
       ? t("detail.eventType.end_planned")
       : tMaybe(`detail.eventType.${ev.event_type}`) ?? ev.event_type;
   const target = ev.reverses_event_id ? all.find((o) => o.id === ev.reverses_event_id) : undefined;
+  if (ev.event_type === "employment_voided") {
+    return (
+      <li>
+        <strong>{label}</strong> <span className="badge">{t("detail.voidedBadge")}</span>
+      </li>
+    );
+  }
   return (
     <li style={reversed ? { color: "var(--muted)" } : undefined}>
       <span style={reversed ? { textDecoration: "line-through" } : ev.event_type === "end" ? { fontWeight: 600 } : undefined}>
         {label} — {formatDate(ev.effective_date)}
         {ev.end_reason && <> · {tMaybe(`endReason.${ev.end_reason.code}`) ?? ev.end_reason.label}</>}
       </span>
-      {ev.event_type === "end" && (
+      {ev.event_type === "end" && (reversed || !voided) && (
         <span className="badge" style={{ marginLeft: 6 }}>
           {reversed ? t("detail.reversedBadge") : t("detail.currentEndBadge")}
         </span>
@@ -113,18 +127,18 @@ export default function EmployeeDetailPage() {
   if (error) return <ErrorBox error={error} />;
   if (!d) return <p className="muted">{t("app.loading")}</p>;
   const op = d.completeness.operational;
-  // S4.8: non-cancelled periods decide between Add Initial Employment Period and Rehire (latest by chronology).
-  const realPeriods = d.employments.filter((e) => !e.cancelled_at);
+  // S4.8: valid (non-cancelled, non-voided) periods decide between Add Initial Employment Period and Rehire.
+  const realPeriods = d.employments.filter((e) => !disposed(e));
   // C-72: an Active End Event with RELATIONSHIP_CHANGE whose successor (starting the next day) was cancelled and that
   // has no non-cancelled successor. Guidance only — the reversal stays an explicit HR_ADMIN action.
-  const needsRelationshipChangeReview = (e: Detail["employments"][number]) =>
-    !e.cancelled_at &&
+  const needsRelationshipChangeReview = (e: Period) =>
+    !disposed(e) &&
     e.active_end_event?.end_reason?.code === "RELATIONSHIP_CHANGE" &&
     !realPeriods.some((o) => o.start_date > e.start_date) &&
     d.employments.some((o) => o.cancelled_at && o.start_date === addDays(e.active_end_event!.effective_date, 1));
   const latest = realPeriods.reduce<(typeof realPeriods)[number] | null>((a, e) => (a === null || e.start_date >= a.start_date ? e : a), null);
-  // Historical corrections: HR_ADMIN only (employment.correct), never on cancelled periods.
-  const canCorrect = (e: Detail["employments"][number]) => !e.cancelled_at && Boolean(session?.can("employment.correct"));
+  // Historical corrections: HR_ADMIN only (employment.correct), never on cancelled or voided periods.
+  const canCorrect = (e: Period) => !disposed(e) && Boolean(session?.can("employment.correct"));
 
   return (
     <>
@@ -242,7 +256,7 @@ export default function EmployeeDetailPage() {
           )
         ))}
       {d.employments.map((e, index) => (
-        <section key={e.id} className="card" style={{ marginBottom: 12, opacity: e.cancelled_at ? 0.7 : 1 }}>
+        <section key={e.id} className="card" style={{ marginBottom: 12, opacity: disposed(e) ? 0.7 : 1 }}>
           <div className="spread" style={{ marginBottom: 8 }}>
             <strong>
               {t("detail.periodHeading", {
@@ -251,8 +265,8 @@ export default function EmployeeDetailPage() {
                 to: e.end_date ? formatDate(e.end_date) : t("detail.periodOpenEnd"),
               })}
             </strong>
-            {e.cancelled_at ? (
-              <span className="badge">{t("detail.cancelledBadge")}</span>
+            {disposed(e) ? (
+              <span className="badge">{t(e.voided_at ? "detail.voidedBadge" : "detail.cancelledBadge")}</span>
             ) : (
               e.period_lifecycle && (
                 <span className={`badge ${e.period_lifecycle === "active" ? "ok" : ""}`}>
@@ -262,6 +276,7 @@ export default function EmployeeDetailPage() {
             )}
           </div>
           {e.cancelled_at && <p className="muted small">{t("detail.cancelledNote")}</p>}
+          {e.voided_at && <p className="muted small">{t("detail.voidedNote")}</p>}
           {needsRelationshipChangeReview(e) && session?.can("employment.correct") && (
             <p className="alert small">{t("guidance.cancelledRelationshipChange")}</p>
           )}
@@ -275,7 +290,7 @@ export default function EmployeeDetailPage() {
             <dt>{t("detail.workEmail")}</dt>
             <dd>{e.work_email ?? "—"}</dd>
           </dl>
-          {!e.cancelled_at &&
+          {!disposed(e) &&
             (session?.can("employment.correct") || (e.period_lifecycle !== "ended" && session?.can("employment.manage"))) && (
               <WorkEmailEditor<Detail>
                 key={`${e.id}-${d.revision}-email`}
@@ -296,7 +311,7 @@ export default function EmployeeDetailPage() {
                 }}
               />
             )}
-          {!e.cancelled_at && session?.can("employment.correct") && (
+          {!disposed(e) && session?.can("employment.correct") && (
             <PeriodCorrectionForm<Detail>
               key={`${e.id}-${d.revision}-period`}
               employmentId={e.id}
@@ -309,7 +324,7 @@ export default function EmployeeDetailPage() {
               }}
             />
           )}
-          {!e.cancelled_at && e.period_lifecycle !== "ended" && !e.has_active_end_event && session?.can("employment.manage") && (
+          {!disposed(e) && e.period_lifecycle !== "ended" && !e.has_active_end_event && session?.can("employment.manage") && (
             <EndEmploymentForm<Detail>
               key={`${e.id}-${d.revision}-end`}
               employmentId={e.id}
@@ -341,7 +356,7 @@ export default function EmployeeDetailPage() {
               }}
             />
           )}
-          {!e.cancelled_at && e.start_date > d.status_as_of && session?.can("employment.manage") && (
+          {!disposed(e) && e.start_date > d.status_as_of && session?.can("employment.manage") && (
             <CancelPlannedForm<Detail>
               key={`${e.id}-${d.revision}-cancel`}
               employmentId={e.id}
@@ -354,7 +369,7 @@ export default function EmployeeDetailPage() {
               }}
             />
           )}
-          {!e.cancelled_at && e.active_end_event && session?.can("employment.correct") && (
+          {!disposed(e) && e.active_end_event && session?.can("employment.correct") && (
             <ReverseEndForm<Detail>
               key={`${e.id}-${d.revision}-reverse`}
               employmentId={e.id}
@@ -369,7 +384,17 @@ export default function EmployeeDetailPage() {
               }}
             />
           )}
-          {!e.cancelled_at && e.assignments.length === 0 && session?.can("employment.manage") && (
+          {e.id === latest?.id && e.start_date <= d.status_as_of && session?.can("employment.correct") && (
+            <VoidPeriodForm<Detail>
+              key={`${e.id}-${d.revision}-void`}
+              employmentId={e.id}
+              onSaved={(updated) => {
+                setD(updated);
+                setNotice(t("voidPeriod.voided"));
+              }}
+            />
+          )}
+          {!disposed(e) && e.assignments.length === 0 && session?.can("employment.manage") && (
             <InitialAssignmentForm<Detail>
               key={`${e.id}-${d.revision}-initial`}
               employmentId={e.id}
@@ -384,7 +409,7 @@ export default function EmployeeDetailPage() {
               }}
             />
           )}
-          {!e.cancelled_at && e.period_lifecycle !== "ended" && e.assignments.length > 0 && session?.can("employment.manage") && (
+          {!disposed(e) && e.period_lifecycle !== "ended" && e.assignments.length > 0 && session?.can("employment.manage") && (
             <AssignmentChangeForm<Detail>
               key={`${e.id}-${d.revision}`}
               employmentId={e.id}
@@ -474,7 +499,7 @@ export default function EmployeeDetailPage() {
           ) : (
             <ul className="small" style={{ margin: 0 }}>
               {e.events.map((ev) => (
-                <EventLine key={ev.id} ev={ev} all={e.events} today={d.status_as_of} />
+                <EventLine key={ev.id} ev={ev} all={e.events} today={d.status_as_of} voided={Boolean(e.voided_at)} />
               ))}
             </ul>
           )}

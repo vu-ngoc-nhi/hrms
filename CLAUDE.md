@@ -93,7 +93,7 @@ Direction: `docs/design/access-control-direction.md`. Phase 1 roles (HR_ADMIN, H
 - Business terminology is English in UI and code (Job Title, Employee Type). Logic and the database depend on ids, codes and stable enum values, never on display text.
 
 ## Domain model
-- Employee Type belongs to the employment period, not the assignment. A genuine relationship change is a new period; a data-entry correction updates the existing period (authorized user, reason). Working Arrangement, Employment Status and Probation are separate concepts: Employment Status is computed (`not_started`/`active`/`ended` → Pre-start/Active/Ended; end causes are future End Reasons); Probation is a concurrent condition of an Active period whose Failed outcome never ends the period automatically. Working Arrangement and the probation module are not implemented (Pending Validation).
+- Employee Type belongs to the employment period, not the assignment. A genuine relationship change is a new period; a data-entry correction updates the existing period (authorized user, reason). Working Arrangement, Employment Status and Probation are separate concepts: Employment Status is computed (`not_started`/`active`/`ended` → Pre-start/Active/Ended; end causes are future End Reasons); Cancelled and Voided (PV-25, C-86) are record dispositions, not statuses — only the shared query module decides what is operational (`cancelled_at IS NULL AND voided_at IS NULL`); Probation is a concurrent condition of an Active period whose Failed outcome never ends the period automatically. Working Arrangement and the probation module are not implemented (Pending Validation).
 - Work email and personal/contact email are separate fields; email is never an identity key.
 
 ## Identity

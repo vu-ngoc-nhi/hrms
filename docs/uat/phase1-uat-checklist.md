@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UAT Checklist
 
-- Milestone: **Core HR Phase 1 — UAT Passed With Pre-Production Actions** (HR sign-off 2026-10-10; results in `phase1-uat-round1-results.md` and `phase1-uat-round2-results.md`). **Not production ready** — PV-25 is a mandatory pre-production action.
+- Milestone: **Core HR Phase 1 — UAT Passed With Pre-Production Actions** (HR sign-off 2026-10-10; results in `phase1-uat-round1-results.md` and `phase1-uat-round2-results.md`). **Not production ready.** PV-25 (mandatory pre-production action) was resolved on 2026-10-10 by C-86 — *Void Employment Period*; see the pre-production verification section below.
 - Environment: local/UAT build with the development test identity (not Microsoft Entra ID). **Use synthetic data only** — never real employee data (C-03).
 - Roles: **HR Admin** (HR_ADMIN), **HR Editor** (HR_EDITOR), **API Docs** (API_DOCS_READER). Sign in from the login page with the matching test account.
 - "Today" means the business date in Asia/Ho_Chi_Minh. End dates are inclusive. Status is computed: **Pre-start / Active / Ended**; **Cancelled** is a history badge, not a status.
@@ -107,13 +107,20 @@ How to use: run each scenario in order with a new synthetic person; tick a step 
 | 10.2 | HR Editor | No "Correct …", "Reverse End Employment", "Clear Work Email"; past-dated business events refused |
 | 10.3 | HR Admin | All actions available, including past dates and corrections |
 
-## Key UAT validation topic: PV-25 (accepted for UAT — required before production)
+## PV-25 Void Employment Period (resolved 2026-10-10, C-86) — pre-production verification
 
-**Effective Employment Period entered by mistake / void effective period (PV-25)** is the highest operational-priority open item. HR accepted it as a known limitation for UAT (2026-10-10); it **must be resolved before Production Readiness**. Today an *effective* Initial Employment or Rehire entered for the wrong person or date has no simple safe recovery workflow (Cancel Planned Period only works before the start date). During UAT, please record:
+During UAT, PV-25 was accepted as a known limitation (an *effective* period entered in error had no safe recovery). It is now implemented as **Void Employment Period** (HR Admin, `employment.correct`). Suggested verification by HR before production readiness (synthetic data only):
 
-- how often this happens and in which situations (wrong person, wrong date, duplicate entry);
-- how HR expects to fix it and who should be allowed to;
-- whether the period may have been used by other processes before the mistake is noticed.
+| # | Scenario | Expected |
+|---|---|---|
+| V-1 | Initial Employment effective today entered for the wrong person → *Void Employment Period* | Confirmation shows "Use Void only when this Employment Period was entered in error and the relationship never existed in reality.", internal records kept and consequences; a reason is mandatory. After Void: period badge **Voided**, note, "Employment period voided — entered in error" listed last; status **No Employment Record**; Employee Code unchanged; *Add Initial Employment Period* available; the reason is not shown |
+| V-2 | Rehire effective today entered by mistake → Void | Previous period and its End unchanged; if that End was also wrong, Reverse End Employment is then possible |
+| V-3 | Another employee's current assignment uses the period as manager | Void blocked, the assignment listed (Employee Code, dates); after correcting it, Void allowed |
+| V-4 | Future period | Not voidable — use Cancel Planned Period |
+| V-5 | Successor of a Relationship Change | Blocked (Reverse Relationship Change is PV-24) |
+| V-6 | HR Editor | No Void action; API refuses (403) |
+
+Not for: real employment that ended (End Employment), planned periods (Cancel Planned Period), change of relationship (Relationship Change; undoing it is PV-24), a wrong End (Reverse End Employment). No Unvoid: if a Void itself was wrong, add a new correct period.
 
 PV-24 (Reverse Relationship Change after it became effective) stays important; record actual occurrences so it can be prioritised by real need.
 
@@ -121,7 +128,7 @@ PV-24 (Reverse Relationship Change after it became effective) stays important; r
 
 - No automatic **Reverse Relationship Change** once the new period has started (PV-24).
 - No same-day **Cancel Planned Period**: a period starting today is already effective (C-69).
-- No **Reverse Rehire** and no way to void an effective period entered by mistake (PV-25 — key UAT validation topic).
+- No **Reverse Rehire** as such; an effective period entered by mistake (including a Rehire) is handled with **Void Employment Period** (PV-25 resolved, C-86). No Unvoid.
 - No automatic repair of manager references to periods that were cancelled or ended (C-73; reported by the integrity scan).
 - No **Assignment** hard delete (C-46) and no generic **Employment Period** delete.
 - Relationship Change requires a known current Employee Type (C-68).

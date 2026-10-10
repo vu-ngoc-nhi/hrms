@@ -45,7 +45,9 @@ afterAll(async () => {
 describe("Shared employment write guard", () => {
   it("rejects a cancelled period with 409 EMPLOYMENT_PERIOD_READ_ONLY", async () => {
     await expect(loadWritableEmployment(db(), cancelledId)).rejects.toMatchObject({ status: 409, code: "EMPLOYMENT_PERIOD_READ_ONLY" });
-    expect(() => assertEmploymentWritable({ id: "x", cancelledAt: new Date() })).toThrow(ApiError);
+    expect(() => assertEmploymentWritable({ id: "x", cancelledAt: new Date(), voidedAt: null })).toThrow(ApiError);
+    expect(() => assertEmploymentWritable({ id: "x", cancelledAt: null, voidedAt: new Date() })).toThrow(/voided/);
+    expect(() => assertEmploymentWritable({ id: "x", cancelledAt: null, voidedAt: null })).not.toThrow();
   });
   it("returns a non-cancelled period and 404s an unknown one", async () => {
     await expect(loadWritableEmployment(db(), liveId)).resolves.toMatchObject({ id: liveId });

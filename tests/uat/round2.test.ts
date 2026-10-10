@@ -6,6 +6,7 @@ import { POST as endRoute } from "@/app/api/v1/core-hr/employments/[id]/end/rout
 import { POST as initialAssignmentRoute } from "@/app/api/v1/core-hr/employments/[id]/initial-assignment/route";
 import { POST as rcRoute } from "@/app/api/v1/core-hr/employments/[id]/relationship-change/route";
 import { POST as reverseRoute } from "@/app/api/v1/core-hr/employments/[id]/reverse-end/route";
+import { POST as voidRoute } from "@/app/api/v1/core-hr/employments/[id]/void/route";
 import { POST as initialEmploymentRoute } from "@/app/api/v1/core-hr/employees/[id]/initial-employment/route";
 import { POST as rehireRoute } from "@/app/api/v1/core-hr/employees/[id]/rehire/route";
 import { GET as detailRoute } from "@/app/api/v1/core-hr/employees/[id]/route";
@@ -136,7 +137,10 @@ describe("UAT Round 2", () => {
     expect(evidence["R2-05"]).toEqual({ new_work_email: null, new_assignments: 0, new_status: "not_started", old_status: "active" });
   });
 
-  it("R2-07 period effective today entered by mistake: no Cancel Planned, no Reverse Rehire, no Void, no DELETE", async () => {
+  // Round 2 recorded R2-07 as a KNOWN LIMITATION (no way to remove a mistaken effective period). PV-25 (2026-10-10)
+  // resolves it with Void Employment Period: Cancel Planned still refuses effective periods and nothing is deleted, but
+  // HR_ADMIN can now void the mistaken period (HR_EDITOR cannot).
+  it("R2-07 period effective today entered by mistake: Cancel Planned refuses, no Reverse Rehire, no DELETE — resolved by Void (PV-25)", async () => {
     const id = await person("UAT R2 SameDay");
     const d = await ok(initialEmploymentRoute, id, id, { start_date: today, employee_type_id: ids.et.EMPLOYEE }, "editor");
     const c = await send(cancelRoute, d.employments[0].id, id, { reason: "Entered for the wrong person" }, "editor");
@@ -148,13 +152,25 @@ describe("UAT Round 2", () => {
       readdirSync(dir).flatMap((n) => (statSync(path.join(dir, n)).isDirectory() ? [path.join(dir, n), ...routeDirs(path.join(dir, n))] : []));
     const all = routeDirs(path.join(process.cwd(), "src/app/api")).map((d) => path.relative(process.cwd(), d));
     const deleteHandlers = all.filter((d) => existsSync(path.join(d, "route.ts")) && /export const DELETE|export async function DELETE/.test(readFileSync(path.join(d, "route.ts"), "utf8")));
+    const editorVoid = await send(voidRoute, d.employments[0].id, id, { reason: "Entered for the wrong person" }, "editor");
+    const v1 = await send(voidRoute, d.employments[0].id, id, { reason: "Entered for the wrong person" }, "admin");
+    const v2 = await send(voidRoute, rh.employments[1].id, p.personId, { reason: "Wrong person" }, "admin");
     evidence["R2-07"] = {
       initial_today_cancel: { status: c.status, code: c.body.details?.[0]?.code },
       rehire_today_cancel: { status: c2.status, code: c2.body.details?.[0]?.code },
-      void_or_reverse_rehire_routes: all.filter((d) => /void|reverse-rehire/i.test(d)),
+      reverse_rehire_routes: all.filter((d) => /reverse-rehire/i.test(d)),
       delete_handlers: deleteHandlers,
+      void_by_hr_editor: editorVoid.status,
+      void_initial_today: { status: v1.status, employment_status: v1.body.employment_status },
+      void_rehire_today: { status: v2.status, employment_status: v2.body.employment_status },
     };
     expect([c.status, c.body.details[0].code, c2.status, c2.body.details[0].code]).toEqual([422, "PERIOD_ALREADY_STARTED", 422, "PERIOD_ALREADY_STARTED"]);
-    expect(evidence["R2-07"]).toMatchObject({ void_or_reverse_rehire_routes: [], delete_handlers: [] });
+    expect(evidence["R2-07"]).toMatchObject({
+      reverse_rehire_routes: [],
+      delete_handlers: [],
+      void_by_hr_editor: 403,
+      void_initial_today: { status: 201, employment_status: "no_employment" },
+      void_rehire_today: { status: 201, employment_status: "ended" },
+    });
   });
 });

@@ -87,3 +87,7 @@ UAT Round 2 is **accepted by HR**. Decisions are recorded as C-82 and C-83 in `d
 
 **Final status: `Core HR Phase 1 — UAT Passed With Pre-Production Actions`.** Functional UAT is accepted; known limitations remain; Production Readiness has **not** been achieved; PV-25 is a mandatory pre-production action. Baseline tag: `phase1-uat-passed` (local).
 
+## Post sign-off update (2026-10-10): PV-25 resolved
+
+PV-25 (R2-07) was implemented after the sign-off as **Void Employment Period** (C-86). The automated R2-07 regression now asserts the new behaviour: Cancel Planned still refuses effective periods (`PERIOD_ALREADY_STARTED`), no Reverse Rehire route and no DELETE handler exist, HR_EDITOR is refused (403), and HR_ADMIN voids the Initial Employment and the Rehire entered today (201; statuses *No Employment Record* and *Ended*). The Round 2 results above are kept as recorded. Production Readiness is still **not** declared.
+

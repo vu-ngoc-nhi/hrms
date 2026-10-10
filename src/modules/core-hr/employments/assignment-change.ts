@@ -21,6 +21,12 @@ const OPERATION = "createAssignmentChange";
 
 export const assignmentTimelineConflict = (error: unknown) => {
   const info = pgErrorInfo(error);
+  // PV-25 safety net: the manager period was voided concurrently (manager resolution itself ignores voided periods).
+  if (info.constraint === "job_assignment_manager_not_voided") {
+    return rule("MANAGER_PERIOD_VOIDED", "The selected manager's employment period was voided. Choose the manager again.", [
+      { field: "manager_person_id", code: "MANAGER_PERIOD_VOIDED", message: "The manager's employment period was voided." },
+    ]);
+  }
   if (info.sqlState === "23P01" || info.constraint === "job_assignment_within_employment") {
     return rule("ASSIGNMENT_TIMELINE_CONFLICT", "The change would make assignments overlap or fall outside the employment period.");
   }

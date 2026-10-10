@@ -1,6 +1,6 @@
 # PV-25 — Void Employment Period (pre-production design, revision 2)
 
-- Status: **REVISED DESIGN — directionally approved, awaiting implementation approval.** Nothing is implemented; no migration, API or UI exists.
+- Status: **APPROVED AND IMPLEMENTED (2026-10-10) — Confirmed Decision C-86; PV-25 resolved.** Forward migration `20261012000000_void_employment_period`; operations `getVoidEligibility` / `createVoidEmployment` (`employment.correct`); dependency checks `src/modules/core-hr/employments/void-dependencies.ts`; service `void-period.ts`; UI `VoidPeriodForm`. See *Implementation notes* at the end. Production Readiness is **not** declared by this item.
 - Revision 2 (2026-10-10) applies the HR decisions on the first proposal: internal period activity (including End / End Reversed) no longer blocks; manager blocking is limited to references that rely on this period; an eligibility preview is added; dependencies are reclassified internal vs cross-period; PV-24 stays separate; no Unvoid.
 - Baseline: `phase1-uat-passed`. Decision item: **PV-25** (HIGH PRIORITY — MUST BE RESOLVED BEFORE PRODUCTION READINESS). Related: PV-24, C-29/C-69–C-71, C-38/C-54–C-57, C-59, C-61, C-73, C-76–C-78.
 
@@ -231,3 +231,19 @@ Verified from zero on `hrms_test` (guarded), applied to local `hrms_dev` only un
 | Q4 | A wrong or duplicate **whole Person profile**: separate backlog item (merge/duplicate profile)? | Yes — new item, not part of PV-25 |
 
 Implementation (migration, API, UI, tests) starts only after explicit approval of this revision. Approval of the design is not approval to run migrations outside the guarded local databases.
+
+## 16. Implementation notes (2026-10-10, C-86)
+
+Implemented as designed. Open questions closed: Q1 yes (void event listed last); Q2 — the predecessor of a Relationship Change whose successor was cancelled is **not routinely voidable**: normal recovery stays *Cancel successor → Reverse End*; Void is evaluated only when HR confirms the predecessor itself was entered in error, and the preview returns the warning `RELATIONSHIP_CHANGE_PREDECESSOR`; Q3 yes (warning only); Q4 out of scope (separate backlog, not started).
+
+Engineering details added during implementation (no business rule changed):
+
+| Detail | Why |
+|---|---|
+| Preview returns `200` with a single blocker `EMPLOYMENT_PERIOD_READ_ONLY` or `PERIOD_NOT_EFFECTIVE` for cancelled/voided or future periods (dependency checks are skipped there); `404` for an unknown period. The preview runs in a `READ ONLY` transaction. | Structured data for the UI; read-only by construction |
+| POST error mapping: first blocker decides the status (`LATER_PERIOD_EXISTS` 409, `DEPENDENCY_CHECK_FAILED` 503 `SERVICE_UNAVAILABLE`, others 422 `BUSINESS_RULE_VIOLATION`); `details` list every blocker and its references (employee code and dates, no names). | Same blockers as the preview |
+| Void row-locks the period (`FOR UPDATE`) before the dependency checks; trigger `job_assignment_manager_not_voided` share-locks the manager period on every assignment write that sets a manager and rejects a reference to a voided period for overlapping dates (mapped to `422 MANAGER_PERIOD_VOIDED`). | No race can leave another employee's assignment depending on a voided period |
+| The new trigger messages carry `(constraint "…")` | The Prisma driver adapter does not expose the constraint name of a trigger-raised `check_violation` |
+| Event-insert trigger now reads (and locks) the period for every event type | Rejects any event after Void and a void event without the marker |
+| UI shows *Void Employment Period* (HR with `employment.correct`) only on the latest valid period once it is effective; earlier periods would always be blocked by `LATER_PERIOD_EXISTS`. The confirmation is built from the preview; if the POST fails, the error and a refreshed preview are shown. | Less noise; preview-driven |
+

@@ -102,4 +102,40 @@ describe("Integrity scan (H4)", () => {
     expect(by("manager_not_employed_on_date")).toEqual([report.personId]);
     expect(findings.every((f) => !JSON.stringify(f).includes("Test Integrity"))).toBe(true); // ids only, no names
   });
+
+  it("PV-25: detects void inconsistencies that only direct data writes can create, and treats voided periods as non-operational", async () => {
+    // Marker without the void event (written directly, bypassing the Void action).
+    const markerOnly = await hired("Test Integrity Void Marker Only", addDays(today, -5));
+    await app.query("UPDATE employment SET voided_at = now() WHERE id = $1", [markerOnly.employmentId]);
+
+    // Void event dated differently from the period start.
+    const wrongDate = await hired("Test Integrity Void Wrong Date", addDays(today, -5));
+    await app.query("UPDATE employment SET voided_at = now() WHERE id = $1", [wrongDate.employmentId]);
+    await db().employmentEvent.create({ data: { employmentId: wrongDate.employmentId, eventType: "employment_voided", effectiveDate: toDbDate(today), reason: "x", recordedBy: admin } });
+
+    // A valid assignment that still uses a (directly) voided period as manager for overlapping dates.
+    const manager = await hired("Test Integrity Void Manager", addDays(today, -30));
+    const report = await hired("Test Integrity Void Report", addDays(today, -10));
+    await db().jobAssignment.updateMany({ where: { employmentId: report.employmentId }, data: { managerEmploymentId: manager.employmentId } });
+    await app.query("UPDATE employment SET voided_at = now() WHERE id = $1", [manager.employmentId]);
+    await db().employmentEvent.create({ data: { employmentId: manager.employmentId, eventType: "employment_voided", effectiveDate: toDbDate(addDays(today, -30)), reason: "x", recordedBy: admin } });
+
+    // A voided period overlapping a valid one is not an overlap (non-operational).
+    const replaced = await hired("Test Integrity Void Replaced", addDays(today, -20));
+    await app.query("UPDATE employment SET voided_at = now() WHERE id = $1", [replaced.employmentId]);
+    await db().employmentEvent.create({ data: { employmentId: replaced.employmentId, eventType: "employment_voided", effectiveDate: toDbDate(addDays(today, -20)), reason: "x", recordedBy: admin } });
+    await db().employment.create({ data: { personId: replaced.personId, startDate: toDbDate(addDays(today, -20)), employeeTypeId: ids.et.EMPLOYEE, createdBy: admin } });
+
+    const findings = await scan([markerOnly, wrongDate, manager, report, replaced].map((p) => p.personId));
+    const by = (check: string) => findings.filter((f) => f.check === check).map((f) => f.ids.person_id);
+    expect(by("voided_period_without_void_event")).toEqual([markerOnly.personId]);
+    expect(by("void_event_date_differs_from_period_start")).toEqual([wrongDate.personId]);
+    expect(by("voided_period_referenced_as_manager")).toEqual([report.personId]);
+    expect(by("period_overlap")).toEqual([]);
+    expect(by("multiple_current_periods")).toEqual([]);
+    expect(by("void_event_on_non_voided_period")).toEqual([]);
+    expect(by("cancelled_and_voided")).toEqual([]);
+    expect(by("event_recorded_after_void")).toEqual([]);
+    expect(findings.every((f) => !JSON.stringify(f).includes("Test Integrity"))).toBe(true);
+  });
 });

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { EndReasonCode } from "@/contracts/core-hr/end-reasons";
-import type { EmployeeCreateInput, EmployeeDetail, EmployeeListItem } from "@/contracts/core-hr/schemas";
+import type { EmployeeCreateInput, EmployeeDetail, EmployeeListItem, EmploymentEventType } from "@/contracts/core-hr/schemas";
 import { addDays, fromDbDate, toDbDate, todayInVietnam } from "@/lib/dates";
 import { db, pgErrorInfo, type Tx } from "@/lib/db";
 import { ApiError, forbidden, notFound, type ErrorDetail } from "@/lib/http/errors";
@@ -12,10 +12,11 @@ import {
   currentEmploymentWhere,
   futurePlannedEmploymentWhere,
   historyFlags,
+  periodDisposition,
   operationalEmploymentWhere,
   operationalPeriods,
 } from "../employments/queries";
-import { activeEndEventOf } from "../employments/lifecycle-events";
+import { activeEndEventOf, historyEventOrder } from "../employments/lifecycle-events";
 import { completenessAssignment, employmentStatus, representativeAssignment, representativeEmployment } from "../employments/status";
 import { completenessView, missingOperationalItems, type OperationalInput } from "./completeness";
 import { normalizePersonalEmail, validateDateOfBirth, validateFullName, validateMobilePhone, validateWorkEmail } from "./validation";
@@ -354,6 +355,11 @@ export async function createEmployee(
       if (info.constraint === "job_assignment_within_employment") {
         throw new ApiError(422, "BUSINESS_RULE_VIOLATION", "An assignment must fall within the employment period.");
       }
+      if (info.constraint === "job_assignment_manager_not_voided") {
+        throw new ApiError(422, "BUSINESS_RULE_VIOLATION", "The selected manager's employment period was voided. Choose the manager again.", [
+          { field: "assignment.manager_person_id", code: "MANAGER_PERIOD_VOIDED", message: "The manager's employment period was voided." },
+        ]);
+      }
       throw error;
     }
   }
@@ -437,14 +443,15 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
     start_date: fromDbDate(e.startDate),
     end_date: fromDbDate(e.endDate),
     ...historyFlags(e),
-    period_lifecycle: historyFlags(e).cancelled_at
+    period_lifecycle: periodDisposition(e)
       ? null
       : employmentStatus([{ startDate: fromDbDate(e.startDate), endDate: fromDbDate(e.endDate) }], today),
     // Event type, date and structured End Reason only: free-text notes and reasons are never exposed (C-24).
-    events: e.events.map((ev) => ({
+    // PV-25: the void event is the disposition of the whole period, so it is listed after all other events.
+    events: historyEventOrder(e.events).map((ev) => ({
       id: ev.id,
       reverses_event_id: ev.reversesEventId,
-      event_type: ev.eventType as "start" | "suspend" | "resume" | "end" | "end_reversed" | "cancel_planned_start",
+      event_type: ev.eventType as EmploymentEventType,
       effective_date: fromDbDate(ev.effectiveDate),
       recorded_at: ev.recordedAt.toISOString(),
       end_reason: ev.endReason ? { code: ev.endReason.code as EndReasonCode, label: ev.endReason.label } : null,
