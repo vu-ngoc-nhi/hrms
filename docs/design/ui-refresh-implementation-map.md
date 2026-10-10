@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) and D-UI-15 … D-UI-16 (register C-97) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). Next slice (UI-8) not started.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) and D-UI-15 … D-UI-16 (register C-97) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). **Employee Detail consistency review — completed** (§16). Next slice (UI-8) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -473,4 +473,88 @@ No personal values, Work Email, full-name history, recorded-at, actor or reason 
 | Unit suite / typecheck / lint / build | 148/148 unit tests; typecheck, lint, production build pass. Frontend-only: DB/UAT suites not re-run |
 | Visual QA (synthetic data, HR Admin test identity, 1440 px) | A/C simple start + planned End DEMO903; B assignment changes DEMO002; D End + Reverse End DEMO006; E Rehire DEMO004; F Relationship Change DEMO005; G Cancelled period with reversed End, unmerged Relationship-Change End and Rehire ES0015; H Voided DEMO906; I/J DEMO801 (personal update and Date of Birth correction from UI-4 QA) — no personal value, correction or Work Email entry appears; empty state ES0010 |
 | Responsive / smoke | one column, no horizontal scroll at phone width; Employees → DEMO005 → History (tab in URL) after restart; no app console or server errors |
+
+## 16. Employee Detail consistency review — completed (2026-10-10)
+
+Review + small consistency fixes across Header, Overview, Personal, Employment, Assignment and History. No business rule, API semantics or permission changed; no backend change; no new capability.
+
+### History semantic correction
+
+The Employee Detail API has no explicit Rehire marker, so History no longer infers "Employee rehired". A later operational period that is not a proven Relationship Change is shown neutrally as **"New Employment Period started / starts"** ("Employment Period N · <type>. The previous Employment Period ended <date>."). Relationship Change keeps its higher-level entry only with explicit `RELATIONSHIP_CHANGE` evidence plus a next-day successor. Unit-tested (`history-tab.test.ts`: no title contains "rehire"). The **Rehire** workflow name stays on its action (More actions), which is a real workflow, not an inference.
+
+### Terminology checklist (one label per concept)
+
+| Concept | Label used everywhere |
+|---|---|
+| Employee Type | Employee Type |
+| Employment Period | Employment Period (N) |
+| Employment card titles | Current Employment · Upcoming Employment · Last Employment · Employment (none) |
+| Assignment card titles | Current Assignment · Upcoming Assignment(s) · Last Assignment · Assignment History |
+| End of a period | Planned End (today or later) / End Date (past); History: "Employment scheduled to end" / "Employment ended" |
+| Completeness | Complete / Needs Attention (list icon text aligned to "Needs Attention") |
+| Relationship Change | End Reason "Relationship Change"; action "Change Employment Relationship"; event "Employment relationship changed / changes" (Overview and History aligned) |
+| Dispositions | Cancelled · Voided (Assignment rows of disposed periods now use the same badges instead of "Not operational") |
+| Starts | "starts" (future) / "started" (past) — "begins" removed from Overview |
+| Assignment dates | Effective since (current) · Takes effect on (upcoming) · Effective from / Replaced on / Effective through (history) — Overview now uses the same labels |
+| Empty states | "No Employment Period has been recorded." · "Only cancelled or voided Employment Periods exist. They are kept for history and have no effect." · "No assignment has been added for this Employment Period." (shared keys for Overview, Employment, Assignment) |
+
+### Visual semantics (all tabs)
+
+Current = normal surface (green left borders removed from Employment / Assignment current cards; the text badge "Current" stays) · Upcoming = INFO accent (D-UI-12) · Historical = neutral surface + neutral badge · Cancelled = muted · Voided = muted + dashed + "Voided". Primary red is used only for the primary action and navigation. Field styling: Overview cards now use the same label-above-value grid as Personal / Employment / Assignment; card titles share one size (Personal card title aligned); badges, radius and borders come from the same tokens.
+
+### Issues found
+
+| Issue | Screen(s) | Severity | Decision |
+|---|---|---|---|
+| "Employee rehired" inferred without an explicit marker | History | High (misleading) | **Fixed now** — neutral "New Employment Period started" |
+| Current assignment dated "Effective Date" vs "Effective since" | Overview vs Assignment | Medium | **Fixed now** |
+| Overview label/value layout differed from the other tabs | Overview | Medium | **Fixed now** (shared grid) |
+| Disposed assignment rows badged "Not operational"; cancelled rows dashed like voided | Assignment | Medium | **Fixed now** (Cancelled / Voided badges; dashed only for Voided) |
+| Current cards with green border in two tabs, plain in Overview | Employment, Assignment | Low | **Fixed now** |
+| Three different sentences for "no assignment" / "no employment"; Assignment tab used plain text instead of the empty state | Overview, Employment, Assignment | Low | **Fixed now** |
+| "begins" vs "starts"; Overview Relationship Change titled "New Employment Period" | Overview, History | Low | **Fixed now** |
+| Completeness rule version code shown to HR | Overview | Low (developer language) | **Fixed now** — plain sentence, version in tooltip |
+| Redundant "Start Date is the start of this employment period." on every Overview | Overview | Low | **Fixed now** (removed) |
+| "Needs attention" casing; "No lifecycle events recorded"; "Last day of the employment period. ·" | List, Employment, Overview | Low | **Fixed now** |
+| Personal card title larger than other card titles | Personal | Low | **Fixed now** |
+| History badge "Planned" vs card badge "Upcoming" | History vs tabs | Low | **Kept**: events are *Planned*, states are *Upcoming*; both use the INFO treatment |
+| Header shows the representative (e.g. upcoming) job title for Pre-start | Header | Info | **Kept**: same rule as the Employee List (C-76), qualified by the status badge; never labelled "current" |
+| Duplicate actions (inventory below) | Header, Employment, Assignment | Medium | **UI-9** (D-UI-13, D-UI-16) |
+| Workflow forms still say "Line Manager", "Effective To (exclusive)", "End Date (inclusive)"; inline form styling | Workflow forms | Medium | **UI-9** (forms → modals, wording aligned) |
+| Add Employee uses "Mobile Phone" / "Personal/Contact Email" | Add Employee | Low | **UI-8** |
+| Phone width: tabs wrap to two lines, header actions under the name | All | Low | Accepted (desktop/laptop primary; nothing unreachable) |
+
+### Action duplication inventory (current state, unchanged in this pass)
+
+| Action | Header primary | Header More actions | Employment period card | Assignment tab | Personal tab |
+|---|---|---|---|---|---|
+| Change Assignment (representative period) | ✓ | — | — | — (other periods: their latest row) | — |
+| Add Initial Assignment (representative period without assignment) | ✓ | — | ✓ secondary | ✓ empty card, secondary | — |
+| Edit Work Email / End Employment / Change Employment Relationship (representative) | — | ✓ | ✓ | — | — |
+| Correct Employment Period / Correct or Clear Work Email / Cancel Planned Period / Reverse End (representative) | — | ✓ Correct record | ✓ Correct record | — | — |
+| Void Employment Period (representative, eligible) | — | ✓ Advanced | ✓ Advanced | — | — |
+| Period actions of other periods | — | — | ✓ only | — | — |
+| Rehire / Plan Rehire / Add Initial Employment Period | — | ✓ only | — | — | — |
+| Correct Name or Date of Birth | — | ✓ only | — | — | hint only |
+| Edit Personal Information | — | — | — | — | ✓ only |
+| Correct assignment (row) | — | — | — | ✓ only, on its row | — |
+
+No new duplicate was introduced in this pass.
+
+### Confirmed UI-9 ownership direction (D-UI-13, D-UI-16)
+
+- Header: primary **Change Assignment** (or **Add Initial Assignment** when the representative period has none) + person-level actions only: Rehire / Plan Rehire, Add Initial Employment Period, Correct Name or Date of Birth.
+- Employment-Period actions only on their period card (remove the representative period's period actions from header More actions).
+- The representative period's empty Assignment card explains the missing assignment without its own button; non-representative / future periods keep a secondary Add Initial Assignment.
+- Assignment-row corrections stay on their row; Edit Personal Information stays in the Personal tab.
+- Workflow forms move to the modal pattern with aligned wording (Manager, business date wording).
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| Unit suite / typecheck / lint / build | 148/148 unit tests (history test updated for the neutral label); typecheck, lint, production build pass. Frontend-only: DB/UAT suites not re-run |
+| Responsive | 1440 / 1280: header on one line, Overview two columns; ~900: Overview stacks, More actions menu inside the viewport; phone: no horizontal scroll, menus reachable |
+| Visual QA (synthetic data, 1440 px) | A Active DEMO001; B Pre-start DEMO901; C Ended DEMO003; D Rehire DEMO004 (Overview + History "New Employment Period started"); E Relationship Change DEMO905 (Overview + Employment); F Planned End DEMO903; G Voided / No Employment Record DEMO906 (Overview + Assignment) |
+| Smoke | Employees → DEMO905 → Overview (aligned upcoming wording) → Personal → Employment → Assignment → History after restart; no server errors |
 
