@@ -1,184 +1,231 @@
-# PV-25 — Void Employment Period (pre-production design)
+# PV-25 — Void Employment Period (pre-production design, revision 2)
 
-- Status: **DESIGN PROPOSAL — awaiting approval.** Nothing here is implemented; no migration, API or UI exists.
-- Baseline: `phase1-uat-passed` (Core HR Phase 1 — UAT Passed With Pre-Production Actions).
-- Decision item: **PV-25** (HIGH PRIORITY — MUST BE RESOLVED BEFORE PRODUCTION READINESS). Related: PV-24 (Reverse Relationship Change), C-29/C-69–C-71 (Cancel Planned Period), C-38/C-54–C-57 (Reverse End Employment), C-61 (Rehire), C-73 (manager references).
-- Every point marked **[HR]** is an open business question (§17) and must not be treated as decided.
+- Status: **REVISED DESIGN — directionally approved, awaiting implementation approval.** Nothing is implemented; no migration, API or UI exists.
+- Revision 2 (2026-10-10) applies the HR decisions on the first proposal: internal period activity (including End / End Reversed) no longer blocks; manager blocking is limited to references that rely on this period; an eligibility preview is added; dependencies are reclassified internal vs cross-period; PV-24 stays separate; no Unvoid.
+- Baseline: `phase1-uat-passed`. Decision item: **PV-25** (HIGH PRIORITY — MUST BE RESOLVED BEFORE PRODUCTION READINESS). Related: PV-24, C-29/C-69–C-71, C-38/C-54–C-57, C-59, C-61, C-73, C-76–C-78.
 
 ## 1. Business definition
 
-**Void Employment Period** (recommended name; UI action "Void Employment Period", history label "Employment period voided — entered in error").
+**Void Employment Period**: HR confirms that an **already-effective** Employment Period was created in error and the employment relationship it represents **never existed in reality**. The period and everything recorded inside it stay in the history; its final disposition becomes **Voided** and it has no operational effect.
 
-> An HR_ADMIN records that an Employment Period which has already become effective was **entered in error and never represented a real employment relationship**. The period stays in the history with all its data and a *Voided* badge, but has no operational effect from its start.
+Void must **not** be used for — these keep using the real lifecycle workflows:
 
-How it differs from the existing actions:
+| Situation | Correct workflow |
+|---|---|
+| Real employment that later ended (including probation not passed) | End Employment |
+| A contract / relationship that actually started | It stays; correct data with Historical Correction; end it with End Employment |
+| Ordinary termination | End Employment |
+| Change of working relationship (e.g. Contractor → Employee) | Relationship Change; undoing it is PV-24 |
+| A wrong End action while the person kept working | Reverse End Employment |
+| A future plan that will not happen | Cancel Planned Period |
+| Cleaning history for convenience | Not allowed |
 
-| Action | Meaning | Applies to |
-|---|---|---|
-| Cancel Planned Period (C-29) | A real **plan** will not take effect | Period starting after today |
-| End Employment (C-50) | A real relationship ends | Real period |
-| Reverse End Employment (C-38) | An End action was wrong; the relationship continued | Active End Event |
-| Historical Correction (C-40) | Real period, wrong data | Real period |
-| **Void Employment Period** | **The period itself should never have been recorded** | Effective period entered in error |
-
-Why not "Cancel" for effective periods: Cancel means "a plan was withdrawn before it took effect" (C-69 keeps it strictly pre-start). Void means "this record was a mistake". Mixing the two would make a cancelled period ambiguous (real plan vs data error) and would weaken C-69.
+The UI must state this definition on the confirmation screen and the reason is mandatory, so the record carries HR's explicit confirmation.
 
 ## 2. Eligibility matrix
 
-Proposed default: **no fixed time limit; strict dependency validation instead.** A same-day limit would not reflect when mistakes are discovered (often days later) and is not the actual risk; the risk is that other records already depend on the period. **[HR Q3]**
+No fixed time limit (same-day / N-day) — eligibility comes from the period's nature and from **cross-period dependencies** (§3), which are the actual risk.
 
-| Period | Void allowed? | Notes |
+| Candidate period | Eligible? | Rule |
 |---|---|---|
-| Initial Employment period (incl. one created with the profile) effective on or before today | **Yes**, if §3 passes | Person returns to *No Employment Record* when no other valid period exists |
-| Rehire period, effective | **Yes**, if §3 passes | Previous period untouched (§11) |
-| Relationship Change **successor** period | **No — blocked** (`RELATIONSHIP_CHANGE_SUCCESSOR`) | Composite reversal belongs to PV-24 (§16) |
-| Relationship Change **predecessor** (old) period | **No** | It has a later period (blocked by §3) |
-| Legacy / imported period (no `start` event) | **Yes**, if §3 passes | Import mistakes are a main use case **[HR Q7]** |
-| Period starting **after today** | **No — use Cancel Planned Period** | Keeps one meaning per action **[HR Q2]** |
-| Cancelled period | No (already non-operational, read-only) | |
-| Already voided period | No (terminal) | |
-| Not the person's **latest** non-cancelled, non-voided period | **No** (`LATER_PERIOD_EXISTS`) | A later period may have been created on the assumption that this one was real (e.g. Rehire's latest-period rule) **[HR Q4]** |
+| Effective (`start_date <= today`), non-cancelled, non-voided, the Person's **latest valid** period | **Yes**, unless a §3 blocker exists | Any origin: profile creation, Add Initial Employment, Rehire, legacy/import |
+| Same, with internal activity (assignment changes, corrections, Work Email changes, planned end date, Active End Event, End + End Reversed) | **Yes** | Internal records do not block (§3.A) |
+| Not the latest valid period (a later **non-cancelled, non-voided** period exists) | No — `LATER_PERIOD_EXISTS` | Later cancelled or voided periods do **not** count |
+| Successor created by a Relationship Change (§3.B) | No — `RELATIONSHIP_CHANGE_SUCCESSOR` | PV-24 |
+| Start date after today | No — `PERIOD_NOT_EFFECTIVE` | Use Cancel Planned Period |
+| Cancelled or already voided | No — `EMPLOYMENT_PERIOD_READ_ONLY` | Dispositions are terminal |
 
-## 3. Permission model
+## 3. Dependency matrix (revised)
 
-- **HR_ADMIN only**, permission `employment.correct`, **mandatory reason** (stored on the void event and in audit; never shown in the generic history).
-- Rationale (confirmed direction): voiding removes the operational effect of an effective record — it is a historical correction, not a business event. HR_EDITOR keeps Cancel Planned Period for future periods. **[HR Q8: is a same-day HR_EDITOR exception needed? Recommendation: no.]**
+### A. Internal to the erroneous period — never block; kept as history; non-operational after Void
 
-## 4. Dependency / blocking matrix
+| Record | After Void |
+|---|---|
+| `start` event (if any) | Kept |
+| Initial assignment and later Assignment Change rows | Kept unchanged; non-operational through the period disposition |
+| Historical corrections made on the period (dates, Employee Type, assignment rows) | Kept (their results stay on the rows; audit stays) |
+| Work Email (current value, earlier changes in audit) | Value kept; reservation released (§7) |
+| Planned end date / end date | Kept |
+| **Active End Event** (incl. its End Reason and C-52 metadata) | Kept as history; **no Reverse End prerequisite**; it simply stops mattering because the whole period is voided |
+| End + End Reversed pairs | Kept |
+| Audit records of any earlier action | Kept (evidence only) |
 
-| Dependency | Class | Behaviour |
+### B. Cross-period — block Void
+
+| Dependency | Blocker | Detection |
 |---|---|---|
-| The period's own `start` event | **A** — safe automatically | Kept; void event added after it |
-| The period's own assignment rows (initial, and later rows of the same period) | **A** for data (kept, become non-operational with the period) — but see **[HR Q5]**: more than the initial row means the period was operated on over time; recommendation: **block (C)** in Phase 1 when an Assignment Change or correction exists on the period | Never deleted, moved or copied |
-| Work Email recorded on the period (incl. later updates of it) | **A** | Value kept for history; reservation released (§9) |
-| Planned end date without End event | **A** | Kept as data |
-| End + End Reversed pairs (fully reversed) | **A** | Kept; they neutralise each other **[HR Q6]** |
-| **Active End Event** on the period | **B** — explicit coordinated reversal | Blocked (`ACTIVE_END_EVENT_EXISTS`): HR runs Reverse End Employment first, then Void |
-| Manager references: other employees' assignments whose `manager_employment_id` is this period | **B** — explicit correction first | Blocked (`MANAGER_REFERENCES_EXIST`) with the list of affected assignments; HR corrects them (Assignment Change / historical correction). Never rewritten automatically (C-73) **[HR Q9: block past references too? Recommendation: yes, all references]** |
-| Later non-cancelled, non-voided period of the same person (Rehire, Relationship Change successor) | **C** — must block | `LATER_PERIOD_EXISTS` |
-| The period is a Relationship Change successor (predecessor's Active End Event has `RELATIONSHIP_CHANGE` ending the day before) | **C** | `RELATIONSHIP_CHANGE_SUCCESSOR` → PV-24 |
-| Other lifecycle events (suspend/resume — not implemented today) | **C** | Blocked |
-| Future modules (Payroll, Leave, Contracts, Entra/account provisioning) referencing the period | **C** | Each future module must register a dependency check (see §10 extension point); Phase 1 has none |
+| A **later valid period** of the same Person (non-cancelled, non-voided, `start_date` after this period) — e.g. a Rehire or Relationship Change successor | `LATER_PERIOD_EXISTS` | Shared operational query |
+| This period **is a Relationship Change successor** | `RELATIONSHIP_CHANGE_SUCCESSOR` → PV-24 | The immediately preceding valid period of the Person ends exactly on `start_date − 1` **and** its Active End Event has End Reason `RELATIONSHIP_CHANGE` (deterministic, from lifecycle data; audit is never used) |
+| This period is a Relationship Change **predecessor** with a valid successor | Covered by `LATER_PERIOD_EXISTS` | — |
+| **Manager dependency** from other employees (§4) | `MANAGER_DEPENDENCY` (lists the assignments) | §4 |
+| Future modules: Payroll, Leave, Contracts | Module-specific codes, e.g. `PAYROLL_DEPENDENCY`, `LEAVE_DEPENDENCY`, `CONTRACT_DEPENDENCY` | Extension point (§3.D) |
+| Future external-system references (e.g. Entra / account provisioning, external leave tool) | `EXTERNAL_REFERENCE` | Extension point |
 
-Principle: **exact void or no void** — the system never repairs other records to make a void possible.
+### C. Explicitly not blocking
 
-## 5. Data model options
+- Later **cancelled or voided** periods of the same Person.
+- A Relationship Change **predecessor whose successor was cancelled** (the Relationship Change never took effect) — see open question Q2.
+- Manager references to **other** periods of the same Person, references from other employees' **cancelled or voided** periods, and references whose dates do not overlap this period (§4).
+- The person merely having appeared as a manager at some time.
 
-| | Option 1 — `voided_at` marker + `employment_voided` event (recommended) | Option 2 — generic `disposition` column replacing `cancelled_at` | Option 3 — event only | Option 4 — separate `employment_void` table |
-|---|---|---|---|---|
-| Business clarity | High: two named dispositions (Cancelled = withdrawn plan, Voided = entered in error) | High, one concept | Low (state hidden in events) | Medium |
-| Data integrity | Exclusion constraints and the terminal trigger read a column on `employment` | Same, after rewriting | **Not possible**: exclusion constraints cannot reference events (same reason as C-29 §9) | **Not possible** for the same reason without also adding a marker |
-| Schema complexity | +1 nullable column, +1 event type, recreate 2 exclusion predicates, extend 2 triggers, +1 unique index | Data transformation of existing cancelled rows, rewrite S4.0 constraints/trigger/tests, drop or deprecate `cancelled_at` | Smallest schema, but unusable | +1 table + marker anyway |
-| Reversal safety | Terminal (no Unvoid); simple | Same | — | Same |
-| Query complexity | One line in the shared module (`OPERATIONAL` adds `voidedAt: null`) | One predicate (`disposition = 'valid'`), but every existing reference changes | Every query joins events | Join |
-| Auditability | Event + audit, same pattern as Cancel/End | Same | Event only | Table + audit |
-| Payroll/Leave/Contracts | Clear rule: only operational (non-cancelled, non-voided) periods are consumable | Same | Fragile | Same |
-| Risk | Low, additive forward migration | Higher: semantic transformation of shipped data (CLAUDE.md migration governance) | — | — |
+### D. Extension mechanism for future modules
 
-**Recommendation: Option 1.** It is additive, keeps C-29 untouched, does **not** overload `cancelled_at`, and reuses the S4.0 shared query abstraction so every operational query excludes voided periods by construction. Option 2 is attractive long-term but transforms shipped data and is not needed for PV-25.
+- A single ordered list of **void dependency checks** in the employments module; each check has a stable `key`, runs **read-only inside the caller's transaction**, receives the period and today's business date, and returns zero or more blockers `{ code, message, references[] }`.
+- The eligibility preview (§8) and the POST action (§9) evaluate the **same list**.
+- **Fail closed:** a check that errors blocks Void (it never silently passes).
+- Phase 1 checks: `later_period`, `relationship_change_successor`, `manager_dependency`. Payroll, Leave and Contracts add their own check when they exist; this action does not change.
+
+## 4. Manager dependency semantics (exact)
+
+Let **V** be the period to void, with validity range `[V.start_date, V.end_date]` (open-ended when `end_date` is null; inclusive end), i.e. assignment-style `[V.start_date, V.end_date + 1)`.
+
+An assignment **A** of **another** person creates a **blocking manager dependency** when all hold:
+
+1. `A.manager_employment_id = V.id` — the manager reference was resolved to **this** period (manager references always point to the exact period valid on the assignment's effective date, `currentEmploymentWhere`);
+2. A belongs to a **valid** period of its own person (non-cancelled, non-voided);
+3. A's range `[A.effective_from, A.effective_to)` **overlaps** V's range — i.e. during that overlap the manager relationship is valid only because V exists.
+
+Consequences:
+
+- Such assignments are listed (person, Employee Code, assignment dates) and Void is blocked until HR corrects them explicitly (Assignment Change for current/future rows, Historical Assignment Correction for past rows). Nothing is rewritten or cleared automatically (C-73).
+- References to **other** periods of the same person (earlier real employment) do **not** block — they do not rely on V.
+- A reference to V with **no** overlap is already inconsistent; it does **not** block, but the preview returns it as a **warning** and the integrity scan reports it (`manager_not_employed_on_date`).
+- Past references within V's dates **do** block (history would otherwise show a manager who never existed). Because V is effective and often recent, these are expected to be rare.
+
+## 5. Event and history semantics
+
+- All existing events stay (`start`, `end`, `end_reversed`, …). A new event **`employment_voided`** is added; free-text reason stored on the event, never in the generic history.
+- **`recorded_at`** = when HR performed Void.
+- **`effective_date`** (the column is mandatory) = **the period's `start_date`**. Justification: Void has no business-effective date of its own — it declares the period void *from its beginning* (ab initio). Using today would invent a date implying the period was valid until today; using the start date matches the existing conventions where an event that negates a timeline point carries that point's date (`cancel_planned_start` = planned start, C-71; `end_reversed` = reversed End's date, C-59).
+- **Presentation:** because `employment_voided` is the **disposition of the whole period**, the history lists it **after all other events of that period**, regardless of its effective date; all other events keep the existing order (effective date, then recorded time). Example:
+  - Start of employment — 10 Oct 2026
+  - End of employment — 31 Oct 2026 · Voluntary Resignation *(Current end at the time)*
+  - Employment period voided — entered in error
+- Period card: **Voided** badge (not a lifecycle badge) and the note "This period was recorded in error and voided. It is kept for traceability and has no operational effect." Internal End badges (C-80) are not shown as "Current end" once the period is voided.
 
 ## 6. Recommended schema (forward migration, not written yet)
 
 - `employment.voided_at timestamptz NULL` — operational marker (recording time). Actor and reason live in the event and audit (as for `cancelled_at`).
-- `CHECK (NOT (cancelled_at IS NOT NULL AND voided_at IS NOT NULL))` — one disposition at most.
-- `employment_event.event_type` CHECK adds `employment_voided`; partial unique index: at most one `employment_voided` event per period; C-52 metadata columns stay null for it (existing CHECKs already enforce this for non-`end` events).
-- Recreate `employment_no_overlap_ex` and `employment_work_email_period_ex` with `... AND voided_at IS NULL` (non-destructive; existing data has `voided_at` null).
-- Terminal trigger: extend `employment_cancelled_is_terminal` (or add `employment_voided_is_terminal`) so a voided period's marker, dates, Employee Type, Work Email and person can never change.
-- Lifecycle trigger: reject inserting `end` / `end_reversed` events on a voided period; the immutability trigger (C-53) already covers the new event's columns.
-- Application: `queries.ts` `OPERATIONAL` becomes `{ cancelledAt: null, voidedAt: null }`; `loadWritableEmployment` rejects voided periods (`409 EMPLOYMENT_PERIOD_READ_ONLY`, message "voided"); the query-boundary contract test also covers `voidedAt`; `historyFlags` adds `voided_at`.
-- Application role grants: unchanged (UPDATE on `employment` already exists; the marker is written only through the shared module, as `markEmploymentCancelled` is).
+- `CHECK (cancelled_at IS NULL OR voided_at IS NULL)` — a period cannot be both cancelled and voided.
+- `employment_event.event_type` CHECK adds `employment_voided`; partial unique index: one `employment_voided` event per period. Existing CHECKs already keep C-52 metadata null on non-`end` events.
+- Terminal rule: extend the terminal trigger so that once `voided_at` is set it can never change and the period's dates, Employee Type, Work Email and person can never change (same rule as cancelled).
+- Event insert rule (extend `employment_event_lifecycle_rules`): on a voided period no further events may be inserted except its single `employment_voided` event, which requires `voided_at` to be set in the same transaction (marker first, then event).
+- Application: the cancellation marker and the void marker are written only through the shared query module (`markEmploymentCancelled`, new `markEmploymentVoided`); the query-boundary contract test covers both fields.
 
-## 7. Lifecycle / history behaviour
+## 7. Operational query and constraint impact
 
-- The `start` event is **kept**. A new `employment_voided` event is added with `effective_date = start_date` (the period is void from its start — same convention as `cancel_planned_start`, C-71) and `recorded_at` = when HR voided it; reason on the event, never exposed in the generic history.
-- History shows the period with a **Voided** badge and, ordered by effective date then recorded time:
-  - Start of employment — 10 Oct 2026
-  - Employment period voided — 10 Oct 2026 (entered in error)
-- Period note: "This period was recorded by mistake and voided. It is kept for traceability and has no operational effect."
-- Any reversed End pairs on the period stay visible as they are (C-80 presentation).
+| Area | Change |
+|---|---|
+| Shared abstraction | `OPERATIONAL` becomes `{ cancelledAt: null, voidedAt: null }` (= `cancelled_at IS NULL AND voided_at IS NULL`); `operationalEmploymentWhere`, `currentEmploymentWhere`, `futurePlannedEmploymentWhere`, `operationalPeriods` follow automatically. No ad-hoc predicates elsewhere (contract test). |
+| Write guard | `loadWritableEmployment` rejects voided periods (`409 EMPLOYMENT_PERIOD_READ_ONLY`, message mentions *voided*); every S4 write path already uses it |
+| Employment overlap exclusion | Recreate `employment_no_overlap_ex` with `WHERE (cancelled_at IS NULL AND voided_at IS NULL)` — a voided period no longer blocks a correct replacement |
+| Work Email availability | Recreate `employment_work_email_period_ex` with `WHERE (work_email IS NOT NULL AND cancelled_at IS NULL AND voided_at IS NULL)` |
+| Status / representative period / completeness / list display and filter / manager resolution / current & future employment | Via the shared abstraction: voided periods never count |
+| Rehire latest-period rule, Add Initial Employment eligibility, Relationship Change latest rule, Cancel Planned latest rule, Reverse End `LATER_PERIOD_EXISTS` | Via the shared abstraction: voided periods are ignored — e.g. after voiding an erroneous Rehire, Reverse End on the previous period is no longer blocked by it |
+| History | Includes voided periods, flagged (`voided_at`), like cancelled ones |
+| Integrity scan | New checks: void marker without event / event without marker; cancelled and voided; voided period referenced by an overlapping valid assignment as manager; events inserted after void |
 
-## 8. Status semantics
+## 8. Eligibility preview contract
 
-- **Voided is a record disposition, not an Employment Status** (exactly like Cancelled, C-16 / C-70). Status codes stay `no_employment` / `not_started` / `active` / `ended`.
-- A voided period has `period_lifecycle = null`, never counts as Active, Ended or Pre-start, never contributes to the person's computed status, representative period, list department/filter (C-76), completeness (C-78), current/future employment or manager resolution.
-- A person whose only periods are voided and/or cancelled is *No Employment Record*.
+`GET /api/v1/core-hr/employments/{id}/void-eligibility` — operation `getVoidEligibility`, permission `employment.correct` (HR_ADMIN; it lists other employees' assignments). Read-only; evaluated as of today's business date.
 
-## 9. Assignment and Work Email behaviour
+```json
+{
+  "employment_id": "uuid",
+  "evaluated_revision": 7,
+  "as_of": "2026-10-10",
+  "eligible": false,
+  "period": { "start_date": "2026-10-10", "end_date": null, "employee_type": { "code": "EMPLOYEE", "name": "Employee" }, "period_lifecycle": "active" },
+  "blockers": [
+    {
+      "code": "MANAGER_DEPENDENCY",
+      "message": "Other employees' assignments use this period as their manager. Correct them first.",
+      "references": [{ "person_id": "uuid", "employee_code": "ES0042", "full_name": "…", "assignment_id": "uuid", "effective_from": "2026-10-12", "effective_to": null }]
+    }
+  ],
+  "warnings": [{ "code": "MANAGER_REFERENCE_WITHOUT_OVERLAP", "message": "…", "references": [] }],
+  "affected_internal_records": {
+    "assignments": 2,
+    "lifecycle_events": [{ "event_type": "start", "effective_date": "2026-10-10" }],
+    "has_active_end_event": false,
+    "work_email": "x@example.test",
+    "planned_end_date": null
+  },
+  "consequences": ["NO_OPERATIONAL_EFFECT", "WORK_EMAIL_RELEASED", "PERSON_HAS_NO_VALID_EMPLOYMENT", "VOID_IS_PERMANENT"]
+}
+```
 
-- **Assignments** of a voided period are kept unchanged (no delete, no void flag, no move, no copy). They become non-operational through the period disposition. A later correct period gets assignments only through the approved workflows (Add Initial Assignment, Relationship Change initial assignment).
-- **Work Email** value is kept for history; the reservation is released by adding `voided_at IS NULL` to `employment_work_email_period_ex` (a new forward migration is required — the current predicate only checks `cancelled_at`). The address can then be used by a valid period under the normal date-range rule.
-- Account deprovisioning stays out of scope (C-36).
+- `consequences` are stable codes the UI translates (e.g. `PERSON_HAS_NO_VALID_EMPLOYMENT` when no other valid period remains; `PREVIOUS_PERIOD_UNCHANGED` for a Rehire, with the hint that a wrong previous End needs a separate Reverse End).
+- The preview is informational only. **The POST never trusts it**; it re-evaluates everything in its transaction. `evaluated_revision` lets the UI send `expected_revision` so a change in between yields `REVISION_CONFLICT`.
 
-## 10. API concept
+## 9. POST Void concept
 
-`POST /api/v1/core-hr/employments/{id}/void` — operation `createVoidEmployment`.
+`POST /api/v1/core-hr/employments/{id}/void` — operation `createVoidEmployment`, permission `employment.correct`, body `{ expected_revision, reason }`, header `Idempotency-Key`. Response `201` with the employee detail.
 
-- Body: `expected_revision`, `reason` (1–1000, mandatory). Header: `Idempotency-Key`. Permission `employment.correct`.
-- Errors (stable codes): `404`; `409 EMPLOYMENT_PERIOD_READ_ONLY` (already cancelled or voided); `422 PERIOD_NOT_EFFECTIVE` (start after today → use Cancel Planned Period); `409 LATER_PERIOD_EXISTS`; `422 RELATIONSHIP_CHANGE_SUCCESSOR` (→ PV-24); `422 ACTIVE_END_EVENT_EXISTS` (→ Reverse End first); `422 MANAGER_REFERENCES_EXIST` (details list the assignments); `422 ASSIGNMENT_HISTORY_EXISTS` (only if **[HR Q5]** confirms blocking); `422 REASON_REQUIRED`; `409 REVISION_CONFLICT`; `409 IDEMPOTENCY_KEY_REUSED`.
-- Response: `201` with the employee detail (the period shows `voided_at`, `period_lifecycle: null`).
-- **Dependency extension point:** a small list of dependency checks evaluated inside the transaction (Phase 1: later periods, Relationship Change successor, Active End Event, manager references, assignment history); future modules (Payroll, Leave, Contracts) add their own checks instead of changing this action.
-- Optional read-only preview (`GET /employments/{id}/void-preview`) returning the blocking dependencies — **[HR Q11]**; the UI can also derive most of it from the detail response.
+One transaction, in this order:
 
-## 11. UI concept
+1. claim the Idempotency-Key (C-34);
+2. load the period through the write guard (404 / 409 read-only);
+3. bump `person.revision` with `expected_revision` (locks the person; serialises with any other action on the person);
+4. check effective (`start_date <= today`, else `PERIOD_NOT_EFFECTIVE`);
+5. evaluate every dependency check (§3.D); any blocker → 422 (or 409 for `LATER_PERIOD_EXISTS`, consistent with existing usage) with the same codes and references as the preview;
+6. set `voided_at` (shared module, conditional on still being non-cancelled/non-voided);
+7. insert `employment_voided` (effective_date = start_date, reason, actor);
+8. write audit;
+9. commit.
 
-- **Void Employment Period** shown only to HR_ADMIN on an effective, non-cancelled, non-voided, latest period (hidden for HR_EDITOR; server enforces regardless).
-- Confirmation screen: period dates, Employee Type, Work Email, assignment summary, lifecycle events; the consequence in plain words ("The period will be kept in history and marked Voided. It will have no effect: no status, no assignment, no manager, no Work Email reservation."); blocking dependencies listed with the action to take (Reverse End Employment first; correct the assignments that use this person as manager; a Relationship Change is undone through PV-24); mandatory reason; explicit warning that **Void cannot be undone in Phase 1**.
-- After voiding a Rehire whose previous End was also wrong, the page offers guidance (not automation): "If the previous End Employment was also recorded only to enable this Rehire, review whether Reverse End Employment is required."
-- History: *Voided* badge and the event line in §7. Future-dated periods keep the existing Cancel Planned Period action.
+Error codes: `404`, `409 EMPLOYMENT_PERIOD_READ_ONLY`, `422 PERIOD_NOT_EFFECTIVE`, `409 LATER_PERIOD_EXISTS`, `422 RELATIONSHIP_CHANGE_SUCCESSOR`, `422 MANAGER_DEPENDENCY`, future module codes, `422 REASON_REQUIRED`, `409 REVISION_CONFLICT`, `409 IDEMPOTENCY_KEY_REUSED`.
 
-## 12. Audit
+UI concept: HR_ADMIN-only "Void Employment Period" on an eligible period → confirmation screen fed by the preview (definition from §1, internal records, consequences, blockers with the action to take, "Void cannot be undone"), mandatory reason → POST. If the POST returns a blocker that appeared after the preview, the screen shows it.
 
-- One audit record `employment.void` on the employment: actor, timestamp, request ID, mandatory reason, `changedFields: ["employment.voided", "employment_event.employment_voided"]`. No structural old/new values (`voided_at` is not added to the C-24 allow-list, same as `cancelled_at`, C-71).
-- Audit is never used as rollback data; there is no rollback.
+## 10. Audit and concurrency rules
 
-## 13. Concurrency / idempotency
+- HR_ADMIN, `employment.correct`, mandatory reason (1–1000 chars, trimmed), actor, request ID, recorded timestamp — on the event and in one audit record `employment.void` (`changedFields: ["employment.voided", "employment_event.employment_voided"]`). No structural old/new values (`voided_at` stays outside the C-24 allow-list, like `cancelled_at`). No personal values.
+- Audit is evidence only; there is no rollback and no Unvoid.
+- Idempotency: same key + same payload → one execution, replayed result; different payload → `IDEMPOTENCY_KEY_REUSED`; different key + stale revision → `REVISION_CONFLICT`.
+- DB safety nets: disposition CHECK, one void event per period, terminal trigger, event-insert rule (row lock on the period, as for End events).
 
-- Same command runner as all S4 actions (C-34): key claimed first in the transaction; `expected_revision`; one `person.revision` bump (M-11); every dependency check runs **after** the revision lock, inside the same transaction.
-- DB safety nets: one `employment_voided` event per period (unique index); terminal trigger; disposition CHECK; lifecycle trigger locks the employment row so a concurrent End/End Reversed insert cannot interleave.
-- Concurrent Void + Rehire / Relationship Change / End on the same person are serialised by the person revision; the loser receives `REVISION_CONFLICT`.
+## 11. Migration impact
 
-## 14. Migration impact
+One **forward, non-destructive** migration — no data transformation (existing rows keep `voided_at = NULL`):
 
-- One **forward, non-destructive** migration (no data transformation; existing rows keep `voided_at = NULL`): new column, disposition CHECK, event type, unique index, two exclusion constraints recreated with the extra predicate, trigger extensions. Verified from zero on `hrms_test`, then applied to local `hrms_dev` under the existing guard; staging/production only with explicit approval.
-- Integrity scan: new checks — voided period appearing operationally (e.g. referenced as a current/future manager), voided without event / event without marker, voided + cancelled, voided with Active End Event.
-- No change to committed migrations.
+- add `employment.voided_at`, disposition CHECK;
+- extend the event-type CHECK, add the one-void-per-period index;
+- recreate the two exclusion constraints with the extra predicate;
+- extend the terminal trigger and the event insert rule.
 
-## 15. Tests required
+Verified from zero on `hrms_test` (guarded), applied to local `hrms_dev` only under the existing guard. Staging/production require explicit approval (CLAUDE.md). No committed migration is edited. OpenAPI gains two operations and the history `voided_at` flag / `employment_voided` event type (additive).
 
-- Eligibility: effective Initial Employment, effective Rehire, legacy period → allowed; future period → `PERIOD_NOT_EFFECTIVE`; cancelled / voided → read-only; not latest → `LATER_PERIOD_EXISTS`; Relationship Change successor → `RELATIONSHIP_CHANGE_SUCCESSOR`.
-- Permissions: HR_ADMIN allowed; HR_EDITOR / API_DOCS_READER / anonymous denied; reason mandatory.
-- Blocking: Active End Event, manager references (listed), assignment history (if confirmed), future dependency hook.
-- Effect: marker + event set atomically; start event kept; status/representative/list/filter/completeness/manager resolution exclude the period; person with only voided periods → *No Employment Record*; Add Initial Employment Period allowed again; Rehire after voiding uses the previous valid period; Work Email reusable; overlap constraint no longer counts the voided period.
-- Rehire scenario: void Rehire → previous period and its End unchanged → Reverse End Employment on the previous period now succeeds (S4.7R ignores the voided period) when the End was also wrong.
-- History: Voided badge, event label/order, no free-text reason; employee code unchanged.
-- Concurrency/idempotency: same key replay, key reuse, stale revision, concurrent Void vs End/Rehire, rollback leaves nothing partial.
-- DB: constraints/trigger/grants from zero; terminal immutability; integrity scan detects seeded violations; clean baseline stays 0/0.
+## 12. Required tests
 
-## 16. Relationship to PV-24
+- **Eligibility:** effective Initial Employment, effective Rehire, legacy period, profile-created period → eligible; with Assignment Changes, corrections, Work Email changes, planned end, Active End Event, End + End Reversed → still eligible; future period → `PERIOD_NOT_EFFECTIVE`; cancelled/voided → read-only; later valid period → `LATER_PERIOD_EXISTS`; later **cancelled or voided** period → still eligible; Relationship Change successor → `RELATIONSHIP_CHANGE_SUCCESSOR`; Relationship Change predecessor with valid successor → `LATER_PERIOD_EXISTS`.
+- **Manager semantics:** overlapping reference from another valid period → blocked and listed; reference to another period of the same person → not blocked; reference from a cancelled/voided period → not blocked; non-overlapping reference → warning only; after HR corrects the reference → eligible.
+- **Preview vs POST:** preview and POST return the same blockers; a blocker created after the preview is caught by the POST; preview is read-only (no revision bump, no audit).
+- **Effect:** marker + event atomic; all internal records unchanged; status/representative/list/filter/completeness/manager resolution exclude the period; person with no valid period → `no_employment`, same Employee Code; Add Initial Employment Period allowed again; Work Email reusable; overlap no longer counted; voided period read-only for every write action.
+- **Rehire:** void erroneous Rehire → previous period and its End unchanged → Reverse End Employment on the previous period then succeeds when HR confirms it was also wrong.
+- **History:** event kept order + `employment_voided` listed last; Voided badge; no free-text reason exposed; End badges not shown as current on a voided period.
+- **Permissions:** HR_ADMIN only for preview and POST; HR_EDITOR / API_DOCS_READER / anonymous denied; reason mandatory.
+- **Concurrency/idempotency:** same-key replay, key reuse, stale revision, concurrent Void vs End/Rehire/Relationship Change, rollback leaves nothing partial.
+- **DB:** constraints, CHECK, index and triggers from zero; immutability after void; integrity scan detects seeded violations; clean baseline stays 0/0; extension point fails closed.
 
-**Keep PV-24 separate.** Voiding a Relationship Change successor alone would leave the predecessor ended with End Reason `RELATIONSHIP_CHANGE` and no successor — an incoherent history that Void must not create. Undoing a Relationship Change requires two coordinated, exact steps (void the successor **and** reverse the predecessor's End with all S4.7R validations); that composite is precisely *Reverse Relationship Change* (PV-24). PV-25 therefore **blocks** successors with `RELATIONSHIP_CHANGE_SUCCESSOR`. A future PV-24 design can reuse the Void primitive plus the existing Reverse End primitive in one atomic action.
+## 13. PV-24 boundary
 
-Rehire is different: a Rehire period is independent of the previous period (the previous End is its own action). Voiding the Rehire leaves the previous period untouched; if that End was also wrong, HR runs Reverse End Employment as a separate explicit step (§11).
+- PV-25 voids **one** erroneous period whose dependencies are internal. A Relationship Change touches **two** periods (End with `RELATIONSHIP_CHANGE` on the predecessor + Start of the successor). Voiding the successor alone would leave the predecessor ended for a transition that never happened — so the successor is **blocked** (`RELATIONSHIP_CHANGE_SUCCESSOR`), and the predecessor is blocked while the successor is valid.
+- Undoing an effective Relationship Change remains **PV-24** (coordinated workflow). PV-24 may later combine this Void primitive with the existing Reverse End primitive atomically; it may also introduce an explicit successor link if detection from lifecycle data is not enough.
+- Rehire is not a coordinated change: a Rehire period can be voided on its own; a wrong previous End is reversed separately, afterwards (§12).
 
-Initial Employment: after voiding, the same Person and Employee Code remain (the code registry is insert-only, M-02); the person returns to *No Employment Record* and can receive a correct Add Initial Employment Period. If the **whole profile** was created for the wrong or a duplicate person, that is a different problem (person merge / duplicate profile) and is out of scope **[HR Q10]**.
+## 14. Initial Employment and Unvoid
 
-## 17. Unresolved business questions (HR approval required)
+- Voiding an effective Initial Employment with no other valid period: the Person and Employee Code remain (the code registry is insert-only, M-02); the Person is operationally profile-only (`no_employment`, shown as "No Employment Record" — an existing value, not a new status). A later correct period is added with Add Initial Employment Period; no new Person or Employee Code is created.
+- **No Unvoid in Phase 1.** If a Void itself was wrong, the recovery is to create a new legitimate period through the approved workflow (Add Initial Employment Period, or Rehire when a previous ended period exists; a past start date requires a reason), keeping the erroneous Void in the history. Data of the voided period (assignments, Work Email) is not copied and must be re-entered. This limitation is shown on the confirmation screen.
+
+## 15. Remaining open questions
 
 | # | Question | Recommendation |
 |---|---|---|
-| Q1 | Business name: "Void Employment Period" / "Mark as entered in error"? | "Void Employment Period", history label "Employment period voided — entered in error" |
-| Q2 | Void also for future periods, or keep Cancel Planned Period for them? | Effective periods only; future → Cancel Planned Period |
-| Q3 | Time limit (same day, N days) or dependency validation only? | No fixed limit; strict dependency validation |
-| Q4 | Only the latest non-cancelled, non-voided period? | Yes in Phase 1 |
-| Q5 | Block when the period has Assignment Changes / corrections beyond the initial assignment? | Block (the period was operated on as real); revisit after real usage |
-| Q6 | Allow when the period has fully reversed End history (End + End Reversed)? | Allow |
-| Q7 | Allow for legacy/imported periods without a start event? | Allow |
-| Q8 | HR_ADMIN only, or a same-day HR_EDITOR exception? | HR_ADMIN only |
-| Q9 | Manager references: block on any reference (past and current/future), or only current/future? | Block on any reference; HR corrects them first |
-| Q10 | Wrong / duplicate whole Person profile: separate backlog item? | Yes, new item (person merge / duplicate profile), not part of PV-25 |
-| Q11 | Is a read-only "void preview" needed, or is the confirmation screen enough? | Confirmation screen with the server re-validating; preview optional |
-| Q12 | Is an **Unvoid** ever needed? | No in Phase 1. Recovery from a wrong void: re-enter the period with Add Initial Employment Period or Rehire (reason required for past dates); both records stay visible |
-| Q13 | Should voided periods appear in the default history view or be collapsed? | Shown with the *Voided* badge (traceability) |
-| Q14 | Must Void notify other systems (Entra/IT, Leave tool) in Phase 1? | No; future integration item |
+| Q1 | History placement: list `employment_voided` **after all other events** of the period (as in the HR example) rather than by its effective date (= start date)? | Yes — it is the disposition of the whole period |
+| Q2 | A Relationship Change **predecessor whose successor was cancelled** (Relationship Change never took effect): may it be voided, with its `RELATIONSHIP_CHANGE` End kept as internal history? | Yes — no valid cross-period dependency remains |
+| Q3 | Manager reference to V **without** date overlap (already inconsistent): warning only? | Yes — warning in the preview and the integrity scan, not a blocker |
+| Q4 | A wrong or duplicate **whole Person profile**: separate backlog item (merge/duplicate profile)? | Yes — new item, not part of PV-25 |
 
-Approval of this design is required before any migration, API or UI work. Approval of the design is not approval to run migrations outside the guarded local databases.
+Implementation (migration, API, UI, tests) starts only after explicit approval of this revision. Approval of the design is not approval to run migrations outside the guarded local databases.
