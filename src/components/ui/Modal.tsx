@@ -8,7 +8,8 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 
 /**
  * Focused workflow dialog: title → description → body → footer (Cancel / primary). Keyboard-safe: focus moves into the
- * dialog, Tab stays inside, Escape closes (unless `busy`), focus returns to the opener on close.
+ * dialog, Tab stays inside, Escape closes (unless `busy`), focus returns to the opener on close, and the page behind
+ * does not scroll. `variant="drawer"` (UI-9) shows the same dialog as a right-side panel for longer workflows.
  */
 export function Modal({
   title,
@@ -18,6 +19,7 @@ export function Modal({
   onClose,
   busy = false,
   wide = false,
+  variant = "dialog",
 }: {
   title: ReactNode;
   description?: ReactNode;
@@ -26,6 +28,7 @@ export function Modal({
   onClose: () => void;
   busy?: boolean;
   wide?: boolean;
+  variant?: "dialog" | "drawer";
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -41,8 +44,12 @@ export function Modal({
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     const dialog = ref.current;
-    const first = dialog?.querySelector<HTMLElement>(`.modal-body ${FOCUSABLE}`) ?? dialog?.querySelector<HTMLElement>(FOCUSABLE);
+    // Scope every selector alternative to the body, so the first field (not the × button) receives focus.
+    const inBody = FOCUSABLE.split(",").map((sel) => `.modal-body ${sel.trim()}`).join(", ");
+    const first = dialog?.querySelector<HTMLElement>(inBody) ?? dialog?.querySelector<HTMLElement>(FOCUSABLE);
     first?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (!dialog) return;
       if (e.key === "Escape" && !busyRef.current) {
@@ -65,15 +72,16 @@ export function Modal({
     document.addEventListener("keydown", onKey, true);
     return () => {
       document.removeEventListener("keydown", onKey, true);
+      document.body.style.overflow = previousOverflow;
       opener?.focus?.();
     };
   }, []);
 
   return (
-    <div className="modal-overlay">
+    <div className={variant === "drawer" ? "modal-overlay drawer-overlay" : "modal-overlay"}>
       <div
         ref={ref}
-        className={wide ? "modal wide" : "modal"}
+        className={["modal", wide ? "wide" : "", variant === "drawer" ? "drawer" : ""].filter(Boolean).join(" ")}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import { todayInVietnam } from "@/lib/dates";
 import { useAssignmentOptions, type Option } from "./useAssignmentOptions";
 import { useFormOpen, type Launched } from "./launch";
 
@@ -37,7 +38,8 @@ export function AssignmentChangeForm<T>({
 }) {
   const [open, setOpen] = useFormOpen(launched);
   const [form, setForm] = useState({
-    effective_date: minDate ?? new Date().toISOString().slice(0, 10),
+    // Default to today's business date in Vietnam (a UTC date could silently propose yesterday).
+    effective_date: minDate ?? todayInVietnam(),
     department_id: current?.department.id ?? "",
     job_title_id: current?.job_title.id ?? "",
     job_level_id: current?.job_level?.id ?? "",

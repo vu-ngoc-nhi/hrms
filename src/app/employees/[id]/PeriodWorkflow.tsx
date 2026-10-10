@@ -13,8 +13,8 @@ import { VoidPeriodForm } from "./VoidPeriodForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
 import { operationalPeriods, type ActionId, type Detail, type Period } from "./detailModel";
 
-// The existing workflow forms of one Employment Period, opened in "launched" mode from the page header (UI-3) or from
-// the period's own card (UI-5). Props are exactly those the inline forms used before; form content is unchanged.
+// The existing workflow forms of one Employment Period, opened in "launched" mode inside the single workflow surface
+// (UI-9 Drawer / Modal). Props are exactly those the inline forms used before; form content is unchanged.
 
 export const periodHeading = (d: Detail, e: Period) =>
   t("detail.periodHeading", {
@@ -43,6 +43,8 @@ export function actionLabel(a: ActionId, plannedRehire = false): string {
     cancel_planned: t("cancelPlanned.open"),
     reverse_end: t("reverseEnd.open"),
     void_period: t("voidPeriod.open"),
+    edit_personal: t("personal.edit"),
+    correct_assignment: t("detail.actionLabel.correctAssignment"),
   }[a];
 }
 
@@ -112,20 +114,17 @@ export function PeriodWorkflow({
       case "correct_work_email":
       case "clear_work_email":
         return (
-          <section className="card">
-            <h2>{actionLabel(action)}</h2>
-            <WorkEmailEditor<Detail>
-              employmentId={tp.id}
-              periodLabel={periodHeading(d, tp)}
-              current={tp.work_email}
-              ended={tp.period_lifecycle === "ended"}
-              canEdit
-              canClear={can("employment.correct")}
-              revision={d.revision}
-              onSaved={(u) => onSaved(u)}
-              launched={{ onClose, mode: action === "clear_work_email" ? "clear" : "edit" }}
-            />
-          </section>
+          <WorkEmailEditor<Detail>
+            employmentId={tp.id}
+            periodLabel={periodHeading(d, tp)}
+            current={tp.work_email}
+            ended={tp.period_lifecycle === "ended"}
+            canEdit
+            canClear={can("employment.correct")}
+            revision={d.revision}
+            onSaved={(u) => onSaved(u)}
+            launched={{ onClose, mode: action === "clear_work_email" ? "clear" : "edit" }}
+          />
         );
       case "end_employment":
         return (

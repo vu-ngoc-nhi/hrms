@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t, tMaybe } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import { addDays } from "@/lib/dates";
 import { useFormOpen, type Launched } from "./launch";
 
 type ActiveEnd = {
@@ -101,7 +102,8 @@ export function ReverseEndForm<T>({
             {activeEnd.closed_assignment.previous_effective_to
               ? t("reverseEnd.impactAssignment", {
                   from: closed ? formatDate(closed.effective_from) : "—",
-                  to: formatDate(activeEnd.closed_assignment.previous_effective_to),
+                  // The stored end is exclusive; HR sees the last day the assignment is in effect.
+                  to: formatDate(addDays(activeEnd.closed_assignment.previous_effective_to, -1)),
                 })
               : t("reverseEnd.impactAssignmentOpen", { from: closed ? formatDate(closed.effective_from) : "—" })}
           </li>

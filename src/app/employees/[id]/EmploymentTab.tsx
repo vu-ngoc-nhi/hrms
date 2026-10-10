@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { ActionMenu, Button, EmptyState } from "@/components/ui";
 import { formatDate, t, tMaybe } from "@/i18n";
 import { addDays } from "@/lib/dates";
-import { PeriodWorkflow, actionLabel, groupedMenu } from "./PeriodWorkflow";
+import { actionLabel, groupedMenu } from "./PeriodWorkflow";
 import type { TabContext } from "./tabContext";
-import { isDisposed, operationalPeriods, periodActions, type ActionId } from "./detailModel";
+import { isDisposed, operationalPeriods, periodCardActions, type ActionId } from "./detailModel";
 import { employmentSections, type LifecycleLine, type PeriodView } from "./employmentModel";
 
 // UI-5 Employment tab: Current → Upcoming → Employment History, one card per Employment Period with explicit text
 // labels (Current / Upcoming / Historical / Cancelled / Voided). Cancelled and Voided are record dispositions, shown
-// muted with their recorded dates and never with an Employment Status. Each period carries its own actions: daily
-// actions as buttons, corrections under "Correct record", Void under Advanced. Business wording only.
+// muted with their recorded dates and never with an Employment Status. Each period carries its own actions (UI-9, D-UI-13):
+// business actions as buttons, corrections under "Correct record", Void under Advanced; they open the single workflow
+// surface. Business wording only.
 
 const endReason = (r: { code: string; label: string } | null) => (r ? tMaybe(`endReason.${r.code}`) ?? r.label : null);
 
@@ -42,19 +42,11 @@ function lineText(l: LifecycleLine): string {
 }
 
 function PeriodCard({ v, ctx }: { v: PeriodView; ctx: TabContext }) {
-  const { d, can, onSaved } = ctx;
+  const { d, can, targetId } = ctx;
   const p = v.period;
-  const [launched, setLaunched] = useState<{ action: ActionId; n: number } | null>(null);
-  const workflowRef = useRef<HTMLDivElement>(null);
-  const actions = periodActions(d, p, can);
-  const launch = (action: ActionId) => setLaunched((l) => ({ action, n: (l?.n ?? 0) + 1 }));
-
-  useEffect(() => {
-    if (!launched || !workflowRef.current) return;
-    workflowRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    const field = workflowRef.current.querySelector<HTMLElement>("input, select, textarea");
-    (field ?? workflowRef.current).focus({ preventScroll: true });
-  }, [launched]);
+  // UI-9: this period's own actions (the representative period's assignment action stays in the header).
+  const actions = periodCardActions(d, p, can, targetId);
+  const launch = (action: ActionId) => ctx.launch(action, { periodId: p.id });
 
   // C-72: an End for Relationship Change whose successor was cancelled — guidance only (reversing the End stays an explicit employment.correct action).
   const realPeriods = operationalPeriods(d);
@@ -66,7 +58,7 @@ function PeriodCard({ v, ctx }: { v: PeriodView; ctx: TabContext }) {
 
   const title = t("employment.periodTitle", { n: v.number });
   const correctionMenu = groupedMenu({ daily: [], correction: actions.correction, advanced: actions.advanced }, launch, undefined, false);
-  const hasActions = actions.daily.length > 0 || actions.initialAssignment || correctionMenu.length > 0;
+  const hasActions = actions.daily.length > 0 || correctionMenu.length > 0;
   const recorded = v.disposition !== null;
 
   return (
@@ -145,11 +137,6 @@ function PeriodCard({ v, ctx }: { v: PeriodView; ctx: TabContext }) {
 
       {hasActions && (
         <div className="period-actions" role="group" aria-label={t("employment.actionsFor", { n: v.number })}>
-          {actions.initialAssignment && (
-            <Button size="small" onClick={() => launch("initial_assignment")}>
-              {actionLabel("initial_assignment")}
-            </Button>
-          )}
           {actions.daily.map((a) => (
             <Button key={a} size="small" onClick={() => launch(a)}>
               {actionLabel(a)}
@@ -159,22 +146,6 @@ function PeriodCard({ v, ctx }: { v: PeriodView; ctx: TabContext }) {
         </div>
       )}
 
-      {launched && (
-        <div ref={workflowRef} className="period-workflow" tabIndex={-1} role="region" aria-label={actionLabel(launched.action)}>
-          <PeriodWorkflow
-            key={launched.n}
-            action={launched.action}
-            period={p}
-            d={d}
-            can={can}
-            onSaved={(u, message) => {
-              setLaunched(null);
-              onSaved(u, message);
-            }}
-            onClose={() => setLaunched(null)}
-          />
-        </div>
-      )}
     </article>
   );
 }

@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Button, EmptyState } from "@/components/ui";
 import { formatDate, t } from "@/i18n";
-import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
-import { PeriodWorkflow, actionLabel } from "./PeriodWorkflow";
 import type { TabContext } from "./tabContext";
 import { assignmentSections, type AssignmentView, type DateWording, type EmptyPeriod } from "./assignmentModel";
 import { periodEligibility, type Detail, type Period } from "./detailModel";
@@ -13,22 +11,8 @@ import { periodEligibility, type Detail, type Period } from "./detailModel";
 // UI-6 Assignment tab: Current → Upcoming → Assignment History (+ records of cancelled/voided periods, never
 // operational). Business date wording only: "Effective since", "Takes effect on", "Effective from … / Replaced on …"
 // — an exclusive end boundary is never shown next to the next row's start. Change Assignment for the representative
-// period stays the red header action (D-UI-13); row corrections stay on their row; nothing here is primary red.
-
-type Workflow = { kind: "correct" | "change" | "initial"; n: number };
-
-function useInlineWorkflow() {
-  const [open, setOpen] = useState<Workflow | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open || !ref.current) return;
-    ref.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    const field = ref.current.querySelector<HTMLElement>("input, select, textarea");
-    (field ?? ref.current).focus({ preventScroll: true });
-  }, [open]);
-  const launch = (kind: Workflow["kind"]) => setOpen((o) => ({ kind, n: (o?.n ?? 0) + 1 }));
-  return { open, ref, launch, close: () => setOpen(null) };
-}
+// period stays the red header action and other periods' assignment actions are on their Employment Period card
+// (D-UI-13, UI-9); each row owns only its correction; nothing here is primary red.
 
 const periodContext = (d: Detail, p: Period, n: number) =>
   t("assignmentTab.periodContext", { n, type: p.employee_type?.name ?? "—", start: formatDate(p.start_date) }) +
@@ -87,17 +71,13 @@ function DateRows({ w }: { w: DateWording }) {
 }
 
 function AssignmentCard({ v, ctx, showPeriod }: { v: AssignmentView; ctx: TabContext; showPeriod: boolean }) {
-  const { d, can, targetId, onSaved } = ctx;
-  const { open: wfOpen, ref: wfRef, launch, close } = useInlineWorkflow();
+  const { d, can } = ctx;
   const a = v.values;
   const el = periodEligibility(d, v.period, can);
   // D-UI-14: rows of cancelled / voided periods never get mutation actions (eligibility is already false for them).
+  // UI-9: the row owns only its correction; Change Assignment lives in the header (representative period) or on the
+  // Employment Period card (other periods).
   const canCorrect = v.disposition === null && el.correctAssignmentRows;
-  // D-UI-13: the representative period's Change Assignment is the header's primary action; other operational
-  // periods offer it (secondary) on their latest row, the row a change follows.
-  const canChange = v.disposition === null && v.latestOfPeriod && el.changeAssignment && v.period.id !== targetId;
-  const rows = [...v.period.assignments].sort((x, y) => (x.effective_from < y.effective_from ? -1 : 1));
-  const previous = rows[rows.findIndex((r) => r.id === v.assignment.id) - 1] ?? null;
   const fromDate = formatDate(v.assignment.effective_from);
   const notes: ReactNode[] = [];
   if (v.label === "upcoming") notes.push(t("assignmentTab.notInEffectYet"));
@@ -160,41 +140,16 @@ function AssignmentCard({ v, ctx, showPeriod }: { v: AssignmentView; ctx: TabCon
       )}
       {showPeriod && v.firstOfPeriod && !v.disposition && v.label !== "current" && <p className="period-note">{t("assignmentTab.firstOfPeriod", { n: v.periodNumber })}</p>}
 
-      {(canCorrect || canChange) && (
+      {canCorrect && (
         <div className="period-actions">
-          {canChange && (
-            <Button size="small" onClick={() => launch("change")}>
-              {actionLabel("change_assignment")}
-            </Button>
-          )}
-          {canCorrect && (
-            <Button size="small" variant="ghost" onClick={() => launch("correct")} aria-label={t("assignmentTab.correctFor", { date: fromDate })}>
-              {t("assignmentTab.correct")}
-            </Button>
-          )}
-        </div>
-      )}
-      {wfOpen && (
-        <div ref={wfRef} className="period-workflow" tabIndex={-1} role="region" aria-label={wfOpen.kind === "correct" ? t("assignmentTab.correctFor", { date: fromDate }) : actionLabel("change_assignment")}>
-          {wfOpen.kind === "correct" ? (
-            <AssignmentCorrectionForm<Detail>
-              key={wfOpen.n}
-              row={v.assignment}
-              previous={previous}
-              personId={d.id}
-              revision={d.revision}
-              onSaved={(u) => {
-                close();
-                onSaved(u);
-              }}
-              onClose={close}
-            />
-          ) : (
-            <PeriodWorkflow key={wfOpen.n} action="change_assignment" period={v.period} d={d} can={can} onSaved={(u, m) => {
-                close();
-                onSaved(u, m);
-              }} onClose={close} />
-          )}
+          <Button
+            size="small"
+            variant="ghost"
+            onClick={() => ctx.launch("correct_assignment", { periodId: v.period.id, assignmentId: v.assignment.id })}
+            aria-label={t("assignmentTab.correctFor", { date: fromDate })}
+          >
+            {t("assignmentTab.correct")}
+          </Button>
         </div>
       )}
     </article>
@@ -202,28 +157,16 @@ function AssignmentCard({ v, ctx, showPeriod }: { v: AssignmentView; ctx: TabCon
 }
 
 function EmptyPeriodCard({ e, ctx, showPeriod }: { e: EmptyPeriod; ctx: TabContext; showPeriod: boolean }) {
-  const { d, can, onSaved } = ctx;
-  const { open: wfOpen, ref: wfRef, launch, close } = useInlineWorkflow();
+  const { d, can, targetId } = ctx;
   const el = periodEligibility(d, e.period, can);
+  // D-UI-16 / UI-9: the action has one home — the header for the representative period, the Employment Period card
+  // for any other period. This card only explains where to add it.
+  const guidance = !el.initialAssignment ? null : e.period.id === targetId ? t("assignmentTab.useHeaderAction") : t("assignmentTab.usePeriodAction", { n: e.periodNumber });
   return (
     <article className="card assignment-card empty" aria-label={t("assignmentTab.emptyTitle", { n: e.periodNumber })}>
       {showPeriod && <p className="period-note lead">{periodContext(d, e.period, e.periodNumber)}</p>}
       <p className="assignment-empty">{t("assignmentTab.emptyBody", { n: e.periodNumber })}</p>
-      {el.initialAssignment && (
-        <div className="period-actions">
-          <Button size="small" onClick={() => launch("initial")}>
-            {actionLabel("initial_assignment")}
-          </Button>
-        </div>
-      )}
-      {wfOpen && (
-        <div ref={wfRef} className="period-workflow" tabIndex={-1} role="region" aria-label={actionLabel("initial_assignment")}>
-          <PeriodWorkflow key={wfOpen.n} action="initial_assignment" period={e.period} d={d} can={can} onSaved={(u, m) => {
-                close();
-                onSaved(u, m);
-              }} onClose={close} />
-        </div>
-      )}
+      {guidance && <p className="period-note">{guidance}</p>}
     </article>
   );
 }

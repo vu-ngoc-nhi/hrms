@@ -111,8 +111,7 @@ export default function NewEmployeePage() {
   if (session && !caps.create) return <p className="alert error">{t("form.noPermission")}</p>;
 
   const set = (field: FieldName) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const value = e.target.type === "checkbox" ? (e.target as HTMLInputElement).checked : e.target.value;
-    dispatch({ type: "set", field, value });
+    dispatch({ type: "set", field, value: e.target.value });
     if (errors[field])
       setErrors((e) => {
         const rest = { ...e };
@@ -339,13 +338,7 @@ export default function NewEmployeePage() {
         ],
         hasEmployment(v) && v.department_id && v.job_title_id ? undefined : t("wizard.noAssignmentReview"),
       )}
-      <label className="checkbox-row">
-        <input type="checkbox" checked={v.require_operational_completeness} onChange={set("require_operational_completeness")} disabled={s.saving} />
-        <span>
-          {t("form.requireOperational")}
-          <span className="muted small"> — {t("wizard.requireCompleteHelp")}</span>
-        </span>
-      </label>
+      <p className="muted small">{t("wizard.healthNote")}</p>
       <p className="muted small">{t("wizard.saveNote")}</p>
     </>
   );

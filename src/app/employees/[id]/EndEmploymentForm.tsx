@@ -134,7 +134,7 @@ export function EndEmploymentForm<T>({
           </li>
         )}
         {currentEnd !== null && end === currentEnd && <li>{t("endEmployment.impactSameDate")}</li>}
-        {closing && <li>{t("endEmployment.impactAssignment", { from: formatDate(closing.effective_from), to: formatDate(addDays(end, 1)) })}</li>}
+        {closing && <li>{t("endEmployment.impactAssignment", { from: formatDate(closing.effective_from), to: formatDate(end) })}</li>}
         {!closing && blocking.length === 0 && end && <li>{t("endEmployment.impactNoAssignment")}</li>}
       </ul>
       {later && <p className="alert small">{t("endEmployment.laterNotAllowed")}</p>}

@@ -21,7 +21,6 @@ export type WizardValues = {
   job_title_id: string;
   job_level_id: string;
   manager_person_id: string;
-  require_operational_completeness: boolean;
 };
 export type FieldName = keyof WizardValues;
 
@@ -39,7 +38,6 @@ export const EMPTY_VALUES: WizardValues = {
   job_title_id: "",
   job_level_id: "",
   manager_person_id: "",
-  require_operational_completeness: false,
 };
 
 /** What the wizard may offer, from server capabilities (never role names). */
@@ -48,7 +46,7 @@ export function wizardCapabilities(can: (permission: string) => boolean) {
     create: can("employees.create"),
     /** Gender, Date of Birth, Mobile, Personal Email. */
     writePersonal: can("employees.write_personal"),
-    /** Keep an existing legacy Employee Code instead of an auto-issued one (approved, permission-controlled). */
+    /** Employee Code override instead of an auto-issued code (approved, permission-controlled). */
     setCode: can("employees.set_code"),
   };
 }
@@ -67,7 +65,6 @@ export const FIELD_STEP: Record<FieldName, StepId> = {
   job_title_id: "assignment",
   job_level_id: "assignment",
   manager_person_id: "assignment",
-  require_operational_completeness: "review",
 };
 
 export const hasEmployment = (v: WizardValues) => v.start_date.trim() !== "";
@@ -96,8 +93,8 @@ export function stepErrors(step: StepId, v: WizardValues): Partial<Record<FieldN
 
 /** The single create request. Empty optional values are omitted; nothing is sent the user may not write. */
 export function buildPayload(v: WizardValues, caps: { writePersonal: boolean; setCode: boolean }) {
+  // The API's optional require_operational_completeness flag is not used: incomplete records are a valid outcome.
   const payload: Record<string, unknown> = { full_name: v.full_name.trim() };
-  if (v.require_operational_completeness) payload.require_operational_completeness = true;
   if (caps.setCode && v.employee_code.trim()) payload.employee_code = v.employee_code.trim();
   if (caps.writePersonal) {
     const personal: Record<string, string> = {};
@@ -162,7 +159,7 @@ export const isDirty = (v: WizardValues) => (Object.keys(EMPTY_VALUES) as FieldN
 // ---- Navigation and submission state ----------------------------------------------------------------------------
 export type WizardState = { step: StepId; visited: StepId[]; values: WizardValues; saving: boolean };
 export type WizardAction =
-  | { type: "set"; field: FieldName; value: string | boolean }
+  | { type: "set"; field: FieldName; value: string }
   | { type: "next" }
   | { type: "back" }
   | { type: "goto"; step: StepId }

@@ -203,20 +203,22 @@ describe("Overview — dispositions and no employment record", () => {
   });
 });
 
-describe("Header actions — same eligibility as before UI-3, by capability", () => {
-  it("Active employee, HR_ADMIN: Change Assignment primary; daily, correction and advanced groups", () => {
+describe("Header actions (UI-9): primary assignment action + person-level actions only", () => {
+  const PERIOD_ACTIONS = ["edit_work_email", "end_employment", "relationship_change", "correct_period", "correct_work_email", "clear_work_email", "cancel_planned", "reverse_end", "void_period"];
+  const headerIds = (a: ReturnType<typeof headerActions>) => [...a.daily, ...a.correction, ...a.advanced];
+
+  it("Active employee, HR_ADMIN: Change Assignment primary; More actions has no period actions", () => {
     const a = headerActions(detail([period("2026-01-05", null)]), HR_ADMIN);
     expect(a.primary).toBe("change_assignment");
-    expect(a.daily).toEqual(["edit_work_email", "end_employment", "relationship_change"]);
-    expect(a.correction).toEqual(["correct_personal", "correct_period", "clear_work_email"]);
-    expect(a.advanced).toEqual(["void_period"]);
-  });
-
-  it("HR_EDITOR (no employment.correct): no corrections of the period and no Void", () => {
-    const a = headerActions(detail([period("2026-01-05", null)]), HR_EDITOR);
-    expect(a.primary).toBe("change_assignment");
+    expect(a.daily).toEqual([]);
     expect(a.correction).toEqual(["correct_personal"]);
     expect(a.advanced).toEqual([]);
+    expect(headerIds(a).filter((x) => PERIOD_ACTIONS.includes(x))).toEqual([]);
+  });
+
+  it("HR_EDITOR: the same primary action; Correct Name or Date of Birth stays (employees.update)", () => {
+    const a = headerActions(detail([period("2026-01-05", null)]), HR_EDITOR);
+    expect(a).toMatchObject({ primary: "change_assignment", daily: [], correction: ["correct_personal"], advanced: [] });
   });
 
   it("read-only capability: no actions", () => {
@@ -224,18 +226,17 @@ describe("Header actions — same eligibility as before UI-3, by capability", ()
     expect(a).toMatchObject({ primary: null, daily: [], correction: [], advanced: [] });
   });
 
-  it("Pre-start without assignment: Add Initial Assignment; Cancel Planned Period is a correction", () => {
+  it("Pre-start without assignment: Add Initial Assignment is the primary action (its single home)", () => {
     const a = headerActions(detail([period("2026-11-02", null, { assignments: [] })]), HR_ADMIN);
     expect(a.primary).toBe("initial_assignment");
-    expect(a.correction).toContain("cancel_planned");
-    expect(a.advanced).toEqual([]); // Void only for a started period
+    expect(headerIds(a)).not.toContain("cancel_planned");
   });
 
-  it("Ended employee: Rehire; email change is a correction; no Change Assignment", () => {
+  it("Ended employee: Rehire is a person-level action; no Change Assignment", () => {
     const a = headerActions(detail([period("2025-01-06", "2026-06-30", { active_end_event: endEvent("2026-06-30", "RESIGNATION"), has_active_end_event: true })]), HR_ADMIN);
     expect(a.primary).toBeNull();
     expect(a.daily).toEqual(["rehire"]);
-    expect(a.correction).toEqual(["correct_personal", "correct_period", "correct_work_email", "clear_work_email", "reverse_end"]);
+    expect(a.correction).toEqual(["correct_personal"]);
   });
 
   it("No operational period: Add Initial Employment Period only", () => {
@@ -249,9 +250,7 @@ describe("Header actions — same eligibility as before UI-3, by capability", ()
     const d = detail([current, next]);
     const a = headerActions(d, HR_ADMIN);
     expect(a.target?.id).toBe(current.id);
-    expect(a.daily).not.toContain("end_employment");
-    expect(a.correction).toContain("reverse_end");
-    expect(a.advanced).toEqual([]);
+    expect(headerIds(a)).toEqual(["correct_personal"]);
     expect(periodEligibility(d, next, HR_ADMIN)).toMatchObject({ cancelPlanned: true, relationshipChange: true, voidPeriod: false });
   });
 });

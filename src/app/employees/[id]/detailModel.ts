@@ -300,6 +300,8 @@ export type ActionId =
   | "rehire"
   | "initial_employment"
   | "correct_personal"
+  | "edit_personal"
+  | "correct_assignment"
   | "correct_period"
   | "correct_work_email"
   | "clear_work_email"
@@ -346,17 +348,31 @@ export function periodActions(d: Detail, p: Period, can: (permission: string) =>
   return { daily, correction, advanced, initialAssignment: e.initialAssignment, changeAssignment: e.changeAssignment };
 }
 
+/**
+ * Header actions (UI-9, D-UI-13/16): the primary assignment action of the representative period plus
+ * person-level / lifecycle-level actions only. Period-specific actions live on their Employment Period card.
+ */
 export function headerActions(d: Detail, can: (permission: string) => boolean): HeaderActions {
   const target = representativePeriod(d);
   const latest = latestPeriod(d);
   const manage = can("employment.manage");
   const pa = target ? periodActions(d, target, can) : null;
   const primary: ActionId | null = pa?.changeAssignment ? "change_assignment" : pa?.initialAssignment ? "initial_assignment" : null;
-  const daily: ActionId[] = [...(pa?.daily ?? [])];
+  const daily: ActionId[] = [];
   if (manage && latest === null) daily.push("initial_employment");
   if (manage && latest?.end_date) daily.push("rehire");
   // Full Name / recorded Date of Birth correction (C-23); normal personal updates live in the Personal tab (UI-4).
   const correction: ActionId[] = can("employees.update") ? ["correct_personal"] : [];
-  correction.push(...(pa?.correction ?? []));
-  return { target, primary, daily, correction, advanced: [...(pa?.advanced ?? [])] };
+  return { target, primary, daily, correction, advanced: [] };
+}
+
+/**
+ * Actions shown on one Employment Period card. The representative period's assignment action belongs to the header
+ * (primary), so it is not repeated here; another period (e.g. a future one) carries its own assignment action.
+ */
+export function periodCardActions(d: Detail, p: Period, can: (permission: string) => boolean, representativeId: string | null) {
+  const pa = periodActions(d, p, can);
+  const assignment: ActionId[] =
+    p.id === representativeId ? [] : pa.changeAssignment ? ["change_assignment"] : pa.initialAssignment ? ["initial_assignment"] : [];
+  return { daily: [...assignment, ...pa.daily] as ActionId[], correction: pa.correction as ActionId[], advanced: pa.advanced as ActionId[] };
 }

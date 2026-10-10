@@ -99,8 +99,7 @@ export const en = {
     tabs: { overview: "Overview", personal: "Personal", employment: "Employment", assignment: "Assignment", history: "History" },
     moreActions: "More actions",
     actionGroup: { correct: "Correct record", advanced: "Advanced" },
-    actionLabel: { relationshipChange: "Change Employment Relationship", correctPeriod: "Correct Employment Period" },
-    selectedAction: "Selected action",
+    actionLabel: { relationshipChange: "Change Employment Relationship", correctPeriod: "Correct Employment Period", correctAssignment: "Correct Assignment" },
     assignmentsTitle: "Assignments",
     historyTitle: "History",
     statusNote: "Status as of {date}, computed from employment periods.",
@@ -109,7 +108,7 @@ export const en = {
     periodOpenEnd: "no end date",
     noEmployment: "No employment record yet (a profile created with a name only has no placeholder employment).",
     startDate: "Start Date",
-    endDate: "End Date (inclusive)",
+    endDate: "End Date",
     notDetermined: "Not determined",
     workEmail: "Work Email",
     employeeType: "Employee Type",
@@ -126,7 +125,7 @@ export const en = {
       employment_voided: "Employment period voided — entered in error",
     },
     jobLevel: "Level",
-    manager: "Line Manager",
+    manager: "Manager",
     saved: "Changes saved.",
   },
   // UI-5 Employment tab: business wording only (no interval notation, no state-machine codes, no tenure).
@@ -176,6 +175,15 @@ export const en = {
     correctFor: "Correct record — Employment Period {n}",
     fullHistoryNote: "The full history of changes is in the History tab.",
   },
+  // UI-9 workflow surface (Drawer / Modal).
+  workflow: {
+    periodContext: "Employment Period {n} · {type} · from {start}",
+    assignmentContext: "Assignment effective from {date} · {department} / {title}",
+    personContext: "{name} · {code}",
+    correctionNote: "Correct record: use this only to fix information that was recorded incorrectly.",
+    discardConfirm: "Close without saving? The changes you entered will be lost.",
+    unavailable: "This action is no longer available for this record. Close and try again.",
+  },
   // UI-8 Add Employee wizard (labels shared with the Employee Detail tabs).
   wizard: {
     title: "Add Employee",
@@ -199,9 +207,9 @@ export const en = {
     noOptions: "No active values — add them under Organization",
     personalNoAccess: "Personal details can be added later by someone with access to personal information.",
     codeAuto: "The Employee Code is issued automatically when the record is saved.",
-    legacyCodeSummary: "Keep an existing (legacy) Employee Code",
-    legacyCode: "Existing Employee Code",
-    legacyCodeHint: "Only for people who already have an EmeSoft code. Leave empty to issue a new code.",
+    legacyCodeSummary: "Advanced: Employee Code override",
+    legacyCode: "Employee Code override",
+    legacyCodeHint: "Only when this person must keep an existing EmeSoft code. Leave empty to issue a new code automatically.",
     codeOnSave: "Issued when saved",
     startDateHint: "Start of the first Employment Period.",
     workEmailHint: "Company email for this Employment Period.",
@@ -215,7 +223,7 @@ export const en = {
     started: "Started {date}",
     noEmploymentReview: "No Employment Period — the profile is saved on its own; employment can be added later.",
     noAssignmentReview: "No assignment — it can be added later.",
-    requireCompleteHelp: "saving is refused if Record Health would show Needs Attention.",
+    healthNote: "Missing details do not block saving. Record Health on the employee's Overview shows anything still to complete.",
     saveNote: "Saving creates the employee record, its Employment Period and assignment together. If saving fails, nothing is saved.",
     nothingSaved: "Nothing was saved.",
     fixHighlighted: "Correct the highlighted fields and save again.",
@@ -300,6 +308,8 @@ export const en = {
     correctFor: "Correct assignment effective from {date}",
     emptyTitle: "Employment Period {n} has no assignment",
     emptyBody: "No assignment has been added for Employment Period {n}.",
+    useHeaderAction: "Use Add Initial Assignment at the top of the page.",
+    usePeriodAction: "Use Add Initial Assignment on Employment Period {n} in the Employment tab.",
   },
   // UI-3 Employee Overview: business wording only (no interval notation, no tenure, no hire/join date).
   overview: {
@@ -353,12 +363,12 @@ export const en = {
   assignmentChange: {
     open: "Change Assignment",
     title: "Change Assignment",
-    help: "Records a real organizational change. The current assignment ends on the effective date and a new assignment starts that day. Employee Type is not affected. To fix a wrongly entered assignment, use a historical correction instead.",
+    help: "Records a real organizational change. The current assignment is replaced when the new assignment takes effect. Employee Type is not affected. To fix a wrongly entered assignment, use Correct Assignment instead.",
     effectiveDate: "Effective Date",
     impact: "Timeline Impact",
-    impactClose: "The assignment in effect since {from} ends on {to}.",
+    impactClose: "The current assignment (in effect since {from}) is replaced when the new assignment takes effect on {to}.",
     impactNone: "No assignment is currently in effect.",
-    impactOpen: "A new assignment starts on {from}.",
+    impactOpen: "The new assignment takes effect on {from}.",
     save: "Save Assignment Change",
   },
   initialAssignment: {
@@ -382,16 +392,16 @@ export const en = {
   endEmployment: {
     open: "End Employment",
     title: "End Employment",
-    help: "Records that this employment period ends on the chosen date (inclusive). A future date keeps the period Active until then. An existing planned end date can be confirmed or brought forward, never moved later.",
+    help: "Records the End Date: the final date of the Employment Period. A future date keeps the period Active until then. An existing planned end date can be confirmed or brought forward, never moved later.",
     currentEnd: "Current / Planned End Date",
     endDate: "End Date",
     reason: "End Reason",
     note: "Note",
     noteHelp: "Required for Other. Kept with the End event; it is not shown in the employment history.",
-    impactPeriod: "The period ends on {date} (last working day, inclusive).",
+    impactPeriod: "{date} is the final date of the Employment Period.",
     impactShortens: "The planned end date {from} is brought forward to {to}.",
     impactSameDate: "The planned end date stays the same; the End event and End Reason are recorded.",
-    impactAssignment: "The assignment in effect since {from} ends on {to}.",
+    impactAssignment: "The assignment in effect since {from} stays in effect through {to}.",
     impactNoAssignment: "No assignment needs to change.",
     laterNotAllowed: "End Employment cannot move the planned end date later. Use Correct Period for that.",
     preStartGuidance:
@@ -422,7 +432,7 @@ export const en = {
   rehire: {
     open: "Rehire",
     title: "Rehire",
-    help: "Creates a new employment period after the latest one ends, for the same person and Employee Code. Use it for a genuine return after leaving.",
+    help: "Create a new Employment Period for this employee. The person and the Employee Code stay the same. Use it for a genuine return after leaving.",
     previousPeriod: "Previous Period",
     previousEnd: "Previous End Date",
     endRecorded: "End Employment recorded",
@@ -438,7 +448,7 @@ export const en = {
   relationshipChange: {
     open: "Relationship Change",
     title: "Relationship Change",
-    help: "A continuous change to a different Employee Type (for example Service Contractor to Employee). The current period ends the day before and a new period starts on the chosen date. A return after a gap is a Rehire instead.",
+    help: "This ends the current Employment Period and creates a new Employment Period with a different Employee Type (for example Service Contractor to Employee). The current period ends the day before the new period starts. A return after a gap is a Rehire instead.",
     currentType: "Current Employee Type",
     newType: "New Employee Type",
     startDate: "New Period Start Date",
@@ -452,7 +462,7 @@ export const en = {
     oldEnd: "The current period ends on {date}.",
     replacesPlanned: "Its planned end date {from} is replaced by {to}.",
     newStart: "The new period starts on {date}.",
-    oldAssignment: "The current assignment (since {from}) ends on {to}.",
+    oldAssignment: "The current assignment (since {from}) stays in effect until the new period starts on {to}.",
     withAssignment: "The new period gets the Initial Assignment entered above.",
     withoutAssignment: "The new period starts without an assignment (add it later with Add Initial Assignment).",
     emailKeepImpact: "The new period keeps the current Work Email.",
@@ -466,7 +476,7 @@ export const en = {
   cancelPlanned: {
     open: "Cancel Planned Period",
     title: "Cancel Planned Period",
-    help: "This period has not started yet and will not take effect. It stays in the employment history with its data; its planned assignments remain for traceability but have no operational effect, and its Work Email is no longer reserved.",
+    help: "For a planned Employment Period that will not take effect. This is not an End, a deletion or a Void: the period stays in the history with its data, its planned assignments have no effect, and its Work Email is no longer reserved.",
     plannedStart: "Planned Start Date",
     plannedEnd: "Planned End Date",
     assignments: "Planned Assignments",
@@ -506,7 +516,7 @@ export const en = {
       RELATIONSHIP_CHANGE_SUCCESSOR:
         "This period was created by a Relationship Change. Void cannot undo a Relationship Change; that workflow (PV-24) is not available yet.",
       MANAGER_DEPENDENCY:
-        "Other employees' assignments use this period as their manager. Open each employee listed below and change their Line Manager first (Change Assignment for a current or future assignment, Correct for a past one); they are never changed automatically. Then use Check again.",
+        "Other employees' assignments use this period as their manager. Open each employee listed below and change their Manager first (Change Assignment for a current or future assignment, Correct for a past one); they are never changed automatically. Then use Check again.",
       MANAGER_REFERENCE_WITHOUT_OVERLAP: "Other employees' assignments reference this period as manager for dates outside it. This does not block Void but should be reviewed.",
       RELATIONSHIP_CHANGE_PREDECESSOR:
         "This period was ended by a Relationship Change. If the original relationship was genuine, do not void it: the normal recovery is to cancel the new period (Cancel Planned Period, if it has not started) and then use Reverse End Employment on this period. Void applies only if HR has independently confirmed that this period itself was entered in error and the relationship it represents never existed; it is then evaluated under the normal Void rules, and any blocker must be resolved first.",
@@ -522,7 +532,7 @@ export const en = {
   reverseEnd: {
     open: "Reverse End Employment",
     title: "Reverse End Employment",
-    help: "Use only when End Employment was recorded by mistake. The period and its assignment are restored exactly to the state before that action; a genuine return after leaving is a Rehire instead.",
+    help: "Use only when End Employment was recorded by mistake. The End effect is removed and the period and its assignment return to their state before that action. The End stays in the history, marked as reversed. A genuine return after leaving is a Rehire instead.",
     originalEnd: "Original End Date",
     restoredEnd: "End Date After Reversal",
     restoredOpen: "No end date (open)",
@@ -531,7 +541,7 @@ export const en = {
     impactPlanned: "The end date goes back to the previously planned {date}.",
     sameDate: "The End Employment action will be reversed. The previously planned End Date will remain unchanged.",
     stillEnded: "That date is in the past, so the period will still be shown as Ended.",
-    impactAssignment: "The assignment in effect since {from} ends on {to} again, as before End Employment.",
+    impactAssignment: "The assignment in effect since {from} stays in effect through {to} again, as before End Employment.",
     impactAssignmentOpen: "The assignment in effect since {from} has no end date again, as before End Employment.",
     blockedNote: "The reversal is refused if anything changed that makes an exact restoration impossible (for example a later assignment change, a later period or a conflicting Work Email).",
     reason: "Reversal Reason",
@@ -549,7 +559,7 @@ export const en = {
   periodCorrection: {
     open: "Correct Period",
     title: "Correct Employment Period",
-    help: "Historical correction of wrongly entered data on this same period. It never creates or ends a period: a genuine change of working relationship is a new period.",
+    help: "Fixes data entered incorrectly on this same period. It never creates or ends a period: a genuine change of working relationship is a new period.",
     openEndNote: "This period has no end date. Ending it is End Employment, not a correction.",
     endDateNote:
       "This end date was set by End Employment: it can be corrected to another date here, but undoing the End Employment itself is a separate action (Reverse End Employment).",
@@ -563,7 +573,7 @@ export const en = {
     open: "Correct",
     title: "Correct Assignment from {from}",
     help: "Fixes a wrongly entered assignment in place; no new assignment is created. Inactive catalog values are allowed (marked ✕) because they may have been valid at the time.",
-    previousMoves: "The previous assignment (from {from}) will end on {to}.",
+    previousMoves: "The previous assignment (from {from}) will be replaced on {to}.",
     save: "Save Correction",
   },
   // Shared form wording used by several workflow forms.
@@ -599,7 +609,6 @@ export const en = {
   },
   form: {
     noPermission: "You do not have permission to create employee profiles.",
-    requireOperational: "Only save if the record is complete",
     none: "—",
     save: "Save Employee",
     saving: "Saving…",

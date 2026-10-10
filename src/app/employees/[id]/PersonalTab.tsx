@@ -20,7 +20,7 @@ import {
   type ProfileSource,
 } from "./personalModel";
 
-// UI-4 Personal tab: minimal, read-only by default. Normal updates (no reason) are edited in place; corrections of
+// UI-4 Personal tab: minimal, read-only by default. Normal updates (no reason) open in the workflow drawer (UI-9); corrections of
 // Full Name / a recorded Date of Birth (reason required, C-23) are a separate action under More actions → Correct
 // record. Optional values that are absent read "—" and are never styled as errors (Record Health owns completeness).
 
@@ -53,7 +53,7 @@ const EDIT_FIELDS: Record<string, keyof EditValues> = {
   "personal.personal_email": "personal_email",
 };
 
-function PersonalEditForm<T>({ profile, onSaved, onCancel }: { profile: Profile; onSaved: (updated: T) => void; onCancel: () => void }) {
+export function PersonalEditForm<T>({ profile, onSaved, onCancel }: { profile: Profile; onSaved: (updated: T) => void; onCancel: () => void }) {
   const [form, setForm] = useState<EditValues>(() => editInitial(profile));
   const { busy, error, save } = useSave(onSaved);
   const body = editPayload(profile, form);
@@ -187,57 +187,43 @@ export function PersonalCorrectionForm<T>({
   );
 }
 
-export function PersonalTab<T>({ profile, can, onSaved }: { profile: Profile; can: (permission: string) => boolean; onSaved: (updated: T) => void }) {
+export function PersonalTab({ profile, can, onEdit }: { profile: Profile; can: (permission: string) => boolean; onEdit: () => void }) {
   const caps = personalCapabilities(can, profile);
-  const [editing, setEditing] = useState(false);
   const p = profile.personal;
   return (
     <section className="card personal-card" aria-labelledby="personal-title">
       <div className="card-header">
         <h2 id="personal-title">{t("personal.title")}</h2>
-        {caps.edit && !editing && <Button onClick={() => setEditing(true)}>{t("personal.edit")}</Button>}
+        {caps.edit && <Button onClick={onEdit}>{t("personal.edit")}</Button>}
       </div>
-      {editing ? (
-        <PersonalEditForm<T>
-          profile={profile}
-          onSaved={(u) => {
-            setEditing(false);
-            onSaved(u);
-          }}
-          onCancel={() => setEditing(false)}
-        />
-      ) : (
-        <>
-          <dl className="info-grid">
+      <dl className="info-grid">
+        <div>
+          <dt>{t("personal.fullName")}</dt>
+          <dd>{profile.full_name}</dd>
+        </div>
+        {p && (
+          <>
             <div>
-              <dt>{t("personal.fullName")}</dt>
-              <dd>{profile.full_name}</dd>
+              <dt>{t("personal.dateOfBirth")}</dt>
+              <dd>{formatDate(p.date_of_birth)}</dd>
             </div>
-            {p && (
-              <>
-                <div>
-                  <dt>{t("personal.dateOfBirth")}</dt>
-                  <dd>{formatDate(p.date_of_birth)}</dd>
-                </div>
-                <div>
-                  <dt>{t("personal.gender")}</dt>
-                  <dd>{genderLabel(p.gender)}</dd>
-                </div>
-                <div>
-                  <dt>{t("personal.mobile")}</dt>
-                  <dd>{p.mobile_phone ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt>{t("personal.personalEmail")}</dt>
-                  <dd>{p.personal_email ?? "—"}</dd>
-                </div>
-              </>
-            )}
-          </dl>
-          {!caps.visible && <p className="muted">{t("detail.personalHidden")}</p>}
-          {caps.correct && <p className="muted small">{t("personal.correctionHint")}</p>}
-        </>
-      )}
+            <div>
+              <dt>{t("personal.gender")}</dt>
+              <dd>{genderLabel(p.gender)}</dd>
+            </div>
+            <div>
+              <dt>{t("personal.mobile")}</dt>
+              <dd>{p.mobile_phone ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>{t("personal.personalEmail")}</dt>
+              <dd>{p.personal_email ?? "—"}</dd>
+            </div>
+          </>
+        )}
+      </dl>
+      {!caps.visible && <p className="muted">{t("detail.personalHidden")}</p>}
+      {caps.correct && <p className="muted small">{t("personal.correctionHint")}</p>}
     </section>
   );
 }

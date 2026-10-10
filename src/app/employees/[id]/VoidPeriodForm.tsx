@@ -219,7 +219,8 @@ export function VoidPeriodForm<T>({
       )}
       <ErrorBox error={error} />
       <div className="row" style={{ marginTop: 12 }}>
-        <button className="primary" type="submit" disabled={busy || !preview?.eligible || !reason.trim()}>
+        {/* Destructive and exceptional: the danger style, never the ordinary primary action (UI-9). */}
+        <button className="danger" type="submit" disabled={busy || !preview?.eligible || !reason.trim()}>
           {busy && preview ? t("form.saving") : t("voidPeriod.confirm")}
         </button>
         <button type="button" onClick={() => void load()} disabled={busy}>

@@ -199,9 +199,22 @@ tbody tr:hover td { background: var(--color-surface-2); }
 .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); padding: var(--space-4) var(--space-5) var(--space-2); }
 .modal-header h2 { margin: 0; }
 .modal-description { margin: var(--space-1) 0 0; color: var(--color-text-2); font-size: var(--font-size-sm); }
-.modal-body { padding: var(--space-2) var(--space-5) var(--space-4); display: grid; gap: var(--space-3); }
+.modal-body { padding: var(--space-2) var(--space-5) var(--space-4); display: grid; gap: var(--space-3); align-content: start; }
 .modal-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--color-border); background: var(--color-surface-2); border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
 .modal-close { min-height: var(--control-height-sm); width: 28px; padding: 0; border-color: transparent; color: var(--color-text-2); }
+/* Drawer (UI-9): right-side workflow panel; wider at laptop-narrow widths, full width on phones. */
+.drawer-overlay { place-items: stretch end; padding: 0; }
+.modal.drawer { max-width: none; width: min(640px, 100vw); height: 100vh; max-height: none; border-radius: 0; overflow: hidden; }
+.modal.drawer .modal-header { border-bottom: 1px solid var(--color-border); padding-bottom: var(--space-3); }
+.modal.drawer .modal-body { flex: 1; overflow-y: auto; padding-top: var(--space-4); }
+/* Workflow forms inside the surface: the surface header carries the title and context, so the form's own card frame
+   and first heading are not repeated; inner section headings stay small. */
+.workflow-body > form.card, .workflow-body > .card { border: 0; box-shadow: none; padding: 0; margin: 0; background: transparent; }
+.workflow-body > form > h2:first-child, .workflow-body > .card > h2:first-child { display: none; }
+.workflow-body h2, .workflow-body h3 { font-size: var(--font-size-base); margin: var(--space-4) 0 var(--space-2); }
+.workflow-body > form { display: grid; gap: var(--space-3); }
+@media (max-width: 1100px) { .modal.drawer { width: min(720px, 100vw); } }
+@media (max-width: 640px) { .modal.drawer { width: 100vw; } }
 
 /* ---------------- Action menu ---------------- */
 .action-menu { position: relative; display: inline-block; }
@@ -229,9 +242,6 @@ tbody tr:hover td { background: var(--color-surface-2); }
 .detail-code { margin-top: 2px; font-size: var(--font-size-sm); color: var(--color-text-2); font-variant-numeric: tabular-nums; }
 .detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-2); color: var(--color-text-2); }
 .detail-actions { flex: none; }
-.workflow-panel { margin-bottom: var(--space-4); }
-.workflow-panel:focus { outline: none; }
-.workflow-panel .card { margin: 0; }
 .tab-panel:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius); }
 .overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
 .overview-grid .card { margin: 0; }
@@ -292,9 +302,6 @@ tbody tr:hover td { background: var(--color-surface-2); }
 .period-lifecycle li.reversed { color: var(--color-text-2); }
 .period-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-border); }
 .period-actions .action-menu-list { right: auto; left: 0; }
-.period-workflow { margin-top: var(--space-3); }
-.period-workflow:focus { outline: none; }
-.period-workflow > .card, .period-workflow > form { margin: 0; }
 /* Assignment tab (UI-6): same card language as Employment; upcoming = INFO (D-UI-12); records of cancelled/voided
    periods muted and labelled "Not operational". */
 .assignment-card { margin: 0; }
@@ -345,8 +352,6 @@ button.stepper-button:hover { border-color: var(--color-border-strong); color: v
 .wizard-actions { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--color-border); }
 .review-card { margin: 0; }
 .review-card .card-header h3 { margin: 0; font-size: var(--font-size-base); }
-.checkbox-row { display: flex; gap: var(--space-2); align-items: flex-start; color: var(--color-text); }
-.checkbox-row input { margin-top: 3px; }
 @media (max-width: 720px) { .stepper { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ---------------- Filter bar (lists) ---------------- */

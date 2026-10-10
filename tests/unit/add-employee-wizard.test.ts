@@ -77,8 +77,8 @@ describe("Payload (the existing single create request)", () => {
     expect(buildPayload(values, ALL)).toEqual({ full_name: "A B", employee_code: "EMS-0001", personal: { gender: "female" } });
   });
 
-  it("the completeness requirement is only sent when chosen", () => {
-    expect(buildPayload(v({ full_name: "A B", require_operational_completeness: true }), ALL)).toMatchObject({ require_operational_completeness: true });
+  it("never asks the server to refuse incomplete records: Needs Attention is a valid outcome", () => {
+    expect(buildPayload(v({ full_name: "A B" }), ALL)).not.toHaveProperty("require_operational_completeness");
   });
 });
 
