@@ -6,6 +6,7 @@ import { SELECTABLE_END_REASON_CODES } from "@/contracts/core-hr/end-reasons";
 import { addDays } from "@/lib/dates";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import { useFormOpen, type Launched } from "./launch";
 
 type Row = { id: string; effective_from: string; effective_to: string | null; department: { name: string }; job_title: { name_en: string } };
 
@@ -20,6 +21,7 @@ export function EndEmploymentForm<T>({
   canBackdate,
   revision,
   onSaved,
+  launched,
 }: {
   employmentId: string;
   employeeType: string | null;
@@ -31,8 +33,10 @@ export function EndEmploymentForm<T>({
   canBackdate: boolean;
   revision: number;
   onSaved: (updated: T) => void;
+  /** UI-3: opened from the Employee header instead of its own button. */
+  launched?: Launched;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useFormOpen(launched);
   const [form, setForm] = useState({ end_date: currentEnd ?? today, end_reason_code: "", note: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiCallError | null>(null);

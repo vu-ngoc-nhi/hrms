@@ -5,6 +5,7 @@ import { ErrorBox } from "@/components/ErrorBox";
 import { t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import { useAssignmentOptions, type Option } from "./useAssignmentOptions";
+import { useFormOpen, type Launched } from "./launch";
 
 // Add Initial Assignment (S4.5A, C-41): only shown for a non-cancelled period without assignments.
 // A past effective date is Initial Data Capture and needs a reason; earlier history is never invented.
@@ -16,6 +17,7 @@ export function InitialAssignmentForm<T>({
   today,
   revision,
   onSaved,
+  launched,
 }: {
   employmentId: string;
   personId: string;
@@ -24,8 +26,10 @@ export function InitialAssignmentForm<T>({
   today: string;
   revision: number;
   onSaved: (updated: T) => void;
+  /** UI-3: opened from the Employee header instead of its own button. */
+  launched?: Launched;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useFormOpen(launched);
   const [form, setForm] = useState({
     effective_date: periodStart,
     department_id: "",

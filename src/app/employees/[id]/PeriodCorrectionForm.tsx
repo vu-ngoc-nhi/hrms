@@ -5,6 +5,7 @@ import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import type { Option } from "./useAssignmentOptions";
+import { useFormOpen, type Launched } from "./launch";
 
 // S4.6 Employment Period correction (HR_ADMIN): Employee Type, start date, end date (date → date only).
 export function PeriodCorrectionForm<T>({
@@ -13,6 +14,7 @@ export function PeriodCorrectionForm<T>({
   hasActiveEndEvent,
   revision,
   onSaved,
+  launched,
 }: {
   employmentId: string;
   current: { start_date: string; end_date: string | null; employee_type: { id: string; name: string } | null };
@@ -20,8 +22,10 @@ export function PeriodCorrectionForm<T>({
   hasActiveEndEvent: boolean;
   revision: number;
   onSaved: (updated: T) => void;
+  /** UI-3: opened from the Employee header instead of its own button. */
+  launched?: Launched;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useFormOpen(launched);
   const [types, setTypes] = useState<Option[]>([]);
   const [form, setForm] = useState({
     employee_type_id: current.employee_type?.id ?? "",

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import { useFormOpen, type Launched } from "./launch";
 
 // S4.10 Cancel Planned Period (C-69 to C-71): the future period will not take effect but stays in history.
 export function CancelPlannedForm<T>({
@@ -12,6 +13,7 @@ export function CancelPlannedForm<T>({
   blockedBy,
   revision,
   onSaved,
+  launched,
 }: {
   employmentId: string;
   period: { start_date: string; end_date: string | null; employee_type: { name: string } | null; work_email: string | null; assignments: unknown[] };
@@ -19,8 +21,10 @@ export function CancelPlannedForm<T>({
   blockedBy: "active_end" | "later_period" | null;
   revision: number;
   onSaved: (updated: T) => void;
+  /** UI-3: opened from the Employee header instead of its own button. */
+  launched?: Launched;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useFormOpen(launched);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiCallError | null>(null);

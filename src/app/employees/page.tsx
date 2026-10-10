@@ -8,7 +8,7 @@ import { Button, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { IconAttention } from "@/components/ui/icons";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
-import { EMPTY_FILTERS, filtersFromQuery, hasActiveFilters, LIST_COMPLETENESS, LIST_STATUSES, listCapabilities, queryFromFilters, type ListFilters } from "./listQuery";
+import { EMPTY_FILTERS, filtersFromQuery, hasActiveFilters, LIST_COMPLETENESS, LIST_STATUSES, listCapabilities, queryFromFilters, rememberListQuery, type ListFilters } from "./listQuery";
 
 type Ref = { id: string; code: string; name: string } | null;
 type Item = {
@@ -51,6 +51,7 @@ export default function EmployeesPage() {
     // Keep the address bar in sync so a filtered list can be shared or reloaded (no navigation, no new history entry).
     const url = `${window.location.pathname}${queryFromFilters(filters, page)}`;
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
+    rememberListQuery(queryFromFilters(filters, page));
     api<Page>(`/api/v1/core-hr/employees?${qs}`)
       .then((r) => {
         if (cancelled) return;

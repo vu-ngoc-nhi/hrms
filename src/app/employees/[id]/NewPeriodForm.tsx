@@ -5,6 +5,7 @@ import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t } from "@/i18n";
 import { addDays } from "@/lib/dates";
 import { api, ApiCallError } from "@/lib/client/api";
+import { useFormOpen, type Launched } from "./launch";
 
 type Option = { id: string; label: string };
 type Previous = { start_date: string; end_date: string; employee_type: { id: string; name: string } | null; has_active_end_event: boolean };
@@ -20,6 +21,7 @@ export function NewPeriodForm<T>({
   canBackdate,
   revision,
   onSaved,
+  launched,
 }: {
   mode: "initial" | "rehire";
   personId: string;
@@ -31,8 +33,10 @@ export function NewPeriodForm<T>({
   canBackdate: boolean;
   revision: number;
   onSaved: (updated: T) => void;
+  /** UI-3: opened from the Employee header instead of its own button. */
+  launched?: Launched;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useFormOpen(launched);
   const [types, setTypes] = useState<Option[]>([]);
   const earliestRehire = previous ? addDays(previous.end_date, 1) : undefined;
   const [form, setForm] = useState({

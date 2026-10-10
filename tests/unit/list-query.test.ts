@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_FILTERS, filtersFromQuery, hasActiveFilters, listCapabilities, queryFromFilters } from "@/app/employees/listQuery";
+import { EMPTY_FILTERS, filtersFromQuery, hasActiveFilters, listBackHref, listCapabilities, queryFromFilters } from "@/app/employees/listQuery";
 
 // UX-3 / UI-2: Employee List filters are initialised from and synchronised with the URL query (canonical API names).
 const DEPT = "1460e54f-0b1b-4035-a1be-982831c351c3";
@@ -33,6 +33,14 @@ describe("Employee List URL state", () => {
     expect(hasActiveFilters({ ...EMPTY_FILTERS, employee_type_id: TYPE })).toBe(true);
     expect(hasActiveFilters(EMPTY_FILTERS)).toBe(false);
     expect(queryFromFilters(EMPTY_FILTERS, 1)).toBe("");
+  });
+});
+
+describe("Back to Employees (UI-3)", () => {
+  it("returns to the remembered list view, re-validated; falls back to the bare list", () => {
+    expect(listBackHref(`?search=DEMO&employee_type_id=${TYPE}&page=2`)).toBe(`/employees?search=DEMO&employee_type_id=${TYPE}&page=2`);
+    expect(listBackHref("?status=active&department_id=javascript:alert(1)")).toBe("/employees");
+    expect(listBackHref(null)).toBe("/employees");
   });
 });
 

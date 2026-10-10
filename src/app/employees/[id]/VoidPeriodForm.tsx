@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t, tMaybe } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import { useFormOpen, type Launched } from "./launch";
 
 // PV-25 Void Employment Period. The confirmation screen is fed by the server's eligibility preview (blockers, warnings,
 // internal records kept, consequences); the Void action re-evaluates everything server-side and never trusts it.
@@ -59,8 +60,17 @@ function FindingList({ findings }: { findings: Finding[] }) {
   );
 }
 
-export function VoidPeriodForm<T>({ employmentId, onSaved }: { employmentId: string; onSaved: (updated: T) => void }) {
-  const [open, setOpen] = useState(false);
+export function VoidPeriodForm<T>({
+  employmentId,
+  onSaved,
+  launched,
+}: {
+  employmentId: string;
+  onSaved: (updated: T) => void;
+  /** UI-3: opened from the Employee header instead of its own button (the preview loads on open). */
+  launched?: Launched;
+}) {
+  const [open, setOpen] = useFormOpen(launched);
   const [preview, setPreview] = useState<Eligibility | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -78,6 +88,19 @@ export function VoidPeriodForm<T>({ employmentId, onSaved }: { employmentId: str
       setBusy(false);
     }
   }
+
+  // Opened from the header: fetch the eligibility preview once, as the inline button does on click.
+  useEffect(() => {
+    if (!launched) return;
+    let cancelled = false;
+    api<Eligibility>(`/api/v1/core-hr/employments/${employmentId}/void-eligibility`)
+      .then((r) => !cancelled && setPreview(r.data))
+      .catch((err) => !cancelled && setError(err as ApiCallError));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening; the form is remounted for each launch
+  }, []);
 
   if (!open) {
     return (

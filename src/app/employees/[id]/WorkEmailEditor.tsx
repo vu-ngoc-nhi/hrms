@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ErrorBox } from "@/components/ErrorBox";
 import { t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import type { Launched } from "./launch";
 
 // Work Email belongs to one Employment Period (C-30). Ended periods are historical corrections that need a reason.
 // Clearing a recorded address is a data correction for HR_ADMIN with a reason, never account deprovisioning (C-36).
@@ -16,6 +17,7 @@ export function WorkEmailEditor<T>({
   canClear,
   revision,
   onSaved,
+  launched,
 }: {
   employmentId: string;
   periodLabel: string;
@@ -27,8 +29,14 @@ export function WorkEmailEditor<T>({
   canClear: boolean;
   revision: number;
   onSaved: (updated: T) => void;
+  /** UI-3: opened from the Employee header (edit or clear) instead of its own buttons. */
+  launched?: Launched & { mode: "edit" | "clear" };
 }) {
-  const [open, setOpen] = useState<null | "edit" | "clear">(null);
+  const [open, setOpenState] = useState<null | "edit" | "clear">(launched?.mode ?? null);
+  const setOpen = (value: null | "edit" | "clear") => {
+    setOpenState(value);
+    if (value === null) launched?.onClose();
+  };
   const [email, setEmail] = useState(current ?? "");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);

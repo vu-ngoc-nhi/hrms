@@ -48,3 +48,29 @@ export const hasActiveFilters = (filters: ListFilters) => Object.values(filters)
 export function listCapabilities(can: (permission: string) => boolean) {
   return { read: can("employees.read"), addEmployee: can("employees.create"), catalogFilters: can("catalogs.read") };
 }
+
+// UI-3: "Back to Employees" returns to the last list view of this browser tab. The list remembers its query in
+// sessionStorage (best effort; storage may be unavailable) and the detail page re-validates it before use.
+const LIST_CONTEXT_KEY = "hrms.employees.listQuery";
+
+export function rememberListQuery(query: string) {
+  try {
+    window.sessionStorage.setItem(LIST_CONTEXT_KEY, query);
+  } catch {
+    // storage unavailable: Back to Employees falls back to the bare list
+  }
+}
+
+/** The Employee List href for a remembered query; unknown, malformed or alias values are dropped. */
+export function listBackHref(stored: string | null): string {
+  const { filters, page } = filtersFromQuery(stored ?? "");
+  return `/employees${queryFromFilters(filters, page)}`;
+}
+
+export function rememberedListHref(): string {
+  try {
+    return listBackHref(window.sessionStorage.getItem(LIST_CONTEXT_KEY));
+  } catch {
+    return "/employees";
+  }
+}

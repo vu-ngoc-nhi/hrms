@@ -6,6 +6,7 @@ import { formatDate, t } from "@/i18n";
 import { addDays } from "@/lib/dates";
 import { api, ApiCallError } from "@/lib/client/api";
 import { useAssignmentOptions, type Option } from "./useAssignmentOptions";
+import { useFormOpen, type Launched } from "./launch";
 
 type Row = {
   id: string;
@@ -27,6 +28,7 @@ export function RelationshipChangeForm<T>({
   canBackdate,
   revision,
   onSaved,
+  launched,
 }: {
   employmentId: string;
   personId: string;
@@ -35,10 +37,12 @@ export function RelationshipChangeForm<T>({
   canBackdate: boolean;
   revision: number;
   onSaved: (updated: T) => void;
+  /** UI-3: opened from the Employee header instead of its own button. */
+  launched?: Launched;
 }) {
   const ended = period.end_date !== null && period.end_date < today;
   const fixedStart = ended ? addDays(period.end_date!, 1) : null;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useFormOpen(launched);
   const [types, setTypes] = useState<Option[]>([]);
   const [form, setForm] = useState({
     start_date: fixedStart ?? (addDays(period.start_date, 1) > today ? addDays(period.start_date, 1) : today),

@@ -5,6 +5,7 @@ import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import { useAssignmentOptions, type Option } from "./useAssignmentOptions";
+import { useFormOpen, type Launched } from "./launch";
 
 type Current = {
   effective_from: string;
@@ -22,6 +23,7 @@ export function AssignmentChangeForm<T>({
   revision,
   minDate,
   onSaved,
+  launched,
 }: {
   employmentId: string;
   personId: string;
@@ -30,8 +32,10 @@ export function AssignmentChangeForm<T>({
   /** Earliest date the caller may choose (today for HR_EDITOR); undefined when past dates are allowed. */
   minDate?: string;
   onSaved: (updated: T) => void;
+  /** UI-3: opened from the Employee header instead of its own button. */
+  launched?: Launched;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useFormOpen(launched);
   const [form, setForm] = useState({
     effective_date: minDate ?? new Date().toISOString().slice(0, 10),
     department_id: current?.department.id ?? "",

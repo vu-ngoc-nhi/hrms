@@ -2,121 +2,51 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
-import { formatDate, t, tMaybe } from "@/i18n";
-import { addDays } from "@/lib/dates";
+import { ActionMenu, Button, StatusBadge, Tabs, type ActionMenuEntry } from "@/components/ui";
+import { t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
-import { ProfileEditForm } from "./ProfileEditForm";
+import { rememberedListHref } from "../listQuery";
 import { AssignmentChangeForm } from "./AssignmentChangeForm";
-import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
 import { CancelPlannedForm } from "./CancelPlannedForm";
 import { EndEmploymentForm } from "./EndEmploymentForm";
 import { InitialAssignmentForm } from "./InitialAssignmentForm";
 import { NewPeriodForm } from "./NewPeriodForm";
+import { OverviewTab } from "./OverviewTab";
 import { PeriodCorrectionForm } from "./PeriodCorrectionForm";
+import { ProfileEditForm } from "./ProfileEditForm";
+import { AssignmentTab, cancelBlockedBy, EmploymentTab, HistoryTab, periodHeading, PersonalTab, type TabContext } from "./RecordTabs";
 import { RelationshipChangeForm } from "./RelationshipChangeForm";
 import { ReverseEndForm } from "./ReverseEndForm";
 import { VoidPeriodForm } from "./VoidPeriodForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
+import { headerActions, latestPeriod, overview, type ActionId, type Detail } from "./detailModel";
 
-type Ref = { id: string; code: string; name: string } | null;
-type Assignment = {
-  id: string;
-  effective_from: string;
-  effective_to: string | null;
-  department: { id: string; name: string };
-  job_title: { id: string; name_en: string };
-  job_level: Ref;
-  manager: { person_id: string; employee_code: string; full_name: string } | null;
-};
-type Detail = {
-  id: string;
-  revision: number;
-  employee_code: string;
-  full_name: string;
-  employment_status: string;
-  status_as_of: string;
-  completeness: {
-    operational: { status: "complete" | "incomplete"; rule_version: string; items: { code: string; satisfied: boolean }[] };
-  };
-  personal?: { gender: string | null; date_of_birth: string | null; personal_email: string | null; mobile_phone: string | null };
-  employments: {
-    id: string;
-    start_date: string;
-    end_date: string | null;
-    period_lifecycle: string | null;
-    events: {
-      id: string;
-      event_type: string;
-      effective_date: string;
-      recorded_at: string;
-      end_reason: { code: string; label: string } | null;
-      reverses_event_id: string | null;
-    }[];
-    has_active_end_event: boolean;
-    active_end_event: {
-      effective_date: string;
-      end_reason: { code: string; label: string } | null;
-      previous_end_date: string | null;
-      closed_assignment: { id: string; previous_effective_to: string | null } | null;
-    } | null;
-    cancelled_at: string | null;
-    voided_at: string | null;
-    employee_type: Ref;
-    work_email: string | null;
-    assignments: Assignment[];
-  }[];
-};
+// UI-3 Employee Detail shell: compact header, one primary action, a More actions menu (daily → Correct record →
+// Advanced), and tabs. Documents is not shown: it has no function yet (roadmap only).
+const TABS = ["overview", "personal", "employment", "assignment", "history"] as const;
+type TabId = (typeof TABS)[number];
 
-type HistoryEvent = Detail["employments"][number]["events"][number];
-type Period = Detail["employments"][number];
-
-// Record dispositions (C-29 Cancelled, PV-25 Voided): history only, never operational, read-only.
-const disposed = (e: Period) => Boolean(e.cancelled_at || e.voided_at);
-
-// C-80 history readability (display only): reversed End events are marked and paired with their reversal; the current
-// End is distinguishable; a future-dated End reads "Planned end of employment". Order and data are unchanged.
-// PV-25: on a voided period no End is shown as "Current end"; the void disposition (listed last) has no date of its own.
-function EventLine({ ev, all, today, voided }: { ev: HistoryEvent; all: HistoryEvent[]; today: string; voided: boolean }) {
-  const reversed = ev.event_type === "end" && all.some((o) => o.reverses_event_id === ev.id);
-  const label =
-    ev.event_type === "end" && ev.effective_date > today
-      ? t("detail.eventType.end_planned")
-      : tMaybe(`detail.eventType.${ev.event_type}`) ?? ev.event_type;
-  const target = ev.reverses_event_id ? all.find((o) => o.id === ev.reverses_event_id) : undefined;
-  if (ev.event_type === "employment_voided") {
-    return (
-      <li>
-        <strong>{label}</strong> <span className="badge">{t("detail.voidedBadge")}</span>
-      </li>
-    );
-  }
-  return (
-    <li style={reversed ? { color: "var(--muted)" } : undefined}>
-      <span style={reversed ? { textDecoration: "line-through" } : ev.event_type === "end" ? { fontWeight: 600 } : undefined}>
-        {label} — {formatDate(ev.effective_date)}
-        {ev.end_reason && <> · {tMaybe(`endReason.${ev.end_reason.code}`) ?? ev.end_reason.label}</>}
-      </span>
-      {ev.event_type === "end" && (reversed || !voided) && (
-        <span className="badge" style={{ marginLeft: 6 }}>
-          {reversed ? t("detail.reversedBadge") : t("detail.currentEndBadge")}
-        </span>
-      )}
-      {target && <span className="muted"> ({t("detail.reversesEnd", { date: formatDate(target.effective_date) })})</span>}
-    </li>
-  );
+function tabFromUrl(): TabId {
+  if (typeof window === "undefined") return "overview";
+  const v = new URLSearchParams(window.location.search).get("tab");
+  return (TABS as readonly string[]).includes(v ?? "") ? (v as TabId) : "overview";
 }
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<ApiCallError | null>(null);
-  const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [correctingRow, setCorrectingRow] = useState<string | null>(null);
+  const [tab, setTab] = useState<TabId>(tabFromUrl);
+  const [backHref] = useState(() => (typeof window === "undefined" ? "/employees" : rememberedListHref()));
+  // The workflow opened from the header; `launch` remounts the form for every opening.
+  const [launched, setLaunched] = useState<{ action: ActionId; launch: number } | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const session = useSession();
+  const can = (p: string) => Boolean(session?.can(p));
 
   useEffect(() => {
     api<Detail>(`/api/v1/core-hr/employees/${id}`)
@@ -124,387 +54,269 @@ export default function EmployeeDetailPage() {
       .catch((e) => setError(e));
   }, [id]);
 
+  // The selected tab is part of the address (shareable, survives reload); Overview is the bare URL.
+  useEffect(() => {
+    const url = `${window.location.pathname}${tab === "overview" ? "" : `?tab=${tab}`}`;
+    if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
+  }, [tab]);
+
+  // Move focus into an opened workflow so keyboard and screen-reader users land on it.
+  useEffect(() => {
+    if (!launched || !panelRef.current) return;
+    panelRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
+    const field = panelRef.current.querySelector<HTMLElement>("input, select, textarea");
+    (field ?? panelRef.current).focus({ preventScroll: true });
+  }, [launched]);
+
   if (error) return <ErrorBox error={error} />;
   if (!d) return <p className="muted">{t("app.loading")}</p>;
-  const op = d.completeness.operational;
-  // S4.8: valid (non-cancelled, non-voided) periods decide between Add Initial Employment Period and Rehire.
-  const realPeriods = d.employments.filter((e) => !disposed(e));
-  // C-72: an Active End Event with RELATIONSHIP_CHANGE whose successor (starting the next day) was cancelled and that
-  // has no non-cancelled successor. Guidance only — the reversal stays an explicit HR_ADMIN action.
-  const needsRelationshipChangeReview = (e: Period) =>
-    !disposed(e) &&
-    e.active_end_event?.end_reason?.code === "RELATIONSHIP_CHANGE" &&
-    !realPeriods.some((o) => o.start_date > e.start_date) &&
-    d.employments.some((o) => o.cancelled_at && o.start_date === addDays(e.active_end_event!.effective_date, 1));
-  const latest = realPeriods.reduce<(typeof realPeriods)[number] | null>((a, e) => (a === null || e.start_date >= a.start_date ? e : a), null);
-  // Historical corrections: HR_ADMIN only (employment.correct), never on cancelled or voided periods.
-  const canCorrect = (e: Period) => !disposed(e) && Boolean(session?.can("employment.correct"));
 
-  return (
-    <>
-      <p>
-        <Link href="/employees">{t("detail.back")}</Link>
-      </p>
-      <div className="spread">
-        <h1>
-          {d.full_name} <span className="muted">· {d.employee_code}</span>
-        </h1>
-        <div className="row">
-          <span className={`badge ${d.employment_status === "active" ? "ok" : ""}`}>
-            {tMaybe(`employmentStatus.${d.employment_status}`) ?? d.employment_status}
-          </span>
-          <span className={`badge ${op.status === "complete" ? "ok" : "warn"}`}>
-            {t("completeness.operationalTitle")}: {t(`completeness.${op.status}`)}
-          </span>
-        </div>
-      </div>
-      <p className="muted small">{t("detail.statusNote", { date: formatDate(d.status_as_of) })}</p>
-      {notice && <p className="alert ok-note small">{notice}</p>}
-      {session?.can("employees.update") &&
-        (editing ? (
+  const o = overview(d);
+  const actions = headerActions(d, can);
+  const target = actions.target;
+  const latest = latestPeriod(d);
+  const close = () => setLaunched(null);
+  const saved = (updated: Detail, message = t("detail.saved")) => {
+    setD(updated);
+    setNotice(message);
+    setLaunched(null);
+  };
+  const launch = (action: ActionId) => {
+    setNotice(null);
+    setLaunched((l) => ({ action, launch: (l?.launch ?? 0) + 1 }));
+  };
+
+  const plannedRehire = Boolean(latest?.end_date && latest.end_date >= d.status_as_of);
+  const label = (a: ActionId): string =>
+    ({
+      change_assignment: t("assignmentChange.open"),
+      initial_assignment: t("initialAssignment.open"),
+      edit_work_email: t("workEmail.edit"),
+      end_employment: t("endEmployment.open"),
+      relationship_change: t("detail.actionLabel.relationshipChange"),
+      rehire: plannedRehire ? t("rehire.plan.open") : t("rehire.open"),
+      initial_employment: t("initialEmployment.open"),
+      edit_profile: t("profileEdit.edit"),
+      correct_period: t("detail.actionLabel.correctPeriod"),
+      correct_work_email: t("workEmail.correct"),
+      clear_work_email: t("workEmail.clear"),
+      cancel_planned: t("cancelPlanned.open"),
+      reverse_end: t("reverseEnd.open"),
+      void_period: t("voidPeriod.open"),
+    })[a];
+  const item = (a: ActionId, danger = false): ActionMenuEntry => ({ type: "item", label: label(a), onSelect: () => launch(a), danger });
+  const menu: ActionMenuEntry[] = [
+    ...actions.daily.map((a) => item(a)),
+    ...(actions.correction.length
+      ? [...(actions.daily.length ? [{ type: "separator" } as const] : []), { type: "group", label: t("detail.actionGroup.correct") } as const, ...actions.correction.map((a) => item(a))]
+      : []),
+    ...(actions.advanced.length
+      ? [{ type: "separator" } as const, { type: "group", label: t("detail.actionGroup.advanced") } as const, ...actions.advanced.map((a) => item(a, true))]
+      : []),
+  ];
+
+  const workflow = (action: ActionId) => {
+    const lp = { onClose: close };
+    const tp = target;
+    switch (action) {
+      case "edit_profile":
+        return (
           <ProfileEditForm
             profile={d}
-            canEditPersonal={Boolean(session.can("employees.write_personal") && d.personal)}
-            onSaved={(updated) => {
-              setD(updated as unknown as Detail);
-              setEditing(false);
-              setNotice(t("profileEdit.saved"));
-            }}
-            onCancel={() => setEditing(false)}
+            canEditPersonal={Boolean(can("employees.write_personal") && d.personal)}
+            onSaved={(updated) => saved(updated as unknown as Detail, t("profileEdit.saved"))}
+            onCancel={close}
           />
-        ) : (
-          <p>
-            <button
-              onClick={() => {
-                setNotice(null);
-                setEditing(true);
-              }}
-            >
-              {t("profileEdit.edit")}
-            </button>
-          </p>
-        ))}
-
-      <div className="grid2">
-        <section className="card">
-          <h2>{t("completeness.operationalTitle")}</h2>
-          <ul>
-            {op.items.map((i) => (
-              <li key={i.code}>
-                {i.satisfied ? "✓" : "✗"} {tMaybe(`completeness.items.${i.code}`) ?? i.code}
-              </li>
-            ))}
-          </ul>
-          <p className="muted small">{t("completeness.ruleNote", { version: op.rule_version })}</p>
-          <p className="muted small">
-            {t("completeness.hrTitle")}: {t("completeness.hrNotDefined")} · {t("completeness.legalTitle")}: {t("completeness.legalPending")}
-          </p>
-        </section>
-        <section className="card">
-          <h2>{t("detail.personalTitle")}</h2>
-          {d.personal ? (
-            <dl className="kv">
-              <dt>{t("detail.gender")}</dt>
-              <dd>{d.personal.gender ? tMaybe(`gender.${d.personal.gender}`) ?? d.personal.gender : "—"}</dd>
-              <dt>{t("detail.dateOfBirth")}</dt>
-              <dd>{formatDate(d.personal.date_of_birth)}</dd>
-              <dt>{t("detail.mobilePhone")}</dt>
-              <dd>{d.personal.mobile_phone ?? "—"}</dd>
-              <dt>{t("detail.personalEmail")}</dt>
-              <dd>{d.personal.personal_email ?? "—"}</dd>
-            </dl>
-          ) : (
-            <p className="muted">{t("detail.personalHidden")}</p>
-          )}
-          <p className="muted small">{t("detail.sensitiveNotice")}</p>
-        </section>
-      </div>
-
-      <h2>{t("detail.employmentTitle")}</h2>
-      <p className="muted small">{t("detail.historyNote")}</p>
-      {d.employments.length === 0 && <p className="muted">{t("detail.noEmployment")}</p>}
-      {session?.can("employment.manage") &&
-        (realPeriods.length === 0 ? (
+        );
+      case "initial_employment":
+        return (
           <NewPeriodForm<Detail>
-            key={`${d.revision}-initial-employment`}
             mode="initial"
             personId={d.id}
             hasCancelledPeriods={d.employments.length > 0}
             today={d.status_as_of}
             canBackdate
             revision={d.revision}
-            onSaved={(updated) => {
-              setD(updated);
-              setNotice(t("detail.saved"));
-            }}
+            onSaved={(u) => saved(u)}
+            launched={lp}
           />
-        ) : (
-          latest?.end_date && (
-            <NewPeriodForm<Detail>
-              key={`${d.revision}-rehire`}
-              mode="rehire"
-              personId={d.id}
-              previous={{ ...latest, end_date: latest.end_date }}
-              today={d.status_as_of}
-              canBackdate={Boolean(session.can("employment.correct"))}
+        );
+      case "rehire":
+        return latest?.end_date ? (
+          <NewPeriodForm<Detail>
+            mode="rehire"
+            personId={d.id}
+            previous={{ ...latest, end_date: latest.end_date }}
+            today={d.status_as_of}
+            canBackdate={can("employment.correct")}
+            revision={d.revision}
+            onSaved={(u) => saved(u)}
+            launched={lp}
+          />
+        ) : null;
+    }
+    if (!tp) return null;
+    switch (action) {
+      case "change_assignment":
+        return (
+          <AssignmentChangeForm<Detail>
+            employmentId={tp.id}
+            personId={d.id}
+            current={tp.assignments.at(-1) ?? null}
+            revision={d.revision}
+            minDate={can("employment.correct") ? undefined : d.status_as_of}
+            onSaved={(u) => saved(u)}
+            launched={lp}
+          />
+        );
+      case "initial_assignment":
+        return (
+          <InitialAssignmentForm<Detail>
+            employmentId={tp.id}
+            personId={d.id}
+            periodStart={tp.start_date}
+            periodEnd={tp.end_date}
+            today={d.status_as_of}
+            revision={d.revision}
+            onSaved={(u) => saved(u)}
+            launched={lp}
+          />
+        );
+      case "edit_work_email":
+      case "correct_work_email":
+      case "clear_work_email":
+        return (
+          <section className="card">
+            <h2>{label(action)}</h2>
+            <WorkEmailEditor<Detail>
+              employmentId={tp.id}
+              periodLabel={periodHeading(d, tp)}
+              current={tp.work_email}
+              ended={tp.period_lifecycle === "ended"}
+              canEdit
+              canClear={can("employment.correct")}
               revision={d.revision}
-              onSaved={(updated) => {
-                setD(updated);
-                setNotice(t("detail.saved"));
-              }}
+              onSaved={(u) => saved(u)}
+              launched={{ onClose: close, mode: action === "clear_work_email" ? "clear" : "edit" }}
             />
-          )
-        ))}
-      {d.employments.map((e, index) => (
-        <section key={e.id} className="card" style={{ marginBottom: 12, opacity: disposed(e) ? 0.7 : 1 }}>
-          <div className="spread" style={{ marginBottom: 8 }}>
-            <strong>
-              {t("detail.periodHeading", {
-                n: index + 1,
-                from: formatDate(e.start_date),
-                to: e.end_date ? formatDate(e.end_date) : t("detail.periodOpenEnd"),
-              })}
-            </strong>
-            {disposed(e) ? (
-              <span className="badge">{t(e.voided_at ? "detail.voidedBadge" : "detail.cancelledBadge")}</span>
-            ) : (
-              e.period_lifecycle && (
-                <span className={`badge ${e.period_lifecycle === "active" ? "ok" : ""}`}>
-                  {tMaybe(`employmentStatus.${e.period_lifecycle}`) ?? e.period_lifecycle}
-                </span>
-              )
-            )}
+          </section>
+        );
+      case "end_employment":
+        return (
+          <EndEmploymentForm<Detail>
+            employmentId={tp.id}
+            employeeType={tp.employee_type?.name ?? null}
+            startDate={tp.start_date}
+            currentEnd={tp.end_date}
+            assignments={tp.assignments}
+            today={d.status_as_of}
+            canBackdate={can("employment.correct")}
+            revision={d.revision}
+            onSaved={(u) => saved(u)}
+            launched={lp}
+          />
+        );
+      case "relationship_change":
+        return tp.employee_type ? (
+          <RelationshipChangeForm<Detail>
+            employmentId={tp.id}
+            personId={d.id}
+            period={{ ...tp, employee_type: tp.employee_type }}
+            today={d.status_as_of}
+            canBackdate={can("employment.correct")}
+            revision={d.revision}
+            onSaved={(u) => saved(u)}
+            launched={lp}
+          />
+        ) : null;
+      case "correct_period":
+        return (
+          <PeriodCorrectionForm<Detail>
+            employmentId={tp.id}
+            current={{ start_date: tp.start_date, end_date: tp.end_date, employee_type: tp.employee_type }}
+            hasActiveEndEvent={tp.has_active_end_event}
+            revision={d.revision}
+            onSaved={(u) => saved(u)}
+            launched={lp}
+          />
+        );
+      case "cancel_planned":
+        return (
+          <CancelPlannedForm<Detail>
+            employmentId={tp.id}
+            period={tp}
+            blockedBy={cancelBlockedBy(d, tp)}
+            revision={d.revision}
+            onSaved={(u) => saved(u)}
+            launched={lp}
+          />
+        );
+      case "reverse_end":
+        return tp.active_end_event ? (
+          <ReverseEndForm<Detail>
+            employmentId={tp.id}
+            activeEnd={tp.active_end_event}
+            currentEnd={tp.end_date}
+            assignments={tp.assignments}
+            today={d.status_as_of}
+            revision={d.revision}
+            onSaved={(u) => saved(u)}
+            launched={lp}
+          />
+        ) : null;
+      case "void_period":
+        return <VoidPeriodForm<Detail> employmentId={tp.id} onSaved={(u) => saved(u, t("voidPeriod.voided"))} launched={lp} />;
+    }
+    return null;
+  };
+
+  const ctx: TabContext = { d, can, targetId: target?.id ?? null, onSaved: (u, message) => saved(u, message) };
+  const meta = [o.header.jobTitle, o.header.department, o.header.employeeType].filter(Boolean).join(" · ");
+
+  return (
+    <>
+      <header className="detail-header">
+        <div className="detail-identity">
+          <Link href={backHref} className="back-link">
+            ← {t("detail.backToEmployees")}
+          </Link>
+          <h1>{d.full_name}</h1>
+          <div className="detail-code">{d.employee_code}</div>
+          <div className="detail-meta">
+            {meta && <span>{meta}</span>}
+            <StatusBadge kind="employment" code={d.employment_status} />
           </div>
-          {e.cancelled_at && <p className="muted small">{t("detail.cancelledNote")}</p>}
-          {e.voided_at && <p className="muted small">{t("detail.voidedNote")}</p>}
-          {needsRelationshipChangeReview(e) && session?.can("employment.correct") && (
-            <p className="alert small">{t("guidance.cancelledRelationshipChange")}</p>
+        </div>
+        <div className="page-actions detail-actions">
+          {actions.primary && (
+            <Button variant="primary" onClick={() => launch(actions.primary!)}>
+              {label(actions.primary)}
+            </Button>
           )}
-          <dl className="kv">
-            <dt>{t("detail.startDate")}</dt>
-            <dd>{formatDate(e.start_date)}</dd>
-            <dt>{t("detail.endDate")}</dt>
-            <dd>{e.end_date ? formatDate(e.end_date) : t("detail.notDetermined")}</dd>
-            <dt>{t("detail.employeeType")}</dt>
-            <dd>{e.employee_type?.name ?? "—"}</dd>
-            <dt>{t("detail.workEmail")}</dt>
-            <dd>{e.work_email ?? "—"}</dd>
-          </dl>
-          {!disposed(e) &&
-            (session?.can("employment.correct") || (e.period_lifecycle !== "ended" && session?.can("employment.manage"))) && (
-              <WorkEmailEditor<Detail>
-                key={`${e.id}-${d.revision}-email`}
-                employmentId={e.id}
-                periodLabel={t("detail.periodHeading", {
-                  n: index + 1,
-                  from: formatDate(e.start_date),
-                  to: e.end_date ? formatDate(e.end_date) : t("detail.periodOpenEnd"),
-                })}
-                current={e.work_email}
-                ended={e.period_lifecycle === "ended"}
-                canEdit={Boolean(e.period_lifecycle === "ended" ? session?.can("employment.correct") : session?.can("employment.manage"))}
-                canClear={Boolean(session?.can("employment.correct"))}
-                revision={d.revision}
-                onSaved={(updated) => {
-                  setD(updated);
-                  setNotice(t("detail.saved"));
-                }}
-              />
-            )}
-          {!disposed(e) && session?.can("employment.correct") && (
-            <PeriodCorrectionForm<Detail>
-              key={`${e.id}-${d.revision}-period`}
-              employmentId={e.id}
-              current={{ start_date: e.start_date, end_date: e.end_date, employee_type: e.employee_type }}
-              hasActiveEndEvent={e.has_active_end_event}
-              revision={d.revision}
-              onSaved={(updated) => {
-                setD(updated);
-                setNotice(t("detail.saved"));
-              }}
-            />
-          )}
-          {!disposed(e) && e.period_lifecycle !== "ended" && !e.has_active_end_event && session?.can("employment.manage") && (
-            <EndEmploymentForm<Detail>
-              key={`${e.id}-${d.revision}-end`}
-              employmentId={e.id}
-              employeeType={e.employee_type?.name ?? null}
-              startDate={e.start_date}
-              currentEnd={e.end_date}
-              assignments={e.assignments}
-              today={d.status_as_of}
-              canBackdate={Boolean(session.can("employment.correct"))}
-              revision={d.revision}
-              onSaved={(updated) => {
-                setD(updated);
-                setNotice(t("detail.saved"));
-              }}
-            />
-          )}
-          {e.id === latest?.id && !e.has_active_end_event && e.employee_type && session?.can("employment.manage") && (
-            <RelationshipChangeForm<Detail>
-              key={`${e.id}-${d.revision}-relationship`}
-              employmentId={e.id}
-              personId={d.id}
-              period={{ ...e, employee_type: e.employee_type }}
-              today={d.status_as_of}
-              canBackdate={Boolean(session.can("employment.correct"))}
-              revision={d.revision}
-              onSaved={(updated) => {
-                setD(updated);
-                setNotice(t("detail.saved"));
-              }}
-            />
-          )}
-          {!disposed(e) && e.start_date > d.status_as_of && session?.can("employment.manage") && (
-            <CancelPlannedForm<Detail>
-              key={`${e.id}-${d.revision}-cancel`}
-              employmentId={e.id}
-              period={e}
-              blockedBy={e.has_active_end_event ? "active_end" : realPeriods.some((o) => o.start_date > e.start_date) ? "later_period" : null}
-              revision={d.revision}
-              onSaved={(updated) => {
-                setD(updated);
-                setNotice(t("detail.saved"));
-              }}
-            />
-          )}
-          {!disposed(e) && e.active_end_event && session?.can("employment.correct") && (
-            <ReverseEndForm<Detail>
-              key={`${e.id}-${d.revision}-reverse`}
-              employmentId={e.id}
-              activeEnd={e.active_end_event}
-              currentEnd={e.end_date}
-              assignments={e.assignments}
-              today={d.status_as_of}
-              revision={d.revision}
-              onSaved={(updated) => {
-                setD(updated);
-                setNotice(t("detail.saved"));
-              }}
-            />
-          )}
-          {e.id === latest?.id && e.start_date <= d.status_as_of && session?.can("employment.correct") && (
-            <VoidPeriodForm<Detail>
-              key={`${e.id}-${d.revision}-void`}
-              employmentId={e.id}
-              onSaved={(updated) => {
-                setD(updated);
-                setNotice(t("voidPeriod.voided"));
-              }}
-            />
-          )}
-          {!disposed(e) && e.assignments.length === 0 && session?.can("employment.manage") && (
-            <InitialAssignmentForm<Detail>
-              key={`${e.id}-${d.revision}-initial`}
-              employmentId={e.id}
-              personId={d.id}
-              periodStart={e.start_date}
-              periodEnd={e.end_date}
-              today={d.status_as_of}
-              revision={d.revision}
-              onSaved={(updated) => {
-                setD(updated);
-                setNotice(t("detail.saved"));
-              }}
-            />
-          )}
-          {!disposed(e) && e.period_lifecycle !== "ended" && e.assignments.length > 0 && session?.can("employment.manage") && (
-            <AssignmentChangeForm<Detail>
-              key={`${e.id}-${d.revision}`}
-              employmentId={e.id}
-              personId={d.id}
-              current={e.assignments.at(-1) ?? null}
-              revision={d.revision}
-              minDate={session.can("employment.correct") ? undefined : d.status_as_of}
-              onSaved={(updated) => {
-                setD(updated);
-                setNotice(t("detail.saved"));
-              }}
-            />
-          )}
-          <div className="table-wrap" style={{ marginTop: 12 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("detail.effectiveFrom")}</th>
-                  <th>{t("detail.effectiveTo")}</th>
-                  <th>{t("employees.columns.department")}</th>
-                  <th>{t("employees.columns.jobTitle")}</th>
-                  <th>{t("detail.jobLevel")}</th>
-                  <th>{t("detail.manager")}</th>
-                  {canCorrect(e) && <th>{t("detail.actions")}</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {e.assignments.map((a) => (
-                  <tr key={a.id}>
-                    <td>{formatDate(a.effective_from)}</td>
-                    <td>{a.effective_to ? formatDate(a.effective_to) : "—"}</td>
-                    <td>{a.department.name}</td>
-                    <td>{a.job_title.name_en}</td>
-                    <td>{a.job_level?.name ?? "—"}</td>
-                    <td>
-                      {a.manager ? (
-                        <Link href={`/employees/${a.manager.person_id}`}>
-                          {a.manager.full_name} ({a.manager.employee_code})
-                        </Link>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    {canCorrect(e) && (
-                      <td>
-                        <button type="button" onClick={() => setCorrectingRow(a.id)} disabled={correctingRow === a.id}>
-                          {t("assignmentCorrection.open")}
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-                {e.assignments.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="muted">
-                      {t("detail.noAssignments")}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {canCorrect(e) &&
-            e.assignments.map(
-              (a, i) =>
-                correctingRow === a.id && (
-                  <AssignmentCorrectionForm<Detail>
-                    key={`${a.id}-${d.revision}`}
-                    row={a}
-                    previous={i > 0 ? e.assignments[i - 1] : null}
-                    personId={d.id}
-                    revision={d.revision}
-                    onSaved={(updated) => {
-                      setD(updated);
-                      setCorrectingRow(null);
-                      setNotice(t("detail.saved"));
-                    }}
-                    onClose={() => setCorrectingRow(null)}
-                  />
-                ),
-            )}
-          <p className="small" style={{ marginTop: 12, marginBottom: 4 }}>
-            <strong>{t("detail.events")}</strong>
-          </p>
-          {e.events.length === 0 ? (
-            <p className="muted small">{t("detail.noEvents")}</p>
-          ) : (
-            <ul className="small" style={{ margin: 0 }}>
-              {e.events.map((ev) => (
-                <EventLine key={ev.id} ev={ev} all={e.events} today={d.status_as_of} voided={Boolean(e.voided_at)} />
-              ))}
-            </ul>
-          )}
-        </section>
-      ))}
+          <ActionMenu label={t("detail.moreActions")} entries={menu} />
+        </div>
+      </header>
+
+      {notice && (
+        <p className="alert ok-note small" role="status">
+          {notice}
+        </p>
+      )}
+
+      {launched && (
+        <div ref={panelRef} className="workflow-panel" tabIndex={-1} role="region" aria-label={t("detail.selectedAction")}>
+          <div key={launched.launch}>{workflow(launched.action)}</div>
+        </div>
+      )}
+
+      <Tabs<TabId> idPrefix="employee" label={t("detail.sectionsLabel")} items={TABS.map((id) => ({ id, label: t(`detail.tabs.${id}`) }))} value={tab} onChange={setTab} />
+      <div role="tabpanel" id={`panel-employee-${tab}`} aria-labelledby={`tab-employee-${tab}`} tabIndex={0} className="tab-panel">
+        {tab === "overview" && <OverviewTab o={o} status={d.employment_status} statusAsOf={d.status_as_of} />}
+        {tab === "personal" && <PersonalTab d={d} />}
+        {tab === "employment" && <EmploymentTab ctx={ctx} />}
+        {tab === "assignment" && <AssignmentTab ctx={ctx} />}
+        {tab === "history" && <HistoryTab d={d} />}
+      </div>
     </>
   );
 }
