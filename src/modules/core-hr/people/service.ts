@@ -540,6 +540,8 @@ type ListQuery = {
   page_size: number;
   search?: string;
   department_id?: string;
+  employee_type_id?: string;
+  operational_completeness?: "complete" | "incomplete";
   employment_status?: "no_employment" | "not_started" | "active" | "ended";
 };
 
@@ -571,6 +573,10 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
     // representative-assignment rule as the displayed row (C-76), applied below before paging.
     and.push({ employments: { some: operationalEmploymentWhere({ assignments: { some: { departmentId: q.department_id } } }) } });
   }
+  if (q.employee_type_id) {
+    // Candidates only; the exact match uses the Employee Type of the representative period shown in the row.
+    and.push({ employments: { some: operationalEmploymentWhere({ employeeTypeId: q.employee_type_id }) } });
+  }
   const where = and.length ? { AND: and } : {};
   // List rows only need operational periods (cancelled periods have no operational effect).
   const include = {
@@ -582,11 +588,16 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
   const orderBy = [{ employeeCode: "asc" as const }, { id: "asc" as const }];
   let data: EmployeeListItem[];
   let total: number;
-  if (q.department_id) {
-    // MVP scale (hundreds of people): filter the candidates with the display rule, then page in memory.
+  // Filters on values derived from the representative period (C-76) and on operational completeness (the same rule as
+  // the profile) are evaluated on the computed row itself. MVP scale (hundreds of people): filter, then page in memory.
+  const rowFilter = (item: EmployeeListItem) =>
+    (!q.department_id || item.department?.id === q.department_id) &&
+    (!q.employee_type_id || item.employee_type?.id === q.employee_type_id) &&
+    (!q.operational_completeness || item.operational_completeness === q.operational_completeness);
+  if (q.department_id || q.employee_type_id || q.operational_completeness) {
     const matched = (await db().person.findMany({ where, orderBy, include }))
       .map((p) => toListItem(p, today))
-      .filter((item) => item.department?.id === q.department_id);
+      .filter(rowFilter);
     total = matched.length;
     data = matched.slice((q.page - 1) * q.page_size, q.page * q.page_size);
   } else {
@@ -655,5 +666,6 @@ function toListItem(p: ListPerson, today: string): EmployeeListItem {
     employee_type: ref(type),
     job_level: a ? ref(a.jobLevel) : null,
     work_email: rep?.e.workEmail ?? null,
+    start_date: rep?.startDate ?? null,
   };
 }

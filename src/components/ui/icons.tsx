@@ -52,3 +52,9 @@ export const IconChevronDown = () => (
     <path d="m6 9 6 6 6-6" />
   </Icon>
 );
+export const IconAttention = () => (
+  <Icon width="15" height="15">
+    <path d="M12 3.5 2.5 20h19z" />
+    <path d="M12 10v4.5M12 17.2v.1" />
+  </Icon>
+);

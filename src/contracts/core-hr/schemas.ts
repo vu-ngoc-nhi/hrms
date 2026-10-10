@@ -640,6 +640,11 @@ export const EmployeeListItemSchema = reg(
     employee_type: CatalogRefSchema.nullable(),
     job_level: CatalogRefSchema.nullable(),
     work_email: z.string().nullable(),
+    start_date: isoDate()
+      .nullable()
+      .describe(
+        "Start date of the employment period this row represents (C-76 representative period, cancelled/voided periods excluded): the current period when Active, the upcoming period when Pre-start, the latest ended period when Ended; null without an employment period. Not a company hire/seniority date.",
+      ),
   }),
 );
 export const EmployeeListSchema = reg(
@@ -662,6 +667,13 @@ export const EmployeeListQuerySchema = z.strictObject({
       "Matches the Department shown in the row (C-76): active → assignment effective today; pre-start → first assignment of the upcoming period; ended → last assignment of the latest ended period. Combine with employment_status to restrict the lifecycle.",
     ),
   employment_status: EmploymentStatusSchema.optional(),
+  employee_type_id: z
+    .uuid()
+    .optional()
+    .describe("Matches the Employee Type shown in the row, i.e. of the representative period (same rule as department_id)."),
+  operational_completeness: CompletenessStatusSchema.optional().describe(
+    "Matches the operational completeness shown in the row and on the profile (same versioned rule; UI label 'Needs Attention' = incomplete).",
+  ),
 });
 
 export type EmployeeCreateInput = z.infer<typeof EmployeeCreateSchema>;
