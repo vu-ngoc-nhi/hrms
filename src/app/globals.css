@@ -306,6 +306,23 @@ tbody tr:hover td { background: var(--color-surface-2); }
 .badge.period-label.last { background: var(--color-neutral-subtle); color: var(--color-text); }
 .badge.period-label.not_operational { background: transparent; color: var(--color-text-2); border: 1px dashed var(--color-border-strong); }
 .change-summary strong { color: var(--color-text); }
+/* History tab (UI-7): one compact vertical timeline grouped by effective date (most recent first). */
+.timeline { list-style: none; margin: var(--space-4) 0 0; padding: 0; }
+.timeline-group { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--space-4); padding-bottom: var(--space-4); }
+.timeline-date { font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; padding-top: var(--space-2); }
+.timeline-items { list-style: none; margin: 0; padding: 0 0 0 var(--space-4); border-left: 2px solid var(--color-border); display: grid; gap: var(--space-2); }
+.timeline-item { position: relative; padding: var(--space-2) var(--space-3); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); }
+.timeline-item::before { content: ""; position: absolute; left: calc(-1 * var(--space-4) - 6px); top: 14px; width: 10px; height: 10px; border-radius: 50%; background: var(--color-surface); border: 2px solid var(--color-border-strong); }
+.timeline-item.planned::before { border-color: var(--color-info); }
+.timeline-item.reversed, .timeline-item.cancelled, .timeline-item.voided, .timeline-item.period_cancelled, .timeline-item.period_voided { background: var(--color-surface-2); }
+.timeline-item.reversed .timeline-title { text-decoration: line-through; color: var(--color-text-2); }
+.timeline-item.period_voided, .timeline-item.voided { border-style: dashed; }
+.timeline-head { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.timeline-title { font-weight: var(--font-weight-semibold); }
+.timeline-line { font-size: var(--font-size-sm); color: var(--color-text-2); }
+.timeline-line strong { color: var(--color-text); }
+.timeline-context { font-size: var(--font-size-xs); color: var(--color-text-2); margin-top: 2px; }
+@media (max-width: 640px) { .timeline-group { grid-template-columns: 1fr; gap: var(--space-1); } .timeline-date { padding-top: 0; } }
 
 /* ---------------- Filter bar (lists) ---------------- */
 .filter-bar {

@@ -5,7 +5,7 @@ import { ActionMenu, Button, EmptyState } from "@/components/ui";
 import { formatDate, t, tMaybe } from "@/i18n";
 import { addDays } from "@/lib/dates";
 import { PeriodWorkflow, actionLabel, groupedMenu } from "./PeriodWorkflow";
-import type { TabContext } from "./RecordTabs";
+import type { TabContext } from "./tabContext";
 import { isDisposed, operationalPeriods, periodActions, type ActionId } from "./detailModel";
 import { employmentSections, type LifecycleLine, type PeriodView } from "./employmentModel";
 

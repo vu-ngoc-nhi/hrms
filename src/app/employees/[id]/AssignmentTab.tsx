@@ -6,7 +6,7 @@ import { Button } from "@/components/ui";
 import { formatDate, t } from "@/i18n";
 import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
 import { PeriodWorkflow, actionLabel } from "./PeriodWorkflow";
-import type { TabContext } from "./RecordTabs";
+import type { TabContext } from "./tabContext";
 import { assignmentSections, type AssignmentView, type DateWording, type EmptyPeriod } from "./assignmentModel";
 import { periodEligibility, type Detail, type Period } from "./detailModel";
 
