@@ -1,0 +1,101 @@
+/*
+ * Mini HRS design tokens (UI refresh, UI-0). The ONLY place where raw visual values live; components and page
+ * styles use these variables. White + red, EmeSoft-inspired, light interface (decisions D-UI-1 … D-UI-11).
+ *
+ * Brand red pending final EmeSoft brand confirmation (D-UI-10): #c8102e is a TEMPORARY primary red. To change it,
+ * edit --color-primary and its derived shades below — nothing else.
+ */
+:root {
+  /* ---- Brand / primary (temporary, D-UI-10) ---- */
+  --color-primary: #c8102e;
+  --color-primary-hover: #a90d27;
+  --color-primary-pressed: #8e0b21;
+  --color-primary-subtle: #fdf0f2;
+  --color-primary-border: #f3c4cc;
+  --color-primary-ink: #ffffff;
+
+  /* ---- Surfaces and text ---- */
+  --color-page: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #f9fafb;
+  --color-border: #e4e6eb;
+  --color-border-strong: #cdd1d9;
+  --color-text: #1b1d22;
+  --color-text-2: #5c606e;
+  --color-overlay: rgba(17, 20, 27, 0.4);
+
+  /* ---- Semantic status colours (red is the accent, not the only status colour) ---- */
+  --color-success: #1d7a46;
+  --color-success-subtle: #e5f4eb;
+  --color-warning: #7a5600;
+  --color-warning-subtle: #fff4d6;
+  --color-danger: #b42318;
+  --color-danger-hover: #95180f;
+  --color-danger-subtle: #fdeceb;
+  --color-info: #1f5fa8;
+  --color-info-subtle: #e8f1fb;
+  --color-neutral: #5c606e;
+  --color-neutral-subtle: #eef0f3;
+  --color-on-danger: #ffffff;
+  --color-success-border: rgba(29, 122, 70, 0.14);
+  --color-warning-border: rgba(122, 86, 0, 0.14);
+  --color-danger-border: rgba(180, 35, 24, 0.16);
+  --color-info-border: rgba(31, 95, 168, 0.14);
+
+  /* ---- Focus ---- */
+  --focus-ring: 0 0 0 3px rgba(200, 16, 46, 0.28);
+
+  /* ---- Spacing scale (4 px rhythm) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* ---- Shape and depth ---- */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.18);
+
+  /* ---- Sizing ---- */
+  --control-height: 36px;
+  --control-height-sm: 28px;
+  --table-row-height: 44px;
+  --sidebar-width: 236px;
+  --content-max-width: 1240px;
+
+  /* ---- Typography (system font stack; no external fonts) ---- */
+  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-size-2xs: 11px;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ---- Legacy aliases (existing screens and inline styles; removed slice by slice) ---- */
+  --bg: var(--color-page);
+  --surface: var(--color-surface);
+  --text: var(--color-text);
+  --muted: var(--color-text-2);
+  --border: var(--color-border);
+  --accent: var(--color-primary);
+  --accent-ink: var(--color-primary-ink);
+  --ok: var(--color-success);
+  --warn-bg: var(--color-warning-subtle);
+  --warn-ink: var(--color-warning);
+  --err-bg: var(--color-danger-subtle);
+  --err-ink: var(--color-danger);
+
+  color-scheme: light;
+}

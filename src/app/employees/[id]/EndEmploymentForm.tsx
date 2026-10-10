@@ -118,7 +118,6 @@ export function EndEmploymentForm<T>({
           maxLength={1000}
           value={form.note}
           onChange={set("note")}
-          style={{ font: "inherit", padding: 8, border: "1px solid var(--border)", borderRadius: 6 }}
         />
       </label>
       <p className="muted small">{t("endEmployment.noteHelp")}</p>

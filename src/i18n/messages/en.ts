@@ -2,7 +2,19 @@
 // locale (e.g. Vietnamese) can be added later as a sibling file with the same keys, without touching components.
 export const en = {
   app: { name: "Mini HRS", loading: "Loading…", notFound: "Not found" },
-  nav: { employees: "Employees", catalogs: "Catalogs", apiDocs: "API Docs", signOut: "Sign out", testIdentity: "Test identity" },
+  nav: {
+    main: "Main navigation",
+    home: "Home",
+    homeSoon: "Soon",
+    homeSoonHint: "The Home overview is coming in a later step of the UI refresh.",
+    employees: "Employees",
+    organization: "Organization",
+    catalogs: "Catalogs",
+    apiDocs: "API Docs",
+    signOut: "Sign out",
+    testIdentity: "Test identity",
+  },
+  ui: { close: "Close", required: "required" },
   login: {
     title: "Sign in to Mini HRS",
     testIdentityNotice:

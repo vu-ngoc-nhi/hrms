@@ -139,7 +139,6 @@ export function ProfileEditForm({
             onChange={(e) => setReason(e.target.value)}
             maxLength={1000}
             rows={2}
-            style={{ font: "inherit", padding: 8, border: "1px solid var(--border)", borderRadius: 6 }}
           />
           <span className="muted small">{t("profileEdit.reasonHelp")}</span>
         </label>

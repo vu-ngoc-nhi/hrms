@@ -93,7 +93,6 @@ export function WorkEmailEditor<T>({
             maxLength={1000}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            style={{ font: "inherit", padding: 8, border: "1px solid var(--border)", borderRadius: 6 }}
           />
         </label>
       )}

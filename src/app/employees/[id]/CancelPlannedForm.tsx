@@ -81,7 +81,6 @@ export function CancelPlannedForm<T>({
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           disabled={blockedBy !== null}
-          style={{ font: "inherit", padding: 8, border: "1px solid var(--border)", borderRadius: 6 }}
         />
       </label>
       <ErrorBox error={error} />

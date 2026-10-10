@@ -166,7 +166,6 @@ export function NewPeriodForm<T>({
           maxLength={1000}
           value={form.reason}
           onChange={set("reason")}
-          style={{ font: "inherit", padding: 8, border: "1px solid var(--border)", borderRadius: 6 }}
         />
       </label>
       <ErrorBox error={error} />
