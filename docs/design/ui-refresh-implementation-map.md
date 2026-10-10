@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95). **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). Next slice (UI-4) not started.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95). **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). Next slice (UI-5) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -266,4 +266,54 @@ UI-4 Personal, UI-5 Employment, UI-6 Assignment, UI-7 History tab redesigns; UI-
 | Responsive | Header and actions fit at 1280 px; Overview cards in two columns ≥ 1024 px, stacked below; no horizontal page scroll at 900 px or phone width |
 | Accessibility | Tabs and More actions operable by keyboard (ArrowDown opens, End/arrows move, Escape closes and returns focus); every card has a heading; status always has text; focus moves into an opened workflow |
 | Smoke | Employees → DEMO001 (Active) → DEMO901 (Pre-start, back link keeps the list search) → DEMO003 (Ended) → DEMO802 (upcoming change); Void opened from More actions loads its preview and Cancel closes it (nothing submitted); no app console or server errors |
+
+## 12. UI-4 — Personal Information (implemented 2026-10-10)
+
+Scope: the Personal tab only. No API, field, privacy rule, permission or correction semantics changed.
+
+### Supported fields (intentionally minimal)
+
+Full Name · Date of Birth · Gender · Mobile · Personal Email — exactly the existing fields. Employee Code, Work Email, Employee Type, Department and Job Title are **not** repeated (header / Overview / Employment own them; Work Email is an employment field).
+
+**Intentionally NOT added:** National ID / legal ID, address, marital status, emergency contact, bank, tax or social-insurance data, family/dependants, generic HR notes, age or birthday analytics. Any future sensitive personal field needs a separate product and legal decision (`employees.read_sensitive` remains unassigned); the former in-page note listing such future fields was removed.
+
+### Layout
+
+One card *Personal Information*: label-above-value pairs in two columns on desktop (Full Name, Date of Birth / Gender, Mobile / Personal Email), one column below 720 px; no horizontal scroll. Absent optional values read "—" with normal styling (no warning) — completeness stays in Overview → Record Health. Dates use the project format (`14 May 1988`). Without `employees.read_personal` the card shows Full Name and "You do not have permission to view personal information."
+
+### Normal update vs correction (C-23 preserved)
+
+The backend has one action (`PATCH /employees/{id}`) whose reason rule is enforced server-side. UI-4 presents its two meanings separately; `personalModel.ts` mirrors the rule only for guidance.
+
+| Path | Where | Fields | Reason |
+|---|---|---|---|
+| **Edit Personal Information** (normal update) | Secondary button in the Personal card (the page keeps a single red primary action); edits in place | Gender, Mobile, Personal Email; Date of Birth **only when none is recorded** (completion). Full Name and a recorded Date of Birth are shown read-only with a pointer to the correction | Never (payload never carries Full Name or a reason) |
+| **Correct Name or Date of Birth** (correction) | More actions → **Correct record** (replaces UI-3's "Edit Profile"); opens in the Selected action region | Full Name; recorded Date of Birth (change or clear to remove) when the personal write capability allows | Always required, kept in the audit trail (values are not audited, C-24) |
+
+Gender keeps the contract values (Female / Male / Other) and stays optional; Date of Birth stays optional (no required marker; future dates and the under-15 review warning remain server rules). Validation errors from the API are shown next to the field (`aria-invalid`, `aria-describedby`), the rest in the error box.
+
+### Permissions (capabilities, never role names)
+
+| Capability | Effect |
+|---|---|
+| `employees.read_personal` | personal values visible |
+| `employees.update` + `employees.write_personal` | Edit Personal Information; Date of Birth correction |
+| `employees.update` | Correct Name or Date of Birth (Full Name) |
+
+HR_ADMIN and HR_EDITOR both hold these today (C-23 corrections of Full Name / Date of Birth are not `employment.correct` actions); API_DOCS_READER sees no employee data.
+
+### Shared primitives
+
+Uses `Card`-style section, `Field` (visible label, `htmlFor`/`id`, hints, errors), `Button`, `InfoBox`; no inline styles. Two UI-0 `Field` fixes: the label no longer inherits the global grid label style (the required `*` sat on its own line) and controls are no longer stretched to a neighbour's height (`align-content: start`). The old combined `ProfileEditForm` was removed.
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| Unit `tests/unit/personal-tab.test.ts` (13) | optional DOB / Gender / Mobile / Personal Email; Gender values; normal update payload (no Full Name, no reason; DOB completion; recorded DOB untouched; clearing → null); correction payload (Full Name, DOB change/removal, reason); capabilities for HR_ADMIN / HR_EDITOR / read-only / no personal access; no role-name checks in the Personal code; field-level errors |
+| Unit `tests/unit/detail-overview.test.ts` | header Correct record now offers `correct_personal` |
+| Unit suite / typecheck / lint / build | 101/101 unit tests; typecheck, lint, production build pass. Frontend-only: DB/UAT suites not re-run |
+| Visual QA (synthetic data, HR Admin test identity, 1440 px) | A all fields DEMO001; B no optional values DEMO906 (all "—", no warning); C edit form open DEMO001 (recorded DOB read-only); D correction from More actions DEMO001 with review (cancelled, nothing saved) |
+| End-to-end on synthetic DEMO801 (batch 8, QA) | normal update filled in the missing Date of Birth and Mobile without a reason; correction of the recorded Date of Birth with a reason; invalid Mobile on DEMO001 rejected with a field-level message (nothing saved) |
+| Responsive / smoke | one column and no horizontal scroll at phone width; Employees → DEMO001 → Personal → edit → cancel → Correct record → cancel after restart; no app console or server errors |
 

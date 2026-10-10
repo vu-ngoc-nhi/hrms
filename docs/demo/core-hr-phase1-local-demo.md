@@ -24,7 +24,7 @@ npm run demo:prepare -- --run 2
 - **Identity:** on the sign-in page choose **Test HR Admin** (role HR_ADMIN). **Local demo authentication only — production Entra authentication is not implemented yet.**
 - `demo:prepare` is local-only (refuses anything but the local `hrms_dev`), idempotent and non-destructive. It creates:
   - **Showcase records** `DEMO001`–`DEMO006` (created once; only *viewed* during the demo).
-  - **A live-action batch** `DEMO<run>01`–`DEMO<run>06` that the demo changes. Use a **new run number for every demo** (`--run 2`, `--run 3`, … up to 8). Batch 1 (`DEMO101`–`DEMO106`) is already prepared and unused; batch 9 was consumed by the smoke test; batch 8 was used for UI-3 visual QA (`DEMO802` has a planned assignment change on 01 Nov 2026). In the steps below `DEMOx0n` means the batch of the day (e.g. `DEMO201`).
+  - **A live-action batch** `DEMO<run>01`–`DEMO<run>06` that the demo changes. Use a **new run number for every demo** (`--run 2`, `--run 3`, … up to 8). Batch 1 (`DEMO101`–`DEMO106`) is already prepared and unused; batch 9 was consumed by the smoke test; batch 8 was used for UI-3/UI-4 visual QA (`DEMO802` has a planned assignment change on 01 Nov 2026; `DEMO801` has QA personal data and a Date of Birth correction). In the steps below `DEMOx0n` means the batch of the day (e.g. `DEMO201`).
 - Prepare the batch on the day of the demo (the pre-start record starts 14 days after preparation; the Void record starts on the preparation day).
 - In the Employee List always search **`DEMO`**: the development database also contains earlier synthetic UAT test records (codes `ES00xx`) that are not part of the story.
 
