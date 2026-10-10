@@ -3,7 +3,7 @@
 - Baseline: tag `phase1-uat-ready` (commit `648e281`), milestone **Core HR Phase 1 — UAT Ready With Known Limitations**.
 - Executed: 2026-10-10 (business date, Asia/Ho_Chi_Minh). Synthetic data only; no real employee data.
 - **This is not a UAT acceptance.** Final UAT acceptance requires human HR confirmation, especially for the items marked *HUMAN VALIDATION*.
-- No product code or business rule was changed during this round.
+- No product code or business rule was changed during this round. The resolutions accepted afterwards are listed in *Round 1 resolutions (2026-10-10)* at the end.
 
 ## How the round was run
 
@@ -90,3 +90,21 @@ Test defects found and corrected in the UAT suite itself (not product bugs): a n
 **UAT ROUND 1 PASSED WITH BUSINESS DECISIONS REQUIRED**
 
 No blocking bugs were found and the P0 recovery scenario passes. HR must decide BD-1 to BD-5 (with BD-2 / PV-25 the most important), and confirm the history readability before final UAT acceptance. Not "UAT Passed"; not production ready.
+
+## Round 1 resolutions (2026-10-10)
+
+Round 1 was accepted (21/24 PASS, 0 FAIL, 3 human/business validation). **This is still not full UAT acceptance**; UAT Round 2 follows. Decisions are recorded in `docs/decision-register.md`.
+
+| Item | Resolution | Status |
+|---|---|---|
+| UAT-17 / BD-1 Pre-start completeness | **Business decision resolved (C-78):** for a Pre-start period an assignment counts for Department / Job Title completeness only if it is ready on the Employment Start Date (`first assignment effective_from <= start date`). The profile stays incomplete from the beginning (no complete → incomplete → complete). Department display and filter keep C-76. | Implemented (`c450f35`); regression tests; UAT-17 assertion updated |
+| UAT-18 / BD-2 PV-25 | **HIGH PRIORITY — must be resolved before production readiness.** Not implemented. Must not be solved by DELETE, a same-day Cancel Planned exception, a fake End Employment, Rehire or date manipulation. Likely direction: explicit *Void Effective Employment Period* — design after UAT Round 2. | Unresolved (by decision) |
+| BD-3 Relationship Change after End | **Current procedure confirmed (C-79):** an Active End Event keeps blocking Relationship Change; if the relationship was actually continuous: (1) Reverse End Employment, (2) Relationship Change. | Confirmed; guidance improved (UX-1) |
+| UX-1 Gap guidance | A gap after a recorded End now says "use Rehire"; a continuous start says "Reverse End Employment first, then Relationship Change". Stable code `ACTIVE_END_EVENT_EXISTS` unchanged. | Fixed (`84dfc8e`) |
+| BD-4 / UX-2 History readability | **UX fix approved and implemented (C-80):** reversed End events are struck through with a *Reversed* badge, the current End has a *Current end* badge, and *End of employment reversed* names the End it reverses. Order and data unchanged. | Fixed (`757dc21`) |
+| UX-3 URL filters | Employee List reads and keeps search / status / department / page in the URL. Count copy fixed ("Profiles found: N"). | Fixed (`2bfeb32`) |
+| UX-4 Future End label | A future-dated End reads *Planned end of employment*; once effective, *End of employment* (display only). | Fixed (`757dc21`) |
+| BD-5 / UX-5 Planned Rehire | **Behaviour confirmed (C-61, C-81).** When the previous period ends in the future the action is shown as *Plan Rehire* with "The current employment is scheduled to end on <date>. This will create a future employment period starting after that date." Same API. | UX clarification implemented |
+
+Next: **UAT Round 2** (human HR confirmation). PV-25 design only after Round 2.
+
