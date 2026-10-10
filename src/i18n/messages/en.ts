@@ -23,7 +23,7 @@ export const en = {
     employmentStatus: "Employment Status",
     department: "Department",
     all: "All",
-    count: "{total} profiles · status as of {date}",
+    count: "Profiles found: {total} · status as of {date}",
     empty: "No profiles match the current filters.",
     previous: "Previous",
     next: "Next",

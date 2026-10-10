@@ -6,6 +6,7 @@ import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
 import { formatDate, t, tMaybe } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import { filtersFromQuery, LIST_STATUSES, queryFromFilters } from "./listQuery";
 
 type Ref = { id: string; code: string; name: string } | null;
 type Item = {
@@ -21,12 +22,14 @@ type Item = {
 type Page = { data: Item[]; total: number; page: number; page_size: number; status_as_of: string };
 
 const PAGE_SIZE = 20;
-const STATUSES = ["active", "not_started", "ended", "no_employment"] as const;
+const STATUSES = LIST_STATUSES;
 
 export default function EmployeesPage() {
   const session = useSession();
-  const [filters, setFilters] = useState({ search: "", employment_status: "", department_id: "" });
-  const [page, setPage] = useState(1);
+  // UX-3: initial state comes from the URL (this page renders client-side only, inside the signed-in AppShell).
+  const [initial] = useState(() => filtersFromQuery(typeof window === "undefined" ? "" : window.location.search));
+  const [filters, setFilters] = useState(initial.filters);
+  const [page, setPage] = useState(initial.page);
   const [result, setResult] = useState<Page | null>(null);
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState<ApiCallError | null>(null);
@@ -37,6 +40,9 @@ export default function EmployeesPage() {
     let cancelled = false;
     const qs = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
     for (const [k, v] of Object.entries(filters)) if (v.trim()) qs.set(k, v.trim());
+    // Keep the address bar in sync so a filtered list can be shared or reloaded (no navigation, no new history entry).
+    const url = `${window.location.pathname}${queryFromFilters(filters, page)}`;
+    if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
     api<Page>(`/api/v1/core-hr/employees?${qs}`)
       .then((r) => {
         if (cancelled) return;
