@@ -3,20 +3,13 @@
 import Link from "next/link";
 import { useState } from "react";
 import { formatDate, t, tMaybe } from "@/i18n";
-import { addDays } from "@/lib/dates";
 import { AssignmentChangeForm } from "./AssignmentChangeForm";
 import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
-import { CancelPlannedForm } from "./CancelPlannedForm";
-import { EndEmploymentForm } from "./EndEmploymentForm";
 import { InitialAssignmentForm } from "./InitialAssignmentForm";
-import { PeriodCorrectionForm } from "./PeriodCorrectionForm";
-import { RelationshipChangeForm } from "./RelationshipChangeForm";
-import { ReverseEndForm } from "./ReverseEndForm";
-import { VoidPeriodForm } from "./VoidPeriodForm";
-import { WorkEmailEditor } from "./WorkEmailEditor";
-import { isDisposed, operationalPeriods, periodEligibility, type Detail, type HistoryEvent, type Period } from "./detailModel";
+import { periodHeading } from "./PeriodWorkflow";
+import { isDisposed, periodEligibility, type Detail, type HistoryEvent, type Period } from "./detailModel";
 
-// UI-3: the pre-UI-3 Employee Detail content split into the Employment, Assignment and History tabs (Personal: UI-4). Layout
+// UI-3: the pre-UI-3 Employee Detail content for the Assignment and History tabs (Personal: UI-4, Employment: UI-5). Layout
 // and wording inside these tabs are unchanged (they are refactored in UI-4 … UI-7). Workflows of the representative
 // period are opened from the header (Change Assignment / More actions); other periods keep their inline buttons.
 
@@ -27,13 +20,6 @@ export type TabContext = {
   targetId: string | null;
   onSaved: (updated: Detail, notice?: string) => void;
 };
-
-export const periodHeading = (d: Detail, e: Period) =>
-  t("detail.periodHeading", {
-    n: d.employments.indexOf(e) + 1,
-    from: formatDate(e.start_date),
-    to: e.end_date ? formatDate(e.end_date) : t("detail.periodOpenEnd"),
-  });
 
 function PeriodHeader({ d, e }: { d: Detail; e: Period }) {
   return (
@@ -49,126 +35,6 @@ function PeriodHeader({ d, e }: { d: Detail; e: Period }) {
     </div>
   );
 }
-
-export function EmploymentTab({ ctx }: { ctx: TabContext }) {
-  const { d, can, targetId, onSaved } = ctx;
-  const realPeriods = operationalPeriods(d);
-  const saved = (updated: Detail) => onSaved(updated);
-  // C-72: an Active End Event with RELATIONSHIP_CHANGE whose successor (starting the next day) was cancelled and that
-  // has no non-cancelled successor. Guidance only — the reversal stays an explicit HR_ADMIN action.
-  const needsRelationshipChangeReview = (e: Period) =>
-    !isDisposed(e) &&
-    e.active_end_event?.end_reason?.code === "RELATIONSHIP_CHANGE" &&
-    !realPeriods.some((o) => o.start_date > e.start_date) &&
-    d.employments.some((o) => o.cancelled_at && o.start_date === addDays(e.active_end_event!.effective_date, 1));
-  return (
-    <>
-      <h2>{t("detail.employmentTitle")}</h2>
-      <p className="muted small">{t("detail.historyNote")}</p>
-      {d.employments.length === 0 && <p className="muted">{t("detail.noEmployment")}</p>}
-      {d.employments.map((e) => {
-        const el = periodEligibility(d, e, can);
-        const inline = e.id !== targetId;
-        return (
-          <section key={e.id} className="card" style={{ marginBottom: 12, opacity: isDisposed(e) ? 0.7 : 1 }}>
-            <PeriodHeader d={d} e={e} />
-            {e.cancelled_at && <p className="muted small">{t("detail.cancelledNote")}</p>}
-            {e.voided_at && <p className="muted small">{t("detail.voidedNote")}</p>}
-            {needsRelationshipChangeReview(e) && can("employment.correct") && <p className="alert small">{t("guidance.cancelledRelationshipChange")}</p>}
-            <dl className="kv">
-              <dt>{t("detail.startDate")}</dt>
-              <dd>{formatDate(e.start_date)}</dd>
-              <dt>{t("detail.endDate")}</dt>
-              <dd>{e.end_date ? formatDate(e.end_date) : t("detail.notDetermined")}</dd>
-              <dt>{t("detail.employeeType")}</dt>
-              <dd>{e.employee_type?.name ?? "—"}</dd>
-              <dt>{t("detail.workEmail")}</dt>
-              <dd>{e.work_email ?? "—"}</dd>
-            </dl>
-            {!inline && <p className="muted small">{t("detail.headerActionsNote")}</p>}
-            {inline && (el.workEmailEdit || el.workEmailClear) && (
-              <WorkEmailEditor<Detail>
-                key={`${e.id}-${d.revision}-email`}
-                employmentId={e.id}
-                periodLabel={periodHeading(d, e)}
-                current={e.work_email}
-                ended={e.period_lifecycle === "ended"}
-                canEdit={el.workEmailEdit}
-                canClear={can("employment.correct")}
-                revision={d.revision}
-                onSaved={saved}
-              />
-            )}
-            {inline && el.correctPeriod && (
-              <PeriodCorrectionForm<Detail>
-                key={`${e.id}-${d.revision}-period`}
-                employmentId={e.id}
-                current={{ start_date: e.start_date, end_date: e.end_date, employee_type: e.employee_type }}
-                hasActiveEndEvent={e.has_active_end_event}
-                revision={d.revision}
-                onSaved={saved}
-              />
-            )}
-            {inline && el.endEmployment && (
-              <EndEmploymentForm<Detail>
-                key={`${e.id}-${d.revision}-end`}
-                employmentId={e.id}
-                employeeType={e.employee_type?.name ?? null}
-                startDate={e.start_date}
-                currentEnd={e.end_date}
-                assignments={e.assignments}
-                today={d.status_as_of}
-                canBackdate={can("employment.correct")}
-                revision={d.revision}
-                onSaved={saved}
-              />
-            )}
-            {inline && el.relationshipChange && e.employee_type && (
-              <RelationshipChangeForm<Detail>
-                key={`${e.id}-${d.revision}-relationship`}
-                employmentId={e.id}
-                personId={d.id}
-                period={{ ...e, employee_type: e.employee_type }}
-                today={d.status_as_of}
-                canBackdate={can("employment.correct")}
-                revision={d.revision}
-                onSaved={saved}
-              />
-            )}
-            {inline && el.cancelPlanned && (
-              <CancelPlannedForm<Detail>
-                key={`${e.id}-${d.revision}-cancel`}
-                employmentId={e.id}
-                period={e}
-                blockedBy={cancelBlockedBy(d, e)}
-                revision={d.revision}
-                onSaved={saved}
-              />
-            )}
-            {inline && el.reverseEnd && e.active_end_event && (
-              <ReverseEndForm<Detail>
-                key={`${e.id}-${d.revision}-reverse`}
-                employmentId={e.id}
-                activeEnd={e.active_end_event}
-                currentEnd={e.end_date}
-                assignments={e.assignments}
-                today={d.status_as_of}
-                revision={d.revision}
-                onSaved={saved}
-              />
-            )}
-            {inline && el.voidPeriod && (
-              <VoidPeriodForm<Detail> key={`${e.id}-${d.revision}-void`} employmentId={e.id} onSaved={(u) => onSaved(u, t("voidPeriod.voided"))} />
-            )}
-          </section>
-        );
-      })}
-    </>
-  );
-}
-
-export const cancelBlockedBy = (d: Detail, e: Period) =>
-  e.has_active_end_event ? ("active_end" as const) : operationalPeriods(d).some((o) => o.start_date > e.start_date) ? ("later_period" as const) : null;
 
 export function AssignmentTab({ ctx }: { ctx: TabContext }) {
   const { d, can, targetId, onSaved } = ctx;

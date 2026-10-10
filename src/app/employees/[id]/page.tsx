@@ -5,23 +5,16 @@ import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
-import { ActionMenu, Button, StatusBadge, Tabs, type ActionMenuEntry } from "@/components/ui";
+import { ActionMenu, Button, StatusBadge, Tabs } from "@/components/ui";
 import { t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import { rememberedListHref } from "../listQuery";
-import { AssignmentChangeForm } from "./AssignmentChangeForm";
-import { CancelPlannedForm } from "./CancelPlannedForm";
-import { EndEmploymentForm } from "./EndEmploymentForm";
-import { InitialAssignmentForm } from "./InitialAssignmentForm";
 import { NewPeriodForm } from "./NewPeriodForm";
 import { OverviewTab } from "./OverviewTab";
-import { PeriodCorrectionForm } from "./PeriodCorrectionForm";
 import { PersonalCorrectionForm, PersonalTab } from "./PersonalTab";
-import { AssignmentTab, cancelBlockedBy, EmploymentTab, HistoryTab, periodHeading, type TabContext } from "./RecordTabs";
-import { RelationshipChangeForm } from "./RelationshipChangeForm";
-import { ReverseEndForm } from "./ReverseEndForm";
-import { VoidPeriodForm } from "./VoidPeriodForm";
-import { WorkEmailEditor } from "./WorkEmailEditor";
+import { PeriodWorkflow, actionLabel, groupedMenu } from "./PeriodWorkflow";
+import { AssignmentTab, HistoryTab, type TabContext } from "./RecordTabs";
+import { EmploymentTab } from "./EmploymentTab";
 import { headerActions, latestPeriod, overview, type ActionId, type Detail } from "./detailModel";
 
 // UI-3 Employee Detail shell: compact header, one primary action, a More actions menu (daily → Correct record →
@@ -87,33 +80,8 @@ export default function EmployeeDetailPage() {
   };
 
   const plannedRehire = Boolean(latest?.end_date && latest.end_date >= d.status_as_of);
-  const label = (a: ActionId): string =>
-    ({
-      change_assignment: t("assignmentChange.open"),
-      initial_assignment: t("initialAssignment.open"),
-      edit_work_email: t("workEmail.edit"),
-      end_employment: t("endEmployment.open"),
-      relationship_change: t("detail.actionLabel.relationshipChange"),
-      rehire: plannedRehire ? t("rehire.plan.open") : t("rehire.open"),
-      initial_employment: t("initialEmployment.open"),
-      correct_personal: t("personal.correct"),
-      correct_period: t("detail.actionLabel.correctPeriod"),
-      correct_work_email: t("workEmail.correct"),
-      clear_work_email: t("workEmail.clear"),
-      cancel_planned: t("cancelPlanned.open"),
-      reverse_end: t("reverseEnd.open"),
-      void_period: t("voidPeriod.open"),
-    })[a];
-  const item = (a: ActionId, danger = false): ActionMenuEntry => ({ type: "item", label: label(a), onSelect: () => launch(a), danger });
-  const menu: ActionMenuEntry[] = [
-    ...actions.daily.map((a) => item(a)),
-    ...(actions.correction.length
-      ? [...(actions.daily.length ? [{ type: "separator" } as const] : []), { type: "group", label: t("detail.actionGroup.correct") } as const, ...actions.correction.map((a) => item(a))]
-      : []),
-    ...(actions.advanced.length
-      ? [{ type: "separator" } as const, { type: "group", label: t("detail.actionGroup.advanced") } as const, ...actions.advanced.map((a) => item(a, true))]
-      : []),
-  ];
+  const label = (a: ActionId) => actionLabel(a, plannedRehire);
+  const menu = groupedMenu(actions, launch, label);
 
   const workflow = (action: ActionId) => {
     const lp = { onClose: close };
@@ -149,118 +117,7 @@ export default function EmployeeDetailPage() {
         ) : null;
     }
     if (!tp) return null;
-    switch (action) {
-      case "change_assignment":
-        return (
-          <AssignmentChangeForm<Detail>
-            employmentId={tp.id}
-            personId={d.id}
-            current={tp.assignments.at(-1) ?? null}
-            revision={d.revision}
-            minDate={can("employment.correct") ? undefined : d.status_as_of}
-            onSaved={(u) => saved(u)}
-            launched={lp}
-          />
-        );
-      case "initial_assignment":
-        return (
-          <InitialAssignmentForm<Detail>
-            employmentId={tp.id}
-            personId={d.id}
-            periodStart={tp.start_date}
-            periodEnd={tp.end_date}
-            today={d.status_as_of}
-            revision={d.revision}
-            onSaved={(u) => saved(u)}
-            launched={lp}
-          />
-        );
-      case "edit_work_email":
-      case "correct_work_email":
-      case "clear_work_email":
-        return (
-          <section className="card">
-            <h2>{label(action)}</h2>
-            <WorkEmailEditor<Detail>
-              employmentId={tp.id}
-              periodLabel={periodHeading(d, tp)}
-              current={tp.work_email}
-              ended={tp.period_lifecycle === "ended"}
-              canEdit
-              canClear={can("employment.correct")}
-              revision={d.revision}
-              onSaved={(u) => saved(u)}
-              launched={{ onClose: close, mode: action === "clear_work_email" ? "clear" : "edit" }}
-            />
-          </section>
-        );
-      case "end_employment":
-        return (
-          <EndEmploymentForm<Detail>
-            employmentId={tp.id}
-            employeeType={tp.employee_type?.name ?? null}
-            startDate={tp.start_date}
-            currentEnd={tp.end_date}
-            assignments={tp.assignments}
-            today={d.status_as_of}
-            canBackdate={can("employment.correct")}
-            revision={d.revision}
-            onSaved={(u) => saved(u)}
-            launched={lp}
-          />
-        );
-      case "relationship_change":
-        return tp.employee_type ? (
-          <RelationshipChangeForm<Detail>
-            employmentId={tp.id}
-            personId={d.id}
-            period={{ ...tp, employee_type: tp.employee_type }}
-            today={d.status_as_of}
-            canBackdate={can("employment.correct")}
-            revision={d.revision}
-            onSaved={(u) => saved(u)}
-            launched={lp}
-          />
-        ) : null;
-      case "correct_period":
-        return (
-          <PeriodCorrectionForm<Detail>
-            employmentId={tp.id}
-            current={{ start_date: tp.start_date, end_date: tp.end_date, employee_type: tp.employee_type }}
-            hasActiveEndEvent={tp.has_active_end_event}
-            revision={d.revision}
-            onSaved={(u) => saved(u)}
-            launched={lp}
-          />
-        );
-      case "cancel_planned":
-        return (
-          <CancelPlannedForm<Detail>
-            employmentId={tp.id}
-            period={tp}
-            blockedBy={cancelBlockedBy(d, tp)}
-            revision={d.revision}
-            onSaved={(u) => saved(u)}
-            launched={lp}
-          />
-        );
-      case "reverse_end":
-        return tp.active_end_event ? (
-          <ReverseEndForm<Detail>
-            employmentId={tp.id}
-            activeEnd={tp.active_end_event}
-            currentEnd={tp.end_date}
-            assignments={tp.assignments}
-            today={d.status_as_of}
-            revision={d.revision}
-            onSaved={(u) => saved(u)}
-            launched={lp}
-          />
-        ) : null;
-      case "void_period":
-        return <VoidPeriodForm<Detail> employmentId={tp.id} onSaved={(u) => saved(u, t("voidPeriod.voided"))} launched={lp} />;
-    }
-    return null;
+    return <PeriodWorkflow action={action} period={tp} d={d} can={can} onSaved={saved} onClose={close} />;
   };
 
   const ctx: TabContext = { d, can, targetId: target?.id ?? null, onSaved: (u, message) => saved(u, message) };

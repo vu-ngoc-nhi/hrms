@@ -13,7 +13,20 @@ export type ActionMenuEntry =
  * Menu button (WAI-ARIA menu pattern): Enter/Space/ArrowDown opens, arrows/Home/End move, Escape closes and returns
  * focus to the trigger, Tab or a click outside closes. Callers pass only the actions the user is allowed to perform.
  */
-export function ActionMenu({ label, entries, variant = "secondary" }: { label: ReactNode; entries: ActionMenuEntry[]; variant?: "secondary" | "primary" }) {
+export function ActionMenu({
+  label,
+  entries,
+  variant = "secondary",
+  size,
+  ariaLabel,
+}: {
+  label: ReactNode;
+  entries: ActionMenuEntry[];
+  variant?: "secondary" | "primary";
+  size?: "small";
+  /** Accessible name when the visible label repeats on the page (e.g. one menu per period). */
+  ariaLabel?: string;
+}) {
   const [open, setOpen] = useState(false);
   const menuId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -61,7 +74,8 @@ export function ActionMenu({ label, entries, variant = "secondary" }: { label: R
       <button
         ref={triggerRef}
         type="button"
-        className={variant === "primary" ? "primary" : undefined}
+        className={[variant === "primary" ? "primary" : "", size === "small" ? "small" : ""].filter(Boolean).join(" ") || undefined}
+        aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

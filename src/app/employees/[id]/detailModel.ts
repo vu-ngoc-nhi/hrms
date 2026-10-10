@@ -319,35 +319,44 @@ export type HeaderActions = {
   advanced: ActionId[];
 };
 
+export type PeriodActionId = Extract<
+  ActionId,
+  "edit_work_email" | "end_employment" | "relationship_change" | "correct_period" | "correct_work_email" | "clear_work_email" | "cancel_planned" | "reverse_end" | "void_period"
+>;
+
+/**
+ * Actions of one period grouped by intent (UI-3 header, UI-5 period cards): daily business actions, Correct record
+ * (corrections and recovery of planned changes) and Advanced (Void). Eligibility is `periodEligibility`.
+ */
+export function periodActions(d: Detail, p: Period, can: (permission: string) => boolean) {
+  const e = periodEligibility(d, p, can);
+  const ended = p.period_lifecycle === "ended";
+  const daily: PeriodActionId[] = [];
+  const correction: PeriodActionId[] = [];
+  const advanced: PeriodActionId[] = [];
+  if (e.workEmailEdit && !ended) daily.push("edit_work_email");
+  if (e.endEmployment) daily.push("end_employment");
+  if (e.relationshipChange) daily.push("relationship_change");
+  if (e.correctPeriod) correction.push("correct_period");
+  if (e.workEmailEdit && ended) correction.push("correct_work_email");
+  if (e.workEmailClear) correction.push("clear_work_email");
+  if (e.cancelPlanned) correction.push("cancel_planned");
+  if (e.reverseEnd) correction.push("reverse_end");
+  if (e.voidPeriod) advanced.push("void_period");
+  return { daily, correction, advanced, initialAssignment: e.initialAssignment, changeAssignment: e.changeAssignment };
+}
+
 export function headerActions(d: Detail, can: (permission: string) => boolean): HeaderActions {
   const target = representativePeriod(d);
   const latest = latestPeriod(d);
   const manage = can("employment.manage");
-  const daily: ActionId[] = [];
-  const correction: ActionId[] = [];
-  const advanced: ActionId[] = [];
-  let primary: ActionId | null = null;
-  if (target) {
-    const e = periodEligibility(d, target, can);
-    const ended = target.period_lifecycle === "ended";
-    if (e.changeAssignment) primary = "change_assignment";
-    else if (e.initialAssignment) primary = "initial_assignment";
-    if (e.workEmailEdit && !ended) daily.push("edit_work_email");
-    if (e.endEmployment) daily.push("end_employment");
-    if (e.relationshipChange) daily.push("relationship_change");
-  }
+  const pa = target ? periodActions(d, target, can) : null;
+  const primary: ActionId | null = pa?.changeAssignment ? "change_assignment" : pa?.initialAssignment ? "initial_assignment" : null;
+  const daily: ActionId[] = [...(pa?.daily ?? [])];
   if (manage && latest === null) daily.push("initial_employment");
   if (manage && latest?.end_date) daily.push("rehire");
   // Full Name / recorded Date of Birth correction (C-23); normal personal updates live in the Personal tab (UI-4).
-  if (can("employees.update")) correction.push("correct_personal");
-  if (target) {
-    const e = periodEligibility(d, target, can);
-    if (e.correctPeriod) correction.push("correct_period");
-    if (e.workEmailEdit && target.period_lifecycle === "ended") correction.push("correct_work_email");
-    if (e.workEmailClear) correction.push("clear_work_email");
-    if (e.cancelPlanned) correction.push("cancel_planned");
-    if (e.reverseEnd) correction.push("reverse_end");
-    if (e.voidPeriod) advanced.push("void_period");
-  }
-  return { target, primary, daily, correction, advanced };
+  const correction: ActionId[] = can("employees.update") ? ["correct_personal"] : [];
+  correction.push(...(pa?.correction ?? []));
+  return { target, primary, daily, correction, advanced: [...(pa?.advanced ?? [])] };
 }
