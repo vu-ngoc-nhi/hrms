@@ -4,7 +4,9 @@
 //     their company-account defaults follow C-10, C-18 and C-20.
 //   - Departments, Job Titles and Job Levels are English demo/reference data still pending HR validation (PV-06),
 //     not the company's real catalogs.
+import pg from "pg";
 import type { PrismaClient } from "../src/generated/prisma/client";
+import { applyChange, listUsers, stateOf } from "../src/modules/identity/access-admin";
 import { TEST_TENANT_ID } from "../src/modules/identity/token-verifiers";
 
 type SeedUser = { oid: string; name: string; roles: readonly string[]; enabled: boolean };
@@ -51,23 +53,8 @@ export const CATALOGS = {
   ],
 };
 
-// Insert-only: creates missing rows, never updates or deletes existing ones.
-export async function seedUsersAndCatalogs(prisma: PrismaClient, opts: { includeTestOnlyUsers: boolean }) {
-  const users: SeedUser[] = Object.values(opts.includeTestOnlyUsers ? TEST_USERS : DEV_USERS);
-  for (const u of users) {
-    const user = await prisma.appUser.upsert({
-      where: { entraTenantId_entraObjectId: { entraTenantId: TEST_TENANT_ID, entraObjectId: u.oid } },
-      update: {},
-      create: { entraTenantId: TEST_TENANT_ID, entraObjectId: u.oid, displayName: u.name, isEnabled: u.enabled },
-    });
-    for (const role of u.roles) {
-      await prisma.appUserRole.upsert({
-        where: { userId_roleCode: { userId: user.id, roleCode: role } },
-        update: {},
-        create: { userId: user.id, roleCode: role },
-      });
-    }
-  }
+// Insert-only: creates missing catalog rows, never updates or deletes existing ones (runs as hrms_app).
+export async function seedCatalogs(prisma: PrismaClient) {
   for (const d of CATALOGS.departments) {
     if (!(await prisma.department.findFirst({ where: { code: d.code } }))) await prisma.department.create({ data: d });
   }
@@ -79,5 +66,34 @@ export async function seedUsersAndCatalogs(prisma: PrismaClient, opts: { include
   }
   for (const t of CATALOGS.employeeTypes) {
     if (!(await prisma.employeeType.findFirst({ where: { code: t.code } }))) await prisma.employeeType.create({ data: t });
+  }
+}
+
+// Accounts go through the guarded access-administration routines (C-89) as a development operator login — the
+// application role can no longer write accounts. Insert-only: an existing account (same Entra identity) is left as is.
+export async function seedAccounts(operatorDatabaseUrl: string, environment: "local" | "test", opts: { includeTestOnlyUsers: boolean }) {
+  const users: SeedUser[] = Object.values(opts.includeTestOnlyUsers ? TEST_USERS : DEV_USERS);
+  const client = new pg.Client({ connectionString: operatorDatabaseUrl });
+  await client.connect();
+  try {
+    for (const u of users) {
+      if ((await listUsers(client)).some((x) => x.tenantId === TEST_TENANT_ID && x.objectId === u.oid)) continue;
+      const reason = `Synthetic ${environment} seed account`;
+      const [created] = await applyChange(client, {
+        environment,
+        tenantId: TEST_TENANT_ID,
+        reason,
+        target: null,
+        expected: null,
+        change: { kind: "create", roles: [...u.roles] },
+        create: { objectId: u.oid, displayName: u.name },
+      });
+      if (!u.enabled) {
+        const target = (await listUsers(client)).find((x) => x.id === created.user_id)!;
+        await applyChange(client, { environment, tenantId: TEST_TENANT_ID, reason, target, expected: await stateOf(client, target.id), change: { kind: "disable" } });
+      }
+    }
+  } finally {
+    await client.end();
   }
 }

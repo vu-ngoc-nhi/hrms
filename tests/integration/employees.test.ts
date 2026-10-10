@@ -11,7 +11,7 @@ import {
 import { addDays, toDbDate, todayInVietnam } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { getEmployee } from "@/modules/core-hr/people/service";
-import { call, catalogIds, key, principalWith, userId, type TestUser } from "../helpers";
+import { call, catalogIds, changeAccess, key, principalWith, type TestUser } from "../helpers";
 
 let ids: Awaited<ReturnType<typeof catalogIds>>;
 const today = todayInVietnam();
@@ -321,12 +321,11 @@ describe("Idempotency", () => {
     const k = key("revoke");
     const body = { full_name: "Test Revoked Replay" };
     expect((await create(body, { idemKey: k })).status).toBe(201);
-    const uid = await userId("editor");
-    await db().appUserRole.delete({ where: { userId_roleCode: { userId: uid, roleCode: "HR_EDITOR" } } });
+    await changeAccess("editor", { kind: "remove", role: "HR_EDITOR" });
     try {
       expect((await create(body, { idemKey: k })).status).toBe(403);
     } finally {
-      await db().appUserRole.create({ data: { userId: uid, roleCode: "HR_EDITOR" } });
+      await changeAccess("editor", { kind: "assign", role: "HR_EDITOR" });
     }
   });
 });

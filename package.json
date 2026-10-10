@@ -20,6 +20,8 @@
     "db:reset-test": "APP_ENV=test tsx scripts/reset-test-db.ts",
     "openapi:write": "tsx scripts/write-openapi.ts",
     "integrity:scan": "tsx scripts/integrity-scan.ts",
+    "access": "tsx scripts/access-admin.ts",
+    "access:provision-local": "tsx scripts/access-provision-local.ts",
     "test": "APP_ENV=test vitest run",
     "test:watch": "APP_ENV=test vitest",
     "test:integrity-baseline": "APP_ENV=test vitest run --config vitest.integrity-baseline.config.ts",

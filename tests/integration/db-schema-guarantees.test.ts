@@ -31,7 +31,8 @@ describe("Database guarantees (H7)", () => {
     // The newest migration's objects exist, which proves the full chain ran.
     expect(await q("SELECT count(*)::int AS n FROM end_reason")).toEqual([{ n: 7 }]);
     expect(await q("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'employment' AND column_name = 'voided_at'")).toEqual([{ n: 1 }]);
-    expect(folders.at(-1)).toBe("20261012000000_void_employment_period");
+    expect(await q("SELECT to_regclass('public.access_audit_event') IS NOT NULL AS ok")).toEqual([{ ok: true }]); // not readable by the app role
+    expect(folders.at(-1)).toBe("20261013000000_access_administration");
   });
 
   it("exclusion, CHECK and partial unique constraints exist (cancelled and voided periods excluded where approved)", async () => {
@@ -69,6 +70,8 @@ describe("Database guarantees (H7)", () => {
       "employment_event_date_correction_scope_trg",
       "employment_event_lifecycle_rules_trg",
       "job_assignment_manager_not_voided_trg",
+      "access_audit_event_no_update_delete_trg",
+      "access_audit_event_no_truncate_trg",
     ]) {
       expect(triggers, t).toContain(t);
     }
@@ -86,6 +89,13 @@ describe("Database guarantees (H7)", () => {
     );
     expect(cols.map((c) => c.column_name)).toEqual(["effective_date"]); // … only the approved column (C-43, C-53)
     expect(await priv("idempotency_record", "UPDATE")).toBe(false);
+    // Access control (C-89, C-93 G): the runtime only reads accounts and roles; access administration data is off-limits.
+    for (const p of ["INSERT", "UPDATE", "DELETE", "TRUNCATE"]) {
+      expect(await priv("app_user", p), `app_user ${p}`).toBe(false);
+      expect(await priv("app_user_role", p), `app_user_role ${p}`).toBe(false);
+    }
+    expect(await priv("app_user", "SELECT")).toBe(true);
+    for (const t of ["access_audit_event", "access_operator", "access_environment", "access_role_permission"]) expect(await priv(t, "SELECT"), t).toBe(false);
     await expect(app.query("TRUNCATE audit_event")).rejects.toMatchObject({ code: "42501" });
     await expect(app.query("ALTER TABLE person ADD COLUMN x int")).rejects.toMatchObject({ code: "42501" });
   });

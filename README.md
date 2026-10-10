@@ -25,7 +25,9 @@ cp .env.example .env      # fill AUTH_TEST_ISSUER_SECRET and IDEMPOTENCY_HMAC_KE
 npm run db:up             # PostgreSQL + role hrms_app + databases hrms_dev, hrms_test
 npm run db:migrate        # guarded: local targets only
 npm run db:generate       # Prisma Client
+npm run access:provision-local  # local only: development access operator + environment (C-89)
 npm run db:seed           # insert-only: test accounts, demo catalogs, demo profiles (only if none exist)
+npm run access -- env --env local   # guarded access administration (docs/production/access-administration-runbook.md)
 npm run dev               # http://localhost:3100 -> /login, pick a test account
 ```
 

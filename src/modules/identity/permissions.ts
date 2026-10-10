@@ -20,7 +20,9 @@ export type Permission = (typeof PERMISSIONS)[number];
 export const ROLE_CODES = ["HR_ADMIN", "HR_EDITOR", "API_DOCS_READER"] as const;
 export type RoleCode = (typeof ROLE_CODES)[number];
 
-const ROLE_PERMISSIONS: Record<RoleCode, readonly Permission[]> = {
+// Mirrored for database enforcement of access administration by the migration-controlled table
+// access_role_permission (contract-tested); change both together through a migration.
+export const ROLE_PERMISSIONS: Record<RoleCode, readonly Permission[]> = {
   HR_ADMIN: [
     "employees.read",
     "employees.read_personal",
@@ -56,3 +58,14 @@ export function permissionsForRoles(roles: readonly string[]): Set<Permission> {
   for (const role of roles) if (isKnownRole(role)) ROLE_PERMISSIONS[role].forEach((p) => out.add(p));
   return out;
 }
+
+// ---------------- Administrative capability (C-93 B) ----------------
+// The ONLY definition of an administrative user: enabled AND effective permissions contain every capability below.
+// Never decided by role name. Mirrored by the database function access_admin_permissions() for the race-safe
+// last-admin guard of the access-administration routines (contract-tested).
+export const ADMINISTRATIVE_PERMISSIONS = ["employment.correct", "catalogs.manage", "employees.set_code"] as const satisfies readonly Permission[];
+
+export function isAdministrative(user: { enabled: boolean; permissions: ReadonlySet<Permission> }): boolean {
+  return user.enabled && ADMINISTRATIVE_PERMISSIONS.every((p) => user.permissions.has(p));
+}
+

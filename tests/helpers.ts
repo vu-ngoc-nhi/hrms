@@ -1,3 +1,6 @@
+import pg from "pg";
+import { operatorUrl, TEST_OPERATORS } from "../scripts/access-provision-local";
+import { type AccessChange, applyChange, listUsers, stateOf } from "@/modules/identity/access-admin";
 import { resetConfigForTests } from "@/lib/config";
 import { db } from "@/lib/db";
 import { resetVerifierForTests, type Principal } from "@/modules/identity/authenticate";
@@ -80,4 +83,36 @@ let counter = 0;
 export function key(prefix = "k") {
   counter += 1;
   return `${prefix}-${Date.now()}-${counter}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// ---------------- Access administration fixtures (C-89) ----------------
+// The application role can no longer write accounts. Normal account changes in tests go through the guarded routines
+// as a test operator; states the guarded path deliberately forbids (e.g. a stale HR_VIEWER row) are set up with the
+// explicit test owner authority on hrms_test only.
+export async function withOwner<T>(fn: (client: pg.Client) => Promise<T>): Promise<T> {
+  const client = new pg.Client({ connectionString: process.env.MIGRATION_DATABASE_URL });
+  await client.connect();
+  try {
+    return await fn(client);
+  } finally {
+    await client.end();
+  }
+}
+
+export async function withOperator<T>(fn: (client: pg.Client) => Promise<T>, operator: { login: string } = TEST_OPERATORS.a): Promise<T> {
+  const client = new pg.Client({ connectionString: operatorUrl(process.env.DATABASE_URL!, operator.login) });
+  await client.connect();
+  try {
+    return await fn(client);
+  } finally {
+    await client.end();
+  }
+}
+
+/** Applies an access change to a seeded test account through the guarded routines. */
+export async function changeAccess(user: TestUser, change: AccessChange, reason = "Test fixture") {
+  return withOperator(async (client) => {
+    const target = (await listUsers(client)).find((u) => u.objectId === TEST_USERS[user].oid)!;
+    return applyChange(client, { environment: "test", tenantId: TEST_TENANT_ID, reason, target, expected: await stateOf(client, target.id), change });
+  });
 }

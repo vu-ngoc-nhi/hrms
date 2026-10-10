@@ -5,7 +5,7 @@ import { GET as getMe } from "@/app/api/v1/me/route";
 import { POST as issueTestToken } from "@/app/api/v1/dev/test-tokens/route";
 import { GET as health } from "@/app/health/route";
 import { db } from "@/lib/db";
-import { call, key, resetAuthState, tokenFor } from "../helpers";
+import { call, key, resetAuthState, tokenFor, withOwner } from "../helpers";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -62,12 +62,13 @@ describe("403: authenticated but not permitted", () => {
   });
   it("a retired or unknown role code (e.g. HR_VIEWER) grants nothing", async () => {
     const uid = (await db().appUser.findFirstOrThrow({ where: { displayName: "Test User Without Roles" } })).id;
-    await db().appUserRole.create({ data: { userId: uid, roleCode: "HR_VIEWER" } });
+    // Stale data the guarded path refuses to create: set up with the explicit test owner authority.
+    await withOwner((c) => c.query("INSERT INTO app_user_role (user_id, role_code) VALUES ($1, 'HR_VIEWER')", [uid]));
     try {
       expect((await call(listEmployees, { path: "/api/v1/core-hr/employees", user: "noroles" })).status).toBe(403);
       expect((await call(getMe, { path: "/api/v1/me", user: "noroles" })).body.roles).toEqual([]);
     } finally {
-      await db().appUserRole.delete({ where: { userId_roleCode: { userId: uid, roleCode: "HR_VIEWER" } } });
+      await withOwner((c) => c.query("DELETE FROM app_user_role WHERE user_id = $1 AND role_code = 'HR_VIEWER'", [uid]));
     }
   });
   it("a denial is audited without payload", async () => {
