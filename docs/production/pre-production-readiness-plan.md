@@ -197,6 +197,8 @@ The critical path is the **longest of**: counsel answers (A1) and IT platform + 
 
 ## 11. Tasks IT can start immediately (in parallel)
 
+Operational handoff for these items (inputs, decision table, migration authority, staging rehearsal evidence): **`it-pre-production-handoff.md`** (2026-10-10). Creating it passes no gate.
+
 - Hosting proposal with Management (on-premise vs cloud; PostgreSQL 18 with encrypted storage, PITR if available) — input to Q-L5.
 - Non-production Entra registration(s) for staging (enables Development's sign-in work); confirm tenant MFA/Conditional Access.
 - Secrets store; staging environment (can be small/temporary); DNS + TLS for staging and production URLs.
