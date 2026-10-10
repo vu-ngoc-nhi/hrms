@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95). **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). Next slice (UI-5) not started.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95). **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). Next slice (UI-6) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -316,4 +316,59 @@ Uses `Card`-style section, `Field` (visible label, `htmlFor`/`id`, hints, errors
 | Visual QA (synthetic data, HR Admin test identity, 1440 px) | A all fields DEMO001; B no optional values DEMO906 (all "—", no warning); C edit form open DEMO001 (recorded DOB read-only); D correction from More actions DEMO001 with review (cancelled, nothing saved) |
 | End-to-end on synthetic DEMO801 (batch 8, QA) | normal update filled in the missing Date of Birth and Mobile without a reason; correction of the recorded Date of Birth with a reason; invalid Mobile on DEMO001 rejected with a field-level message (nothing saved) |
 | Responsive / smoke | one column and no horizontal scroll at phone width; Employees → DEMO001 → Personal → edit → cancel → Correct record → cancel after restart; no app console or server errors |
+
+## 13. UI-5 — Employment (implemented 2026-10-10)
+
+Scope: the Employment tab only. No Employment Period rule, status computation, Rehire / Relationship Change / End / Reverse End / Cancel Planned / Void semantics, permission or API changed. Employment Period ≠ Contract; Contracts/Documents not implemented.
+
+### Information architecture
+
+Three sections, each shown only when it has periods: **Current Employment** → **Upcoming Employment** → **Employment History**. One card per Employment Period ("Employment Period N · <Employee Type>", N = chronological number among all recorded periods), never merged.
+
+| Section | Rule (server facts only, `employmentModel.ts`) |
+|---|---|
+| Current | `period_lifecycle = active` |
+| Upcoming | `period_lifecycle = not_started` (nearest first) |
+| Employment History | `period_lifecycle = ended`, plus Cancelled / Voided records — most recent first |
+| No operational period | "No Employment Record" empty state; cancelled/voided records still listed under History. With no records at all: "No employment period has been recorded" (Add Initial Employment Period stays in More actions) |
+
+Card labels are text badges: **Current** (soft green), **Upcoming** (soft blue), **Historical** (neutral), **Cancelled** (neutral, muted card), **Voided** (dashed outline, muted dashed card). Red is not used for lifecycle; Current/Upcoming cards carry a soft left border.
+
+### Card content
+
+Employee Type · Employment Status (operational periods only) · Start Date · End Date / **Planned End** (end date today or later) / "No end date" · End Reason · **Work Email** (of that period; Work Email lives here, not in Personal). Status notes: "Starts <date>. Not in effect yet." (Upcoming), "Scheduled to end <date>. Employment stays active until then." (planned End). No Tenure, Join/Hire/Company Start Date or Working Arrangement. "No assignment recorded for this period yet." is neutral text (never a period error) with a neutral **Add Initial Assignment** button when permitted.
+
+**Period history** (per card, from recorded events only — nothing synthesized, C-24): "Started / Starts <date>", "Scheduled to end <date>", "Ended <date> · <End Reason>", "Ended <date> for Relationship Change", "End of <date> reversed" (a reversed End and its reversal shown once), "Cancelled before it started", "Voided — entered in error"; for disposed records the start reads "Was planned to start" (Cancelled) / "Recorded start" (Voided). No interval notation, no raw codes, no audit payload; the full history stays in the History tab.
+
+### Rehire and Relationship Change
+
+- **Rehire**: the new period is its own card (Upcoming or Current) and the ended period stays in History; same person/code implicit.
+- **Relationship Change** (predecessor's active End has reason `RELATIONSHIP_CHANGE` and the next period starts the next day): the predecessor shows End Reason "Relationship Change" and "Scheduled to end / Ended for a Relationship Change. A new Employment Period starts/started <date>."; the successor says "This Employment Period was created by a Relationship Change (previously <type>)." and its history reads "Started/Starts <date> — new Employment Period after a Relationship Change". The C-72 guidance (successor cancelled) is kept as a warning box for `employment.correct` holders.
+
+### Cancelled / Voided (dispositions, not Employment Status)
+
+No Employment Status row; recorded dates are kept and labelled "Recorded Start Date / Recorded End Date". Cancelled: "This period was planned but cancelled before it started. It never took effect and is kept for history only." Voided: "This period was entered in error and is not operational. It is kept for traceability only." No actions on disposed records.
+
+### Actions
+
+Each period carries its own actions (eligibility = existing `periodEligibility`, grouped by the shared `periodActions`, which the header now also uses):
+
+| Group | Presentation | Actions |
+|---|---|---|
+| Daily | Secondary small buttons | Add Initial Assignment (no assignment yet), Edit Work Email, End Employment, Change Employment Relationship |
+| Correct record | Menu button "Correct record" (accessible name includes the period) | Correct Employment Period, Correct Work Email (ended period), Clear Work Email, Cancel Planned Period, Reverse End Employment |
+| Advanced | Inside the same menu, separated | Void Employment Period (red text item; never a filled button) |
+
+The selected workflow opens inside its period card (unchanged form, focus moves to it; Cancel/Save closes). The page header keeps Change Assignment and More actions for the representative period (UI-3), so those actions are reachable from both places; both open the same form (`PeriodWorkflow.tsx`). Assignment-row corrections remain in the Assignment tab (UI-6).
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| Unit `tests/unit/employment-tab.test.ts` (17) | Active, Pre-start (never Current), Ended, planned End, reversed End, Rehire (separate numbered periods), Relationship Change (predecessor/successor links), Cancelled and Voided as dispositions with no status (even if a lifecycle value were present), no operational period, History ordering, Work Email per period; actions for HR_ADMIN / HR_EDITOR / read-only, Pre-start Add Initial Assignment + Cancel Planned, ended-period corrections, no actions on disposed records; no role names |
+| Header regression | `tests/unit/detail-overview.test.ts` unchanged and passing after the header switched to `periodActions` |
+| Unit suite / typecheck / lint / build | 118/118 unit tests; typecheck, lint, production build pass. Frontend-only: DB/UAT suites not re-run |
+| Visual QA (synthetic data, HR Admin test identity, 1440 px) | A Active DEMO001; B Pre-start DEMO901; C Ended DEMO003; D Rehire DEMO904 (Period 1 History, Period 2 Upcoming); E Relationship Change DEMO005 (completed) and DEMO905 (planned); F planned End DEMO903; G Cancelled ES0015 (with reversed End, C-72 guidance and Add Initial Assignment); H Voided + I no operational record DEMO906; ES0010 no records at all |
+| Responsive / accessibility | actions on one line at 1280 px; one column, menus inside the viewport and no horizontal scroll at phone width; labels are text; menus keyboard operable with per-period accessible names; headings h2 (section) / h3 (period) / h4 (period history) |
+| Smoke | Employees → DEMO005 → Employment → Edit Work Email from the period card (focus inside, Cancel closes) → header More actions unchanged; no app console or server errors |
 
