@@ -2,221 +2,419 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
-import { t } from "@/i18n";
+import { Button, Field, InfoBox, PageHeader, Stepper, type FieldControlProps } from "@/components/ui";
+import { formatDate, t, tMaybe } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import { todayInVietnam } from "@/lib/dates";
+import { rememberedListHref } from "../listQuery";
+import {
+  STEPS,
+  buildPayload,
+  createdHref,
+  hasAssignmentInput,
+  hasEmployment,
+  initialState,
+  isDirty,
+  mapServerErrors,
+  stepErrors,
+  wizardCapabilities,
+  wizardReducer,
+  workEmailExpected,
+  type FieldName,
+  type StepId,
+} from "./wizardModel";
 
-type Option = { id: string; label: string };
-type Options = { departments: Option[]; jobTitles: Option[]; employeeTypes: Option[]; levels: Option[]; managers: Option[] };
+// UI-8 Add Employee: Personal → Employment → Assignment → Review. Nothing is saved before "Save Employee"; the save is
+// the existing single create operation (one transaction, Idempotency-Key), so the record is either created complete
+// or not at all. Labels match the Employee Detail tabs.
 
-const empty = {
-  require_operational_completeness: false,
-  full_name: "",
-  employee_code: "",
-  gender: "",
-  date_of_birth: "",
-  personal_email: "",
-  mobile_phone: "",
-  start_date: "",
-  work_email: "",
-  department_id: "",
-  job_title_id: "",
-  employee_type_id: "",
-  job_level_id: "",
-  manager_person_id: "",
-};
-type Form = typeof empty;
+type Option = { id: string; label: string; requires_work_email?: boolean };
+type Catalogs = { departments: Option[]; jobTitles: Option[]; levels: Option[]; employeeTypes: Option[]; managers: Option[] };
+type CatalogState = { status: "loading" } | { status: "error"; error: ApiCallError } | { status: "ready"; data: Catalogs };
+type Row = { id: string; code: string; name?: string; name_en?: string; is_active?: boolean; requires_work_email?: boolean };
 
-function buildPayload(f: Form, canSetCode: boolean) {
-  const payload: Record<string, unknown> = { full_name: f.full_name };
-  if (f.require_operational_completeness) payload.require_operational_completeness = true;
-  if (canSetCode && f.employee_code.trim()) payload.employee_code = f.employee_code.trim();
-  const personal: Record<string, string> = {};
-  if (f.gender) personal.gender = f.gender;
-  if (f.date_of_birth) personal.date_of_birth = f.date_of_birth;
-  if (f.personal_email.trim()) personal.personal_email = f.personal_email.trim();
-  if (f.mobile_phone.trim()) personal.mobile_phone = f.mobile_phone.trim();
-  if (Object.keys(personal).length) payload.personal = personal;
-  if (f.start_date) {
-    const employment: Record<string, unknown> = { start_date: f.start_date };
-    if (f.employee_type_id) employment.employee_type_id = f.employee_type_id;
-    if (f.work_email.trim()) employment.work_email = f.work_email.trim();
-    if (f.department_id || f.job_title_id) {
-      const a: Record<string, string> = { department_id: f.department_id, job_title_id: f.job_title_id };
-      for (const k of ["job_level_id", "manager_person_id"] as const) if (f[k]) a[k] = f[k];
-      employment.assignment = a;
-    }
-    payload.employment = employment;
-  }
-  return payload;
+const GENDERS = ["female", "male", "other"] as const;
+
+function useCatalogs(enabled: boolean) {
+  const [state, setState] = useState<CatalogState>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    // Only active values can be used for a new record (inactive ones are rejected by the server).
+    const list = (path: string) =>
+      api<{ data: Row[] }>(`/api/v1/core-hr/${path}?page_size=100`).then((r) =>
+        r.data.data.filter((x) => x.is_active !== false).map((x) => ({ id: x.id, label: x.name ?? x.name_en ?? x.code, requires_work_email: x.requires_work_email })),
+      );
+    Promise.all([
+      list("departments"),
+      list("job-titles"),
+      list("job-levels"),
+      list("employee-types"),
+      api<{ data: { id: string; employee_code: string; full_name: string }[] }>("/api/v1/core-hr/employees?employment_status=active&page_size=100").then((r) =>
+        r.data.data.map((x) => ({ id: x.id, label: `${x.full_name} (${x.employee_code})` })),
+      ),
+    ])
+      .then(([departments, jobTitles, levels, employeeTypes, managers]) => {
+        if (!cancelled) setState({ status: "ready", data: { departments, jobTitles, levels, employeeTypes, managers } });
+      })
+      .catch((e) => {
+        if (!cancelled) setState({ status: "error", error: e as ApiCallError });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, attempt]);
+  const retry = () => {
+    setState({ status: "loading" });
+    setAttempt((n) => n + 1);
+  };
+  return { state, retry };
 }
-
-type Catalog = { id: string; code: string; name?: string; name_en?: string };
-const toOptions = (rows: Catalog[]) => rows.map((x) => ({ id: x.id, label: `${x.name ?? x.name_en} (${x.code})` }));
 
 export default function NewEmployeePage() {
   const session = useSession();
   const router = useRouter();
-  const [form, setForm] = useState(empty);
-  const [opts, setOpts] = useState<Options>({ departments: [], jobTitles: [], employeeTypes: [], levels: [], managers: [] });
-  const [error, setError] = useState<ApiCallError | null>(null);
-  const [busy, setBusy] = useState(false);
-  // Reuse the same Idempotency-Key when resubmitting identical content (e.g. after a lost response); new content gets a new key.
+  const caps = wizardCapabilities((p) => Boolean(session?.can(p)));
+  const [s, dispatch] = useReducer(wizardReducer, undefined, initialState);
+  const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
+  const [saveError, setSaveError] = useState<{ error: ApiCallError | null; network: boolean } | null>(null);
+  const [focusInvalid, setFocusInvalid] = useState(0);
+  const catalogs = useCatalogs(caps.create);
+  const [backHref] = useState(() => (typeof window === "undefined" ? "/employees" : rememberedListHref()));
   const attempt = useRef<{ key: string; payload: string } | null>(null);
+  const savingRef = useRef(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const v = s.values;
+  const dirty = isDirty(v);
 
-  const canSetCode = Boolean(session?.can("employees.set_code"));
-  const canWritePersonal = Boolean(session?.can("employees.write_personal"));
-
+  // Lightweight leave protection (no drafts): the browser asks before closing or reloading with unsaved input.
   useEffect(() => {
-    const list = (path: string) => api<{ data: Catalog[] }>(`/api/v1/core-hr/${path}?page_size=100`).then((r) => toOptions(r.data.data));
-    Promise.all([
-      list("departments"),
-      list("job-titles"),
-      list("employee-types"),
-      list("job-levels"),
-      api<{ data: { id: string; employee_code: string; full_name: string }[] }>(
-        "/api/v1/core-hr/employees?employment_status=active&page_size=100",
-      ).then((r) => r.data.data.map((x) => ({ id: x.id, label: `${x.full_name} (${x.employee_code})` }))),
-    ])
-      .then(([departments, jobTitles, employeeTypes, levels, managers]) => setOpts({ departments, jobTitles, employeeTypes, levels, managers }))
-      .catch((e) => setError(e));
-  }, []);
+    if (!dirty || s.saving) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty, s.saving]);
 
-  const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.type === "checkbox" ? (e.target as HTMLInputElement).checked : e.target.value }));
+  // Each step change moves focus to the step heading; a validation failure moves it to the first invalid field.
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [s.step]);
+  useEffect(() => {
+    if (focusInvalid) bodyRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [focusInvalid]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const payloadText = JSON.stringify(buildPayload(form, canSetCode));
-    if (!attempt.current || attempt.current.payload !== payloadText) {
-      attempt.current = { key: crypto.randomUUID(), payload: payloadText };
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await api<{ id: string }>("/api/v1/core-hr/employees", {
-        method: "POST",
-        body: payloadText,
-        headers: { "Idempotency-Key": attempt.current.key },
+  if (session && !caps.create) return <p className="alert error">{t("form.noPermission")}</p>;
+
+  const set = (field: FieldName) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const value = e.target.type === "checkbox" ? (e.target as HTMLInputElement).checked : e.target.value;
+    dispatch({ type: "set", field, value });
+    if (errors[field])
+      setErrors((e) => {
+        const rest = { ...e };
+        delete rest[field];
+        return rest;
       });
-      router.push(`/employees/${r.data.id}`);
+  };
+  const check = (step: StepId) => {
+    const found = Object.fromEntries(Object.entries(stepErrors(step, v)).map(([k, key]) => [k, t(key as Parameters<typeof t>[0])]));
+    setErrors(found);
+    if (Object.keys(found).length) setFocusInvalid((n) => n + 1);
+    return Object.keys(found).length === 0;
+  };
+  const next = () => {
+    if (check(s.step)) dispatch({ type: "next" });
+  };
+  const leave = (e: React.MouseEvent) => {
+    if (dirty && !window.confirm(t("wizard.leaveConfirm"))) e.preventDefault();
+  };
+
+  async function save() {
+    // Synchronous guard: a second click before React re-renders never sends a second request.
+    if (savingRef.current) return;
+    // Re-check every step; return HR to the first step with a problem.
+    const all = stepErrors("review", v);
+    if (Object.keys(all).length) {
+      setErrors(Object.fromEntries(Object.entries(all).map(([k, key]) => [k, t(key as Parameters<typeof t>[0])])));
+      dispatch({ type: "goto", step: STEPS.find((st) => Object.keys(stepErrors(st, v)).length) ?? "personal" });
+      setFocusInvalid((n) => n + 1);
+      return;
+    }
+    const payloadText = JSON.stringify(buildPayload(v, caps));
+    // The same content reuses the same Idempotency-Key, so saving again after a lost response never creates a duplicate.
+    if (!attempt.current || attempt.current.payload !== payloadText) attempt.current = { key: crypto.randomUUID(), payload: payloadText };
+    savingRef.current = true;
+    dispatch({ type: "saveStart" });
+    setSaveError(null);
+    try {
+      const r = await api<{ id: string }>("/api/v1/core-hr/employees", { method: "POST", body: payloadText, headers: { "Idempotency-Key": attempt.current.key } });
+      router.push(createdHref(r.data.id));
     } catch (err) {
-      setError(err as ApiCallError);
-    } finally {
-      setBusy(false);
+      savingRef.current = false;
+      dispatch({ type: "saveEnd" });
+      if (!(err instanceof ApiCallError)) {
+        setSaveError({ error: null, network: true });
+        return;
+      }
+      const mapped = mapServerErrors(err.body?.details);
+      setErrors(mapped.fields);
+      setSaveError({ error: new ApiCallError(err.status, { ...err.body, details: mapped.other }), network: false });
+      if (mapped.firstStep && mapped.firstStep !== "review") {
+        dispatch({ type: "goto", step: mapped.firstStep });
+        setFocusInvalid((n) => n + 1);
+      }
     }
   }
 
-  if (session && !session.can("employees.create")) return <p className="alert error">{t("form.noPermission")}</p>;
-
-  const select = (k: keyof Form, label: string, options: Option[], disabled = false) => (
-    <label>
-      {label}
-      <select value={form[k] as string} onChange={set(k)} disabled={disabled}>
-        <option value="">{t("form.none")}</option>
-        {options.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
+  const ready = catalogs.state.status === "ready" ? catalogs.state.data : null;
+  const field = (name: FieldName, label: string, control: (c: FieldControlProps) => ReactNode, opts: { required?: boolean; hint?: ReactNode } = {}) => (
+    <Field label={label} required={opts.required} hint={opts.hint} error={errors[name]}>
+      {control}
+    </Field>
   );
-  const noStart = !form.start_date;
+  const select = (name: FieldName, options: Option[] | undefined, disabled = false) =>
+    function SelectControl(c: FieldControlProps) {
+      return (
+    <select {...c} value={v[name] as string} onChange={set(name)} disabled={disabled || !options || options.length === 0}>
+      <option value="">{!options ? t("wizard.loadingOptions") : options.length === 0 ? t("wizard.noOptions") : t("form.none")}</option>
+      {(options ?? []).map((o) => (
+        <option key={o.id} value={o.id}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+      );
+    };
+  const optionLabel = (options: Option[] | undefined, id: string) => (id ? (options?.find((o) => o.id === id)?.label ?? "—") : "—");
+  const startText = v.start_date ? formatDate(v.start_date) : "";
+  const catalogProblem =
+    catalogs.state.status === "error" ? (
+      <div>
+        <ErrorBox error={catalogs.state.error} />
+        <Button size="small" onClick={catalogs.retry}>
+          {t("wizard.retry")}
+        </Button>
+      </div>
+    ) : null;
+
+  const personal = (
+    <>
+      <div className="form-grid">
+        {field("full_name", t("personal.fullName"), (c) => <input {...c} value={v.full_name} onChange={set("full_name")} maxLength={200} autoComplete="off" />, { required: true })}
+        {caps.writePersonal && (
+          <>
+            {field("date_of_birth", t("personal.dateOfBirth"), (c) => <input {...c} type="date" value={v.date_of_birth} onChange={set("date_of_birth")} />)}
+            {field("gender", t("personal.gender"), (c) => (
+              <select {...c} value={v.gender} onChange={set("gender")}>
+                <option value="">{t("form.none")}</option>
+                {GENDERS.map((g) => (
+                  <option key={g} value={g}>
+                    {t(`gender.${g}`)}
+                  </option>
+                ))}
+              </select>
+            ))}
+            {field("mobile_phone", t("personal.mobile"), (c) => <input {...c} value={v.mobile_phone} onChange={set("mobile_phone")} inputMode="tel" maxLength={20} autoComplete="off" />, {
+              hint: t("personal.mobileHint"),
+            })}
+            {field("personal_email", t("personal.personalEmail"), (c) => <input {...c} type="email" value={v.personal_email} onChange={set("personal_email")} maxLength={254} autoComplete="off" />)}
+          </>
+        )}
+      </div>
+      {!caps.writePersonal && <p className="muted small">{t("wizard.personalNoAccess")}</p>}
+      <p className="muted small">{t("wizard.codeAuto")}</p>
+      {caps.setCode && (
+        <details className="wizard-advanced" open={Boolean(v.employee_code) || Boolean(errors.employee_code)}>
+          <summary>{t("wizard.legacyCodeSummary")}</summary>
+          <div className="form-grid">
+            {field("employee_code", t("wizard.legacyCode"), (c) => <input {...c} value={v.employee_code} onChange={set("employee_code")} maxLength={20} autoComplete="off" />, {
+              hint: t("wizard.legacyCodeHint"),
+            })}
+          </div>
+        </details>
+      )}
+    </>
+  );
+
+  const typeChosen = Boolean(v.employee_type_id);
+  const expected = ready ? workEmailExpected(ready.employeeTypes, v.employee_type_id) : false;
+  const employment = (
+    <>
+      {catalogProblem}
+      <div className="form-grid">
+        {field("start_date", t("employment.startDate"), (c) => <input {...c} type="date" value={v.start_date} onChange={set("start_date")} />, { hint: t("wizard.startDateHint") })}
+        {field("employee_type_id", t("employment.employeeType"), select("employee_type_id", ready?.employeeTypes))}
+        {field("work_email", t("employment.workEmail"), (c) => <input {...c} type="email" value={v.work_email} onChange={set("work_email")} maxLength={254} autoComplete="off" />, {
+          hint: !typeChosen ? t("wizard.workEmailHint") : expected ? t("wizard.workEmailExpected") : t("wizard.workEmailOptional"),
+        })}
+      </div>
+    </>
+  );
+
+  const assignmentEnabled = hasEmployment(v);
+  const needsPair = hasAssignmentInput(v);
+  const assignment = (
+    <>
+      {catalogProblem}
+      {!assignmentEnabled && <InfoBox>{t("wizard.assignmentNeedsEmployment")}</InfoBox>}
+      <div className="form-grid">
+        {field("department_id", t("overview.department"), select("department_id", ready?.departments, !assignmentEnabled), { required: needsPair && assignmentEnabled })}
+        {field("job_title_id", t("overview.jobTitle"), select("job_title_id", ready?.jobTitles, !assignmentEnabled), { required: needsPair && assignmentEnabled })}
+        {field("job_level_id", t("overview.level"), select("job_level_id", ready?.levels, !assignmentEnabled))}
+        {field("manager_person_id", t("overview.manager"), select("manager_person_id", ready?.managers, !assignmentEnabled), { hint: t("wizard.managerHint") })}
+      </div>
+      {assignmentEnabled && (
+        <dl className="info-grid wizard-effective">
+          <div>
+            <dt>{t("assignmentTab.takesEffectOn")}</dt>
+            <dd>{startText}</dd>
+          </div>
+        </dl>
+      )}
+      {assignmentEnabled && <p className="muted small">{t("wizard.assignmentEffectiveNote")}</p>}
+      {assignmentEnabled && !needsPair && <p className="muted small">{t("wizard.assignmentSkipNote")}</p>}
+    </>
+  );
+
+  const reviewSection = (step: StepId, title: string, rows: [string, ReactNode][], note?: string) => (
+    <section className="card review-card" aria-labelledby={`review-${step}`}>
+      <div className="card-header">
+        <h3 id={`review-${step}`}>{title}</h3>
+        <Button size="small" variant="ghost" onClick={() => dispatch({ type: "goto", step })} aria-label={t("wizard.editSection", { section: title })} disabled={s.saving}>
+          {t("wizard.edit")}
+        </Button>
+      </div>
+      {note ? (
+        <p className="muted">{note}</p>
+      ) : (
+        <dl className="info-grid">
+          {rows.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value || "—"}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
+  const today = todayInVietnam();
+  const review = (
+    <>
+      {reviewSection("personal", t("wizard.step.personal"), [
+        [t("personal.fullName"), v.full_name.trim()],
+        ...(caps.writePersonal
+          ? ([
+              [t("personal.dateOfBirth"), v.date_of_birth ? formatDate(v.date_of_birth) : ""],
+              [t("personal.gender"), v.gender ? (tMaybe(`gender.${v.gender}`) ?? v.gender) : ""],
+              [t("personal.mobile"), v.mobile_phone.trim()],
+              [t("personal.personalEmail"), v.personal_email.trim()],
+            ] as [string, ReactNode][])
+          : []),
+        [t("overview.employeeCode"), caps.setCode && v.employee_code.trim() ? v.employee_code.trim() : t("wizard.codeOnSave")],
+      ])}
+      {reviewSection(
+        "employment",
+        t("wizard.step.employment"),
+        [
+          [t("employment.employeeType"), optionLabel(ready?.employeeTypes, v.employee_type_id)],
+          [t("employment.startDate"), v.start_date ? t(v.start_date > today ? "wizard.starts" : "wizard.started", { date: startText }) : ""],
+          [t("employment.workEmail"), v.work_email.trim()],
+        ],
+        hasEmployment(v) ? undefined : t("wizard.noEmploymentReview"),
+      )}
+      {reviewSection(
+        "assignment",
+        t("wizard.step.assignment"),
+        [
+          [t("overview.department"), optionLabel(ready?.departments, v.department_id)],
+          [t("overview.jobTitle"), optionLabel(ready?.jobTitles, v.job_title_id)],
+          [t("overview.level"), optionLabel(ready?.levels, v.job_level_id)],
+          [t("overview.manager"), optionLabel(ready?.managers, v.manager_person_id)],
+          [t("assignmentTab.takesEffectOn"), startText],
+        ],
+        hasEmployment(v) && v.department_id && v.job_title_id ? undefined : t("wizard.noAssignmentReview"),
+      )}
+      <label className="checkbox-row">
+        <input type="checkbox" checked={v.require_operational_completeness} onChange={set("require_operational_completeness")} disabled={s.saving} />
+        <span>
+          {t("form.requireOperational")}
+          <span className="muted small"> — {t("wizard.requireCompleteHelp")}</span>
+        </span>
+      </label>
+      <p className="muted small">{t("wizard.saveNote")}</p>
+    </>
+  );
+
+  const body: Record<StepId, ReactNode> = { personal, employment, assignment, review };
+  const isReview = s.step === "review";
 
   return (
     <>
-      <p>
-        <Link href="/employees">{t("detail.back")}</Link>
-      </p>
-      <h1>{t("form.title")}</h1>
-      <form onSubmit={submit}>
-        <fieldset>
-          <legend>{t("form.identity")}</legend>
-          <div className="grid2">
-            <label>
-              {t("form.fullName")} *
-              <input required value={form.full_name} onChange={set("full_name")} maxLength={200} />
-            </label>
-            {canSetCode && (
-              <label>
-                {t("form.legacyCode")}
-                <input value={form.employee_code} onChange={set("employee_code")} maxLength={20} />
-              </label>
+      <Link href={backHref} className="back-link" onClick={leave}>
+        ← {t("detail.backToEmployees")}
+      </Link>
+      <PageHeader title={t("wizard.title")} subtitle={t("wizard.subtitle")} />
+      <Stepper
+        label={t("wizard.stepsLabel")}
+        items={STEPS.map((id) => ({ id, label: t(`wizard.step.${id}`) }))}
+        current={s.step}
+        visited={s.visited}
+        onSelect={(step) => !s.saving && dispatch({ type: "goto", step })}
+      />
+      <section className="card wizard-card" aria-labelledby="wizard-step-title">
+        <h2 id="wizard-step-title" ref={headingRef} tabIndex={-1}>
+          {t(`wizard.step.${s.step}`)}
+        </h2>
+        <p className="muted small">{t(`wizard.intro.${s.step}`)}</p>
+        <div ref={bodyRef} className="wizard-body">
+          {/* The save result stays visible on whichever step HR is sent back to. */}
+          {saveError?.network && <InfoBox variant="warning">{t("wizard.networkError")}</InfoBox>}
+          {saveError?.error && (
+            <InfoBox variant="danger" title={t("wizard.nothingSaved")}>
+              {Object.keys(errors).length > 0 && <div>{t("wizard.fixHighlighted")}</div>}
+              {/* Errors that belong to no field (e.g. a conflict) are listed in words, never as codes. */}
+              {(saveError.error.body?.details ?? []).map((d, i) => (
+                <div key={i}>{d.message}</div>
+              ))}
+              {!Object.keys(errors).length && !saveError.error.body?.details?.length && (
+                <div>{(saveError.error.body && tMaybe(`errors.${saveError.error.body.error}`)) ?? saveError.error.message}</div>
+              )}
+            </InfoBox>
+          )}
+          {body[s.step]}
+        </div>
+        <div className="wizard-actions">
+          <Link href={backHref} className="button ghost" onClick={leave} aria-disabled={s.saving}>
+            {t("profileEdit.cancel")}
+          </Link>
+          <div className="page-actions">
+            {s.step !== "personal" && (
+              <Button onClick={() => dispatch({ type: "back" })} disabled={s.saving}>
+                {t("wizard.back")}
+              </Button>
+            )}
+            {isReview ? (
+              <Button variant="primary" onClick={() => void save()} disabled={s.saving} aria-busy={s.saving}>
+                {s.saving ? t("wizard.saving") : t("form.save")}
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={next}>
+                {t("wizard.next")}
+              </Button>
             )}
           </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>{t("form.employment")}</legend>
-          <p className="muted small">{t("form.employmentHelp")}</p>
-          <div className="grid2">
-            <label>
-              {t("form.startDate")}
-              <input type="date" value={form.start_date} onChange={set("start_date")} />
-            </label>
-            {select("employee_type_id", t("form.employeeType"), opts.employeeTypes, noStart)}
-            <label>
-              {t("form.workEmail")}
-              <input type="email" value={form.work_email} onChange={set("work_email")} disabled={noStart} />
-            </label>
-            {select("department_id", t("form.department"), opts.departments, noStart)}
-            {select("job_title_id", t("form.jobTitle"), opts.jobTitles, noStart)}
-            {select("job_level_id", t("form.jobLevel"), opts.levels, noStart)}
-            {select("manager_person_id", t("form.manager"), opts.managers, noStart)}
-          </div>
-        </fieldset>
-
-        {canWritePersonal && (
-          <fieldset>
-            <legend>{t("form.personal")}</legend>
-            <div className="grid2">
-              <label>
-                {t("detail.gender")}
-                <select value={form.gender} onChange={set("gender")}>
-                  <option value="">{t("form.none")}</option>
-                  {(["female", "male", "other"] as const).map((g) => (
-                    <option key={g} value={g}>
-                      {t(`gender.${g}`)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                {t("detail.dateOfBirth")}
-                <input type="date" value={form.date_of_birth} onChange={set("date_of_birth")} />
-              </label>
-              <label>
-                {t("detail.mobilePhone")}
-                <input value={form.mobile_phone} onChange={set("mobile_phone")} placeholder="0xxxxxxxxx" inputMode="tel" />
-              </label>
-              <label>
-                {t("detail.personalEmail")}
-                <input type="email" value={form.personal_email} onChange={set("personal_email")} />
-              </label>
-            </div>
-          </fieldset>
+        </div>
+        {s.saving && (
+          <p className="muted small" role="status">
+            {t("wizard.savingStatus")}
+          </p>
         )}
-
-        <fieldset>
-          <label style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--text)" }}>
-            <input
-              type="checkbox"
-              checked={form.require_operational_completeness}
-              onChange={set("require_operational_completeness")}
-            />
-            {t("form.requireOperational")}
-          </label>
-          <p className="muted small">{t("form.requireOperationalHelp")}</p>
-        </fieldset>
-
-        <ErrorBox error={error} />
-        <button className="primary" type="submit" disabled={busy}>
-          {busy ? t("form.saving") : t("form.save")}
-        </button>
-      </form>
+      </section>
     </>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
@@ -34,7 +34,13 @@ export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<ApiCallError | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // UI-8: arriving from Add Employee (…?created=1) shows a success notice; the parameter is then dropped from the URL.
+  const created = useSearchParams().get("created") === "1";
+  const [notice, setNotice] = useState<string | null>(created ? t("wizard.created") : null);
+  const router = useRouter();
+  useEffect(() => {
+    if (created) router.replace(`/employees/${id}`, { scroll: false });
+  }, [created, id, router]);
   const [tab, setTab] = useState<TabId>(tabFromUrl);
   const [backHref] = useState(() => (typeof window === "undefined" ? "/employees" : rememberedListHref()));
   // The workflow opened from the header; `launch` remounts the form for every opening.

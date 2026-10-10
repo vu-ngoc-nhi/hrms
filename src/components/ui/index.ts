@@ -7,4 +7,5 @@ export { InfoBox, type InfoVariant } from "./InfoBox";
 export { Modal } from "./Modal";
 export { PageHeader } from "./PageHeader";
 export { StatusBadge, statusVariant, type BadgeVariant, type StatusKind } from "./StatusBadge";
+export { Stepper, type StepperItem } from "./Stepper";
 export { Tabs, type TabItem } from "./Tabs";
