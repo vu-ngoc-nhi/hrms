@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95). **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). Next slice (UI-6) not started.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 also in §8 (register C-96). **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). Next slice (UI-7) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -136,6 +136,9 @@ Stages that need none of these decisions: UI-0, UI-3 (without tenure), UI-4, UI-
 | D-UI-9 | **Rehire stays a two-step flow**; after a successful Rehire the UI guides HR to **Add Initial Assignment**; no simulated atomic Rehire + Assignment. |
 | D-UI-10 | Use the existing **#c8102e** as the **temporary** primary red, defined once as a central token (`--color-primary` in `src/app/tokens.css`). **Brand red pending final EmeSoft brand confirmation.** |
 | D-UI-11 | The product UI stays **English-first**; Vietnamese only in review documents/mockups, never a mixed-language production UI. |
+| D-UI-12 (2026-10-10, register C-96) | **Upcoming / future-effective state uses the semantic INFO treatment** everywhere (light-blue accent + explicit text such as *Upcoming*). The primary red is never used for ordinary future lifecycle state. Applied to the Overview upcoming cards and Upcoming Changes in UI-6. |
+| D-UI-13 (2026-10-10, register C-96) | **Action ownership direction:** the header holds the primary assignment action and person-level / lifecycle-level actions only; Employment-Period-specific actions belong to the relevant period card (and assignment-row corrections to their row). The consolidation is done in **UI-9**; current behaviour stays stable until then. |
+| D-UI-14 (2026-10-10, register C-96) | **Cancelled / Voided Employment Periods never expose operational mutation actions** on their own card (Employment and Assignment tabs); proved by unit tests. |
 
 **Revised implementation order:** UI-0 → UI-2 Employee List → UI-3 Detail shell + Overview → UI-4 Personal → UI-5 Employment → UI-6 Assignment → UI-7 History → UI-8 Add Employee → UI-9 Action workflows → UI-10 Organization → **UI-1 Home last** (largest data gaps; avoids mixing the UI refactor with new API work).
 
@@ -371,4 +374,57 @@ The selected workflow opens inside its period card (unchanged form, focus moves 
 | Visual QA (synthetic data, HR Admin test identity, 1440 px) | A Active DEMO001; B Pre-start DEMO901; C Ended DEMO003; D Rehire DEMO904 (Period 1 History, Period 2 Upcoming); E Relationship Change DEMO005 (completed) and DEMO905 (planned); F planned End DEMO903; G Cancelled ES0015 (with reversed End, C-72 guidance and Add Initial Assignment); H Voided + I no operational record DEMO906; ES0010 no records at all |
 | Responsive / accessibility | actions on one line at 1280 px; one column, menus inside the viewport and no horizontal scroll at phone width; labels are text; menus keyboard operable with per-period accessible names; headings h2 (section) / h3 (period) / h4 (period history) |
 | Smoke | Employees → DEMO005 → Employment → Edit Work Email from the period card (focus inside, Cancel closes) → header More actions unchanged; no app console or server errors |
+
+## 14. UI-6 — Assignment (implemented 2026-10-10)
+
+Scope: the Assignment tab, plus D-UI-12 applied to the Overview upcoming cards. No assignment rule, effective-date semantics, manager rule, Change / Initial Assignment behaviour, correction semantics, permission or API changed; no backend change.
+
+### Decisions recorded first (§8, register C-96)
+
+D-UI-12 upcoming = INFO treatment (Overview Upcoming Changes / upcoming cards switched from the light-red accent to info; Employment and Assignment already use it). D-UI-13 action ownership direction (consolidation in UI-9; behaviour unchanged now). D-UI-14 no operational mutation on Cancelled/Voided period cards (unit-tested in `assignment-tab.test.ts`, covering every eligibility flag and the grouped actions for both dispositions, with and without assignment rows).
+
+### Information architecture (`assignmentModel.ts`, server facts only)
+
+| Section | Rule |
+|---|---|
+| **Current Assignment** | Row in effect today (`effective_from ≤ today < effective_to`, open end allowed) of the period the server reports `active`; at most one. An active period without an assignment shows the empty state here |
+| **Upcoming Assignment(s)** | Every operational row with `effective_from` after today — planned changes in the current period, the initial row of a Pre-start period, rows of a future period after Rehire / Relationship Change — nearest first; several are shown (the model never assumes one) |
+| **Assignment History** | Remaining operational rows (replaced rows, rows of ended periods), most recent first; the final row of an ended period is labelled **Last Assignment** |
+| **Cancelled or voided periods** | Rows recorded on cancelled / voided periods: muted, "Not operational", explanation, no actions — never Current or Upcoming |
+
+Labels are text badges (Current / Upcoming / Historical / Last Assignment / Not operational); Current soft green, Upcoming info (D-UI-12). When more than one Employment Period is recorded each card names its period ("Employment Period 2 · Employee · from 02 Nov 2026"); assignments are never compared or merged across periods.
+
+### Card content and date wording
+
+Department · Job Title · Level · Manager · dates. Level absent → "—" (optional); Manager absent → "—" with the accessible name "No manager", never warning styling; Manager shows name (Employee Code) linking to that person — no email, org tree or report counts.
+
+| State | Wording |
+|---|---|
+| Current | **Effective since** <date>; if a planned row follows: "A planned change takes effect on <date> (see Upcoming Assignment)." |
+| Upcoming | **Effective Date** <date> + "Takes effect on <date>. Not in effect yet." |
+| Historical, followed by the next row | **Effective from** <date> · **Replaced on** <next row's start> |
+| Historical, closed without successor (e.g. End Employment) | **Effective from** <date> · **Effective through** <exclusive end − 1 day> |
+| Last row of an ended period, open end | **Effective from** <date> · **Effective through** <period end date> |
+
+The exclusive `effective_to` is never shown as an "End Date" next to the next row's start (unit-tested). A small change summary shows only changed fields against the previous row of the same period ("Changed from the previous assignment: Job Title: … → …"), using the existing pure comparison; no backend support added.
+
+### Actions
+
+| Action | Where | Treatment |
+|---|---|---|
+| Change Assignment — representative period | Employee header (UI-3) | Primary red (unchanged); no competing red in the tab |
+| Change Assignment — another operational period (e.g. future period after Relationship Change) | That period's latest row | Secondary small button |
+| Correct (assignment correction, `employment.correct`) | Its own row | Ghost small button, accessible name "Correct assignment effective from <date>"; existing form and reason rules |
+| Add Initial Assignment (`employment.manage`) | Empty state "No assignment has been added for Employment Period N." | Secondary; a normal operational action (the record may stay Needs Attention per the authoritative completeness) |
+
+Forms open inside their card (unchanged content; focus moves in; Cancel/Save closes). Row corrections are not in the header (D-UI-13).
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| Unit `tests/unit/assignment-tab.test.ts` (16) | current; multiple historical rows with "Replaced on" (no overlapping end date); change summary of changed fields only; future change; several upcoming rows ordered; Pre-start Upcoming; Ended → Last Assignment "Effective through"; open row of ended period; missing Manager / Level; Rehire and Relationship Change keep rows in their period (no cross-period comparison); empty period state; Cancelled/Voided rows never Current/Upcoming; D-UI-14 eligibility; Correct needs `employment.correct`, Change / Initial need `employment.manage`; no role names |
+| Unit suite / typecheck / lint / build | 134/134 unit tests; typecheck, lint, production build pass. Frontend-only: DB/UAT suites not re-run |
+| Visual QA (synthetic data, HR Admin test identity) | A current DEMO001 (1280 px); B Pre-start upcoming DEMO901; C historical changes DEMO002 (QA Junior → QA Middle → Engineering); D future change DEMO802; E missing Manager DEMO901/DEMO003; F Rehire DEMO904 (Period 2 upcoming, Period 1 Last Assignment); G period without assignment ES0015 (empty state + Add Initial Assignment); H Ended DEMO003 (Last Assignment, effective through 31 Dec 2025); I Relationship Change DEMO905 (future-period row Upcoming with period context and secondary Change Assignment); voided row DEMO906 (Not operational, no actions); Overview DEMO802 with the D-UI-12 info treatment |
+| Responsive / smoke | 1280 px readable; one column and no horizontal scroll at phone width; Employees → DEMO905 → Assignment → Change Assignment (period row) → Cancel after restart; Correct opens the existing correction form in place; no app console or server errors |
 
