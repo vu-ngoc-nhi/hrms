@@ -3,6 +3,7 @@
 - Phase: **Pre-Production Readiness Planning** — planning only; nothing in this document has been implemented.
 - Baseline: **`Core HR Phase 1 — UAT Passed With Pre-Production Actions`** (PV-25 Accepted / Closed). **UAT Passed ≠ Production Ready.**
 - Target: **minimum safe production** for EmeSoft (~70–100 employees, lean HR team) — not enterprise completeness before launch. C-84: *reduce process complexity, not engineering quality*. C-85: *flexible role configuration, strict authorization enforcement*.
+- **Decision Pack 01 (2026-10-10, `pre-production-decision-pack-01.md`)** resolved several open questions (onboarding option and depth, access-administration form, ownership rule, RPO/RTO target, maintenance, RBAC scope). Updated below where relevant. **Decisions are not evidence: no gate group is passed.**
 - Revision 2 (2026-10-10) replaces the flat list of 55 P0 items (revision 1) with **three gates and 13 requirement groups**. Nothing was weakened in legal/privacy, authentication/authorization, secrets/isolation, data integrity, backup/restore, deployment safety or real-data validation; duplicated or speculative P0s were grouped or downgraded (§4, §5). The full revision-1 item list stays traceable in Appendix J.
 
 ---
@@ -36,7 +37,7 @@
 
 **GATE C — Post-go-live hardening** (important, not blocking first use at EmeSoft's scale): configurable Access Role editor / self-service access screen, dependency upgrades, periodic restore tests, audit retention answer, Entra "assignment required", idle timeout, rate limiting, idempotency purge, audit viewer, config inventory, migration-compatibility checklist, legal classification guidance (§3).
 
-**Today: Gate A 0/8, Gate B 0/5.** The longest lead times are A1 (counsel) and A2/A3 (IT platform + Entra). HR decisions in §10 unblock most of the rest.
+**Today: Gate A 0/8, Gate B 0/5** (decisions recorded for A1, A4, A5, A6, A7 — nothing passed). The longest lead times are A1 (counsel) and A2/A3 (IT platform + Entra). HR decisions in §10 unblock most of the rest.
 
 ---
 
@@ -46,13 +47,13 @@ Status values: **Not started** · **Partly in place** (some evidence exists) · 
 
 | Gate | Requirement Group | Risk Addressed | Current State | Owner | Evidence | Status |
 |---|---|---|---|---|---|---|
-| A | **A1 Legal / privacy approval for real data** — Q-L1 basis + notice, Q-L2 retention incl. leavers, Q-L4 backup retention, Q-L5 hosting/vendor/encryption, Q-L6 impact assessment, Q-L7 HR access to personal fields (Appendix A) | Unlawful processing of employee data; retention/deletion obligations; vendor exposure | No counsel answers; no data or retention assumed in code | Legal + HR (+ Management for hosting) | Written counsel answers; notice text/delivery if required; retention values recorded (Pending Legal Review → decided) | Not started |
+| A | **A1 Legal / privacy approval for real data** — Q-L1 basis + notice, Q-L2 retention incl. leavers, Q-L4 backup retention, Q-L5 hosting/vendor/encryption, Q-L6 impact assessment, Q-L7 HR access to personal fields (Appendix A) | Unlawful processing of employee data; retention/deletion obligations; vendor exposure | Review started by decision (C-88); questions to be sent; no counsel answers; no data or retention assumed in code | Legal + HR (+ Management for hosting) | Written counsel answers; notice text/delivery if required; retention values recorded (Pending Legal Review → decided) | Not started |
 | A | **A2 Secure production platform** — hosting decision; private PostgreSQL 18 with encrypted storage and TLS; separate owner / `hrms_app` / read-only roles with new secrets; grants re-verified; secrets store; staging/production isolation; production config (`APP_ENV`/`NODE_ENV=production`, `AUTH_MODE=entra`, real `COMPANY_EMAIL_DOMAINS`, strong HMAC key); **Production Web Security** (HSTS, frame protection, CSP compatible with sign-in, same-origin/no CORS, proxy logs without query strings); dependency advisories triaged | Data exposure through the network, leaked credentials, dev values in production, XSS/clickjacking with tokens in the browser, names leaking into access logs | Local Docker only; public dev password; no page security headers; app-side log hygiene and same-origin API proven | IT (platform) + Development (headers, config review) | Platform record; role/grant check (`db-schema-guarantees` checks re-run as the production app role); header check on the URL; proxy log sample; secrets inventory; advisory triage note | Partly in place (app side) |
 | A | **A3 Production identity** — invariants in §7 (Entra sign-in in the browser, real v2 tokens validated for issuer/audience/scope/tenant, test identity impossible, secure redirect/origin, disable/revoke behaviour, tenant MFA applies) | Unauthorised access to HR data; test identity reachable in production | Verifier rules proven with local keys; test identity blocked by configuration logic; **no browser sign-in (MSAL)**; no registration values (PV-11) | IT (Entra) + Development (sign-in) | Real-token test record (accepted/rejected cases); `/api/v1/dev/*` → 404 on production; sign-in/sign-out demo | Partly in place |
-| A | **A4 Access administration + named owners** — minimum RBAC (§6); named HR_ADMIN/HR_EDITOR holders, system owner, technical owner; joiner/mover/leaver procedure; production admin access list; rule: data is corrected only through audited app workflows, never ad-hoc SQL | Wrong people keep access after leaving; HR depends on SQL for staffing; untraceable data changes | Capability enforcement proven; accounts/roles only via dev seed; nobody named | Management + HR + Development + IT | Named list; leaver procedure (½ page); access-admin capability demonstrated on staging incl. audit record and "last admin" refusal | Partly in place |
-| A | **A5 Backup + restore rehearsal** — daily encrypted backup in a separate location, retention per Q-L4, access restricted, failure alert; **restore rehearsal passed** (Appendix C) | Permanent loss of HR history; unrecoverable mistakes | None | IT (+ Management approves RPO/RTO) | Backup job + failure-alert test; signed restore-rehearsal record within RTO | Not started |
-| A | **A6 Deployment & migration rehearsal** — staging (may be lightweight/temporary), one artifact per tag, attended migration runbook (backup first, forward-only), health + smoke, rollback/forward-fix policy, maintenance window | A failed or improvised migration against real data; no way back | Build and forward-only migrations proven locally; `db:migrate` refuses non-local targets by design; no runbook | Development + IT | Runbook; staging rehearsal record (deploy, migrate, smoke, rollback of the app version) | Partly in place |
-| A | **A7 Onboarding validated on synthetic data** — onboarding option and history depth decided (§8); mapping sheet (PV-05/06/08); production catalogs; synthetic rehearsal on staging with integrity 0/0; reconciliation template | Wrong or duplicate people, wrong periods/managers from day 1 | No decision, no mapping, no tool | HR (+ Development if option B) | Approved mapping; rehearsal record; template | Not started |
+| A | **A4 Access administration + named owners** — minimum RBAC (§6); named HR_ADMIN/HR_EDITOR holders, system owner, technical owner; joiner/mover/leaver procedure; production admin access list; rule: data is corrected only through audited app workflows, never ad-hoc SQL | Wrong people keep access after leaving; HR depends on SQL for staffing; untraceable data changes | Capability enforcement proven; **form decided: guarded access-administration command (C-89), fixed roles only (C-92)**; ownership rule decided (C-90), names open (PV-26); command not built; accounts/roles only via dev seed today | Management + HR + Development + IT | Named list; leaver procedure (½ page); access-admin capability demonstrated on staging incl. audit record and "last admin" refusal | Partly in place |
+| A | **A5 Backup + restore rehearsal** — encrypted backups meeting **RPO ≤ 4 h** (every 4 h or point-in-time recovery) in a separate location, retention per Q-L4, access restricted, failure alert; **restore rehearsal passed** (Appendix C) | Permanent loss of HR history; unrecoverable mistakes | None; **target decided: RPO ≤ 4 h, RTO ≤ 1 business day (M-14, provisional; IT confirmation PV-27)** | IT (+ Management approves RPO/RTO) | Backup job + failure-alert test; signed restore-rehearsal record within RTO | Not started |
+| A | **A6 Deployment & migration rehearsal** — staging (may be lightweight/temporary), one artifact per tag, attended migration runbook (backup first, forward-only), health + smoke, rollback/forward-fix policy, maintenance window | A failed or improvised migration against real data; no way back | Build and forward-only migrations proven locally; `db:migrate` refuses non-local targets by design; no runbook; maintenance approach decided (C-91: outside working hours with notice) | Development + IT | Runbook; staging rehearsal record (deploy, migrate, smoke, rollback of the app version) | Partly in place |
+| A | **A7 Onboarding validated on synthetic data** — onboarding option and history depth decided (§8); mapping sheet (PV-05/06/08); production catalogs; synthetic rehearsal on staging with integrity 0/0; reconciliation template | Wrong or duplicate people, wrong periods/managers from day 1 | **Option decided: one-time validated import utility (M-12); depth decided: current operational truth + relationship-relevant prior periods (M-13)**; mapping Pending Validation (PV-05/06/08); utility not built | HR (+ Development if option B) | Approved mapping; rehearsal record; template | Not started |
 | A | **A8 Real-Data Go/No-Go signed** (Appendix G) | Real data entering before A1–A7 are true | — | Management + HR + technical owner | Signed checklist recorded in the decision register | Not started |
 | B | **B1 Real-data load reconciled** — counts per status/department/type, ≥ 10 % sampled by HR, persons without Work Email/manager listed, integrity scan 0/0 | Silent import/entry errors becoming operational truth | — | HR (+ technical owner) | Signed reconciliation | Not started |
 | B | **B2 Minimum operations visibility** — `/health` availability alert to IT; application error logs (request id + error type) retained; backup alert (from A5); integrity scan runnable read-only on production; Entra sign-in logs known to IT | Outage or failure noticed only by HR; integrity drift unnoticed | `/health` and log hygiene proven; scanner refuses non-local hosts by design | IT + Development | Test alert received; log location; first production scan result | Partly in place |
@@ -134,8 +135,8 @@ Result: 55 flat P0s → **8 Gate A groups + 5 Gate B groups**; nothing previousl
 4. Guardrail: refuse any change that leaves **zero active HR_ADMIN** accounts.
 5. Normal HR staffing changes need **no code change and no deployment**.
 
-**Smallest safe form — decision needed (HR + Management):**
-- **Option 1 (recommended for first go-live):** guarded, audited administration command run by the technical owner on the HR system owner's request. No UI, **no new permission**.
+**Smallest safe form — DECIDED (C-89, C-92): Option 1.** Option 2 stays a Gate C option.
+- **Option 1 (chosen for first go-live):** guarded, audited administration command run by the technical owner on the HR system owner's request. No UI, **no new permission**.
 - **Option 2:** minimal in-app access screen behind a new permission `access.manage` (self-service for HR). Adding a permission is a business decision (CLAUDE.md gate) and needs C-85 Q1 (who administers) and Q2 (anti-escalation) answered. Fits Gate C unless HR wants self-service from day 1.
 
 **Not required before first go-live:** configurable Access Role editor, create/clone custom roles, permission-membership UI, scope engine, ABAC, Job Title → automatic role (Gate C, only on a demonstrated need).
@@ -165,7 +166,7 @@ Result: 55 flat P0s → **8 Gate A groups + 5 Gate B groups**; nothing previousl
 | Import-error risk | Typing errors; every record passes the same app validations, reasons and audit | Systematic errors possible but visible in dry-run; uses the **application services**, no direct SQL | Same as B plus framework bugs |
 | Development effort | None (existing screens) | Small, throw-away after use | Large, ongoing |
 
-**Recommendation:** **A** if HR decides current-state onboarding (current period, current assignment, manager); **B** only if HR needs historical periods/assignments loaded. **C is not recommended** at EmeSoft's scale. Either way: synthetic rehearsal on staging (A7), anonymized rehearsal only if counsel allows, real load only after A8, reconciliation in B1. Design notes (matching, codes, managers in two passes, no import of erroneous/cancelled rows) are in Appendix F.
+**Decision (M-12, M-13): option B — a small one-time validated import utility, run by the technical owner (source file → validation → dry run → error report → approved import → reconciliation), loading current operational truth plus prior periods only where needed for correct lifecycle interpretation; no generic framework, end-user import module or mapping engine.** Original revision-2 recommendation, kept for context: **A** if HR decides current-state onboarding (current period, current assignment, manager); **B** only if HR needs historical periods/assignments loaded. **C is not recommended** at EmeSoft's scale. Either way: synthetic rehearsal on staging (A7), anonymized rehearsal only if counsel allows, real load only after A8, reconciliation in B1. Design notes (matching, codes, managers in two passes, no import of erroneous/cancelled rows) are in Appendix F.
 
 ## 9. Critical execution path
 
@@ -187,11 +188,11 @@ The critical path is the **longest of**: counsel answers (A1) and IT platform + 
 ## 10. Decisions HR must make first
 
 1. **Send the legal questions** (Appendix A) and name the counsel contact — longest lead time.
-2. **Onboarding option and history depth** (§8: A or B; current state vs history).
-3. **Named people:** HR system owner; HR_ADMIN and HR_EDITOR holders (with Management: technical owner, production admins).
-4. **Access administration form** (§6: Option 1 via technical owner, or Option 2 self-service with a new permission).
+2. ~~Onboarding option and history depth~~ — **decided** (M-12, M-13); remaining: the actual mapping and which people need prior periods.
+3. **Named people:** rule decided (C-90: System Owner, Technical Owner, primary + backup HR administrator, ≥ 2 operational admin accounts); **names still needed (PV-26)**.
+4. ~~Access administration form~~ — **decided** (C-89: guarded command; C-92: no configurable roles for first go-live).
 5. **Source mapping and real catalogs** (PV-05, PV-06, PV-08): departments, job titles EN/VI, levels, Employee Types, company email domain.
-6. With Management: **RPO/RTO** (proposed 24 h / 1 business day, Appendix C) and a **maintenance window**.
+6. ~~RPO/RTO and maintenance~~ — **decided** (M-14: RPO ≤ 4 h, RTO ≤ 1 business day, provisional pending IT confirmation PV-27; C-91 maintenance outside working hours with notice).
 7. Note: whether HR Editor keeps access to personal contact fields waits for counsel (Q-L7); no change before that.
 
 ## 11. Tasks IT can start immediately (in parallel)
@@ -208,8 +209,8 @@ The critical path is the **longest of**: counsel answers (A1) and IT platform + 
 | Task | Wait for |
 |---|---|
 | Browser Entra sign-in (MSAL) | Non-production Entra registration + agreed topology (§7) |
-| Access-administration minimum | HR/Management choice of Option 1 vs 2; if Option 2, approval of `access.manage` and C-85 Q1/Q2 |
-| Onboarding utility (option B) | HR choice of option B, history depth and an approved mapping sheet |
+| Access-administration command (C-89) | **Unblocked once Decision Pack 01 is approved** — a design proposal (security-audit storage, guard, last-admin rule) comes first |
+| One-time import utility (M-12) | Approved source mapping (PV-05/06/08) and a sample synthetic or (if counsel allows) anonymized source structure |
 | Migration/deployment runbook details | Hosting/platform decision (A2) |
 | Production-safe integrity scan mode | DB read-only role design from IT |
 | CSP final policy | Sign-in library choice (CSP must allow the Entra endpoints) — a baseline of HSTS/frame protection can be prepared earlier |
@@ -274,9 +275,9 @@ Invariants are in §7; items E-1/E-2 describe the recommended topology and may b
 | Question | Recommendation (for approval) | EmeSoft risk addressed |
 |---|---|---|
 | What | The production PostgreSQL database (full logical backup incl. `_prisma_migrations`); the deployed artifact version; non-secret configuration. Secrets backed up by the secret store itself | Loss of HR history; inability to rebuild the service |
-| Frequency | Daily automated backup. If the chosen managed PostgreSQL offers point-in-time recovery at no extra process, enable it | Data loss after a failure or a bad change |
-| RPO | **24 hours** with daily backups (≤ 15 min if PITR is available). Justification: low write volume (a few HR changes per day), each change traceable to HR source documents and re-enterable | Proportionate to the business impact |
-| RTO | **1 business day** (target ≤ 8 working hours). No payroll or real-time dependency exists in Phase 1 | Proportionate; avoids HA infrastructure |
+| Frequency | **At least every 4 hours** (M-14), or continuous point-in-time recovery where the chosen PostgreSQL service offers it — IT to confirm (PV-27) | Data loss after a failure or a bad change |
+| RPO | **≤ 4 hours** (M-14, provisional planning target; revision 1 proposed 24 h). Justification: low write volume (a few HR changes per day), each change traceable to HR source documents and re-enterable | Proportionate to the business impact |
+| RTO | **≤ 1 business day** (M-14). No payroll or real-time dependency exists in Phase 1 | Proportionate; avoids HA infrastructure |
 | Retention | Technical proposal: 14 daily + 6 monthly — **Pending Legal Review (Q-L4)**; final value set only after counsel answers | Deleted data lingering in backups; inability to recover older mistakes |
 | Encryption | Encrypted at rest by the storage; dump additionally encrypted with a key held outside the backup location; TLS in transit | Backup theft exposes all employee data |
 | Location | Separate from the database host (different storage account/server), same legal jurisdiction as approved in Q-L5 | Host loss destroys both data and backup |
