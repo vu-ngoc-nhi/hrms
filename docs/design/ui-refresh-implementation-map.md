@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) and D-UI-15 … D-UI-16 (register C-97) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). **Employee Detail consistency review — completed** (§16). Next slice (UI-8) not started.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) and D-UI-15 … D-UI-16 (register C-97) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). **Employee Detail consistency review — completed** (§16). **UI-8 Add Employee implemented** (§17). Next slice (UI-9) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -557,4 +557,54 @@ No new duplicate was introduced in this pass.
 | Responsive | 1440 / 1280: header on one line, Overview two columns; ~900: Overview stacks, More actions menu inside the viewport; phone: no horizontal scroll, menus reachable |
 | Visual QA (synthetic data, 1440 px) | A Active DEMO001; B Pre-start DEMO901; C Ended DEMO003; D Rehire DEMO004 (Overview + History "New Employment Period started"); E Relationship Change DEMO905 (Overview + Employment); F Planned End DEMO903; G Voided / No Employment Record DEMO906 (Overview + Assignment) |
 | Smoke | Employees → DEMO905 → Overview (aligned upcoming wording) → Personal → Employment → Assignment → History after restart; no server errors |
+
+## 17. UI-8 — Add Employee wizard (implemented 2026-10-10)
+
+Scope: the Add Employee page only. No backend, API, business rule or permission change.
+
+### Create semantics verified before implementation
+
+| Question | Finding (`POST /api/v1/core-hr/employees`, `createEmployee`) |
+|---|---|
+| What creates the record | One request with optional `personal`, optional `employment` (`start_date`, `employee_type_id`, `work_email`) and optional `employment.assignment` (`department_id` + `job_title_id`, optional `job_level_id`, `manager_person_id`) |
+| Transaction | **One database transaction**: Person, Employee Code (issued, or legacy code registered), first Employment Period, its start event, Initial Assignment and audit record. Atomic — a failure saves nothing |
+| Employee Code | Issued inside the transaction on save (`nextGeneratedCode`); a legacy code only with `employees.set_code` |
+| Initial Assignment date | Always the Start Date (no separate input exists) |
+| Work Email | Optional at save. The Employee Type's server flag `requires_work_email` drives the completeness rule after the start date (PV-03); no hard requirement |
+| Idempotency | `Idempotency-Key` per content; a retried identical request replays the same result (no duplicate person) |
+| Validation | Full Name required; inactive catalog values rejected; manager must be employed on the Start Date; future DOB rejected; unusual start date only a warning; optional "require completeness" refuses incomplete records |
+
+Consequence: the wizard needs no new API and no recovery path for partial creation — there is no partial state. Real blocker: none.
+
+### Wizard
+
+Personal → Employment → Assignment → Review (shared `Stepper` primitive: current step `aria-current="step"`, completed steps marked "✓" and "completed" in text, only reached steps can be revisited). One page, values kept across Back / Next / Edit (reducer, unit-tested). Next = red primary, Back = secondary, Cancel = ghost. Focus moves to the step heading on each step and to the first invalid field on a failed check. Nothing is saved before **Save Employee** on Review.
+
+| Step | Fields (labels shared with the Employee Detail tabs) | Required |
+|---|---|---|
+| Personal | Full Name; Date of Birth, Gender, Mobile, Personal Email (only with `employees.write_personal`); "Keep an existing (legacy) Employee Code" disclosure only with `employees.set_code` | Full Name only |
+| Employment | Start Date, Employee Type (active catalog values), Work Email | None; Employee Type / Work Email need a Start Date. Work Email hint follows the server flag: "Expected for this Employee Type…" or "Optional for this Employee Type." — never a `*` |
+| Assignment | Department, Job Title, Level, Manager (active employees, "Name (Code)"); "Takes effect on <Start Date>" shown read-only | Optional as a whole; once started, Department and Job Title are required (`*` appears); Level and Manager never required. Disabled with an explanation when there is no Start Date |
+| Review | Personal / Employment / Assignment summaries with Edit buttons; "Only save if the record is complete" (existing option); "Saving creates the employee record, its Employment Period and assignment together. If saving fails, nothing is saved." | — |
+
+No duplicate-person warning or matching (D-UI-8): only the server's exact conflicts are shown (duplicate legacy Employee Code, Work Email already in use). No National ID, address, family, bank or notes fields. Copy aligned: Mobile, Personal Email, Manager (not "Line Manager"), Start Date (never Join / Hire Date).
+
+### Saving and failure behaviour
+
+- One request; the Save button is guarded synchronously and disabled while saving ("Saving the employee record…") — three rapid clicks sent one request in QA. Back and step navigation are locked during the save.
+- Success → the new record's Overview with "Employee record created." (`?created=1`, removed from the URL afterwards). A Pre-start record shows Upcoming Employment / Upcoming Assignment (UI-3 semantics).
+- Validation / business error → nothing was saved: "Nothing was saved. Correct the highlighted fields and save again." shown on whichever step HR is returned to; server field errors (e.g. invalid Mobile, Work Email in use, manager not employed on the Start Date, duplicate code) are mapped to their field and step.
+- Lost connection → "The connection was interrupted, so the result is unknown. Saving again is safe: the same details will not create a second employee." (same Idempotency-Key).
+- Saving without an assignment is a valid, intentional result (the record shows Needs Attention and the header offers Add Initial Assignment) — not a partial failure.
+- Catalog loading: "Loading…" in the select, "No active values — add them under Organization" when empty, error box with **Try again** on API failure.
+- Leaving with unsaved input: confirmation on Back to Employees / Cancel, browser prompt on reload or close; no drafts.
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| Unit `tests/unit/add-employee-wizard.test.ts` (18) | name-only payload (optional DOB / Gender omitted), full payload in one request, Level / Manager optional, Department + Job Title pairing, no assignment effective date sent, capability-filtered payload (personal, legacy code), completeness option; step checks (Full Name, Start Date needed for employment fields, assignment needs employment); Work Email never required, hint from the server flag; Back / Next / Edit keep values; no jump to unreached steps; no change while saving; dirty tracking; server field errors → field and step; creation result URL; capabilities; no role names |
+| Unit suite / typecheck / lint / build | 166/166 unit tests; typecheck, lint, production build pass. Frontend-only: DB/UAT suites not re-run |
+| Browser QA (synthetic data, HR Admin test identity) | A Personal; B Employment — Employee; C Employment — Service Contractor (Work Email hint differs, never required); D Assignment; E Review; F validation (Full Name, Department / Job Title pairing; server invalid Mobile → back to Personal, "Nothing was saved"); G success → Overview of **ES0032 "UI8 QA Pre-start (Synthetic)"** (Pre-start, Upcoming Assignment, Complete); H intentional no-assignment result **ES0033 "UI8 QA No Assignment (Synthetic)"** (Needs Attention, Add Initial Assignment). Exactly one person per save confirmed in `hrms_dev` (read-only check) |
+| Responsive / accessibility | 1440 / 1280 / ~900: four-step stepper, two-column fields; phone: two-column stepper, one-column fields, no horizontal scroll; labels associated, `aria-invalid` / `aria-describedby` on errors, focus management, state in text |
 
