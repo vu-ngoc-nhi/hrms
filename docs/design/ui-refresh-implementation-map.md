@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **AUDIT — awaiting approval. No UI code has been changed.**
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95). **UI-0 implemented** (§9). Next slice (UI-2) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -120,3 +120,39 @@ Verification after each stage: typecheck, lint, build, unit tests for new pure h
 | D-UI-10 | Exact red token | Temporary `#c8102e` until HR/brand approval (`#E8002D` candidate) | UI-0 |
 
 Stages that need none of these decisions: UI-0, UI-3 (without tenure), UI-4, UI-5, UI-6, UI-7 (effective dates), UI-8 (without duplicate detection), UI-9, UI-10.
+
+## 8. Approved decisions (2026-10-10, register C-95)
+
+| ID | Decision |
+|---|---|
+| D-UI-1 | Use **Employee Type** (not "Employment Type"). |
+| D-UI-2 | *Needs Attention* shows only issues backed by actual product rules. **Missing Manager is not an issue** while Manager is optional; **no double counting** of Missing Work Email when the same condition is already shown as record incompleteness. |
+| D-UI-3 | A small **read-only Upcoming Events endpoint** is approved for later (not in UI-0); no notification/workflow engine. |
+| D-UI-4 | Employee List: **Start Date** column, **Employee Type** filter, **Record Completeness** filter approved. **Deferred:** Manager filter, Upcoming Changes filter. |
+| D-UI-5 | **Export deferred** pending Legal/Privacy review; not implemented in this refresh until separately approved. |
+| D-UI-6 | **No Tenure** in Phase 1. Use Start Date or neutral wording such as "Current period since <date>"; never imply company seniority across Rehire / Relationship Change. |
+| D-UI-7 | History shows the business **Effective Date** only; no Recorded At / actor until an approved audit-read design exists. |
+| D-UI-8 | Duplicate-person detection is a **future capability**; no fake or disabled duplicate warning in the real Add Employee flow (may stay documented as a future design state). |
+| D-UI-9 | **Rehire stays a two-step flow**; after a successful Rehire the UI guides HR to **Add Initial Assignment**; no simulated atomic Rehire + Assignment. |
+| D-UI-10 | Use the existing **#c8102e** as the **temporary** primary red, defined once as a central token (`--color-primary` in `src/app/tokens.css`). **Brand red pending final EmeSoft brand confirmation.** |
+| D-UI-11 | The product UI stays **English-first**; Vietnamese only in review documents/mockups, never a mixed-language production UI. |
+
+**Revised implementation order:** UI-0 → UI-2 Employee List → UI-3 Detail shell + Overview → UI-4 Personal → UI-5 Employment → UI-6 Assignment → UI-7 History → UI-8 Add Employee → UI-9 Action workflows → UI-10 Organization → **UI-1 Home last** (largest data gaps; avoids mixing the UI refactor with new API work).
+
+## 9. UI-0 — Design system / global shell (implemented 2026-10-10)
+
+| Deliverable | Evidence |
+|---|---|
+| Central tokens | `src/app/tokens.css`: primary red + hover/pressed/subtle/border/ink, page/surface/surface-2/border/border-strong, text primary/secondary, success/warning/danger/info (+ subtle/border), neutral, focus ring, spacing scale (4–48 px), radii, shadows, control height (36/28), table row height (44), sidebar/content widths, font sizes/weights. Legacy aliases (`--accent`, `--muted`, …) map to the new tokens for screens not yet refactored |
+| Single red | Contract test: `#c8102e` appears only in `tokens.css`; `globals.css` contains no raw colours |
+| Global styles | `src/app/globals.css` rebuilt on tokens: typography, focus-visible, sidebar shell, page header, buttons, forms, cards, key/value, tables (sticky header, row height), semantic badges, alerts, tabs, empty state, modal, action menu |
+| Button hierarchy | primary (red/white), secondary (white + border, default), danger and danger-outline (destructive, separate `--color-danger`), ghost, small; hover / active / focus-visible / disabled |
+| Shell | `AppShell.tsx`: light sidebar, "Mini HRS" wordmark (no logo), nav Home (disabled placeholder "Soon" until UI-1; `/` still opens the Employee List), Employees, Organization (route `/catalogs` until UI-10); API Docs in the sidebar footer; user block (initials, name, role codes), Test identity badge, Sign out; becomes a top bar under 900 px |
+| Permission behaviour | Unchanged capability checks: Home + Employees need `employees.read`, Organization `catalogs.read`, API Docs `docs.read`. Verified: HR_ADMIN and HR_EDITOR see Home/Employees/Organization (no API Docs); API_DOCS_READER sees only API Docs. No role-name check added |
+| Shared primitives | `src/components/ui/`: Button, Card, PageHeader, Tabs (WAI-ARIA tabs, roving arrows), StatusBadge (semantic variants by stable code), Field (label/hint/error association), Modal (focus moves in, Tab trapped, Escape closes unless busy, focus returns), ActionMenu (menu button: arrows/Home/End/Escape/Tab/click-outside), InfoBox, EmptyState, icons, `keyboard.ts` |
+| Inline styles | 64 → 52: the 12 duplicated textarea styles replaced by the global `textarea` rule; the shell has none. Screen-specific margins stay until each slice |
+| Tests | `tests/unit/ui-foundation.test.ts` (token discipline, status variants, keyboard helper) + all unit tests: 62/62; typecheck, lint, production build pass |
+| Visual QA (synthetic DEMO data, 1100 px viewport) | Login (white card, red buttons); shell + Employee List (white sidebar, red active item, red *Create Employee*); DEMO002 detail; existing Change Assignment form inside the new base styles; smoke login → Employees → Employee Detail after restart |
+
+Still expected before the final mockup (later slices): list columns/filters and semantic status badges in the list (UI-2); detail tabs, header actions and Overview (UI-3…UI-7); wizard (UI-8); modals/action menus for workflows (UI-9); Organization page title and tabs (UI-10, page title still "Catalogs"); Home (UI-1).
+
