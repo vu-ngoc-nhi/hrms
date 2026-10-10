@@ -1,6 +1,6 @@
 # Mini HRS — Guarded Access Administration Command (design, revision 2)
 
-- Status: **DESIGN — overall design approved; revision 2 resolves the two security-boundary issues raised in review. Implementation is NOT started and needs explicit approval of this revision.**
+- Status: **IMPLEMENTED (2026-10-10, C-94)** — forward migration `20261013000000_access_administration`, CLI `npm run access`, runbook `docs/production/access-administration-runbook.md`. Development evidence for Gate A4 is complete; IT provisioning, named owners (PV-26) and a staging rehearsal are still required (readiness plan A4). See §18 for differences from the text above.
 - Scope: the smallest safe access-management mechanism for **Gate A4**. Applies C-84, C-85, C-89, C-90, C-92 and the PV-28 decisions (§2). Real employee data remains prohibited (C-88).
 - Out of scope (Gate C): role editor, custom roles, permission-membership administration, `access.manage` UI, scope/ABAC, Position → role mapping, Entra group provisioning.
 - Revision 2 changes: (1) the operator no longer holds any raw DML on access-control tables — the **only mutation path is a small set of guarded database routines**; (2) the operator's identity, environment and Entra OID come from **protected, owner-maintained data keyed by `session_user`**, never from operator-settable values (the revision-1 `hrms.operator_oid` and `hrms.environment` settings are withdrawn — see §5).
@@ -244,3 +244,22 @@ The routines enforce the supported allow-list (`access_role.assignable`). `HR_VI
 | HR | — (PV-28 A–E and G decided) | — | — |
 
 **No business decision blocks implementation.** Implementation still requires explicit approval of this revision.
+
+## 18. Implementation notes (2026-10-10)
+
+Implemented as designed in revision 2 with the final technical constraints of the implementation approval:
+
+| Topic | As implemented |
+|---|---|
+| SECURITY DEFINER owner | Dedicated `hrms_access_function_owner` (NOLOGIN, NOSUPERUSER, NOINHERIT, no members, no CREATE/TEMP). Grants: `app_user` SELECT, INSERT, UPDATE(`is_enabled`, `updated_at`); `app_user_role` SELECT, INSERT, DELETE; `access_role_permission` SELECT; `access_environment`/`access_operator` SELECT, INSERT, UPDATE; `access_audit_event` INSERT. No Core HR table. The migration fails closed if it cannot transfer ownership (non-superuser without `SET ROLE` on the owner); routines are never left owned by the schema owner. |
+| Policy mirror — reduced from three tables to **one** | `access_role_permission(role_code, permission)` only. Its distinct role codes are the supported allow-list; its rows give effective permissions. The administrative capability set is an `IMMUTABLE` migration-defined function `access_admin_permissions()` (no table). `access_role` and `access_admin_capability` from revision 2 were unnecessary. Contract test: equal to `ROLE_PERMISSIONS` / `ADMINISTRATIVE_PERMISSIONS`; the CLI also refuses to run on drift. |
+| Central admin definition | `ADMINISTRATIVE_PERMISSIONS` + `isAdministrative()` in `permissions.ts` (code) and `access_admin_count()` in the DB; no role-name checks (test asserts the access modules contain no role name or admin permission literal). |
+| Self-escalation (generalised) | Rule: an operator may not perform any access action after which the effective permissions of **their own** Entra identity contain a permission they did not have before. Covers own role assignment and enabling an own disabled account whose retained roles would reactivate. Self-reducing actions (remove own role, disable own account) are allowed subject to the last-admin rule. Creating one's own account **without roles** adds no permission and is therefore allowed. |
+| Operator identity / environment | `session_user` → `access_operator` (owner-maintained); `access_environment` single row. No custom setting is read. Routines also take the target environment as a parameter and compare it. |
+| Privilege boundary | Operators: exactly SELECT on the six access-control tables, EXECUTE on four mutation routines and four read helpers; no DML, no CREATE on `public`, no TEMP. The migration additionally revokes `TEMPORARY` on the database from `PUBLIC` (defence in depth; no role needs temporary objects). |
+| Routine hardening | `SET search_path = pg_catalog, pg_temp` on every routine; all access tables and routines referenced as `public.…` (tested); a test operator granted TEMP solely for the test proves that shadow tables in `pg_temp` and a caller `search_path` do not change behaviour. |
+| Concurrency | `pg_advisory_xact_lock` in every routine + READ COMMITTED assertion; tests: overlapping transactions on the last two administrators (disable/disable, remove/remove, mixed) → exactly one succeeds; uncoordinated races never reach zero; concurrent bootstrap from zero → both succeed with consistent audit; same identity twice → one `ACCESS_USER_EXISTS`. |
+| Error codes | `ACCESS_REASON_REQUIRED`, `ACCESS_ROLE_NOT_SUPPORTED`, `ACCESS_INVALID_INPUT`, `ACCESS_USER_NOT_FOUND`, `ACCESS_USER_EXISTS`, `ACCESS_LAST_ADMIN`, `ACCESS_SELF_ESCALATION`, `ACCESS_ENVIRONMENT_MISMATCH`, `ACCESS_OPERATOR_UNKNOWN`, `ACCESS_TENANT_MISMATCH`, `ACCESS_STATE_CHANGED`, `ACCESS_ISOLATION`; CLI-only `ACCESS_UNSAFE_CONNECTION`, `ACCESS_POLICY_DRIFT`, `ACCESS_CONFIRMATION_REQUIRED`. |
+| Seeds / tests | `hrms_app` lost account-table DML; development and test accounts are created through the routines by development operator logins (`npm run access:provision-local`; test global setup). Fixtures the routines refuse on purpose (stale `HR_VIEWER`) use the test owner connection on `hrms_test` only. |
+| Not built | Role editor, `access.manage` UI, custom roles, scope/ABAC, Position → role, Entra group provisioning (Gate C). |
+
