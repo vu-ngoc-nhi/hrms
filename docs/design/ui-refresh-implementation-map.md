@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 also in §8 (register C-96). **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). Next slice (UI-7) not started.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) and D-UI-15 … D-UI-16 (register C-97) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). Next slice (UI-8) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -139,6 +139,8 @@ Stages that need none of these decisions: UI-0, UI-3 (without tenure), UI-4, UI-
 | D-UI-12 (2026-10-10, register C-96) | **Upcoming / future-effective state uses the semantic INFO treatment** everywhere (light-blue accent + explicit text such as *Upcoming*). The primary red is never used for ordinary future lifecycle state. Applied to the Overview upcoming cards and Upcoming Changes in UI-6. |
 | D-UI-13 (2026-10-10, register C-96) | **Action ownership direction:** the header holds the primary assignment action and person-level / lifecycle-level actions only; Employment-Period-specific actions belong to the relevant period card (and assignment-row corrections to their row). The consolidation is done in **UI-9**; current behaviour stays stable until then. |
 | D-UI-14 (2026-10-10, register C-96) | **Cancelled / Voided Employment Periods never expose operational mutation actions** on their own card (Employment and Assignment tabs); proved by unit tests. |
+| D-UI-15 (2026-10-10, register C-97) | **Assignments of Cancelled / Voided Employment Periods remain visible as historical evidence** in a separate muted section ("Cancelled or voided periods"); they are not operational, never Current, never Upcoming and never mutation targets. Historical facts are not hidden because the parent period is Cancelled or Voided. |
+| D-UI-16 (2026-10-10, register C-97) | **Duplicate Add Initial Assignment placement is consolidated in UI-9** (not before): for the representative period the header owns the primary Add Initial Assignment CTA and the empty Assignment card only explains the missing assignment; a non-representative / future period's card may keep its own secondary Add Initial Assignment. |
 
 **Revised implementation order:** UI-0 → UI-2 Employee List → UI-3 Detail shell + Overview → UI-4 Personal → UI-5 Employment → UI-6 Assignment → UI-7 History → UI-8 Add Employee → UI-9 Action workflows → UI-10 Organization → **UI-1 Home last** (largest data gaps; avoids mixing the UI refactor with new API work).
 
@@ -427,4 +429,48 @@ Forms open inside their card (unchanged content; focus moves in; Cancel/Save clo
 | Unit suite / typecheck / lint / build | 134/134 unit tests; typecheck, lint, production build pass. Frontend-only: DB/UAT suites not re-run |
 | Visual QA (synthetic data, HR Admin test identity) | A current DEMO001 (1280 px); B Pre-start upcoming DEMO901; C historical changes DEMO002 (QA Junior → QA Middle → Engineering); D future change DEMO802; E missing Manager DEMO901/DEMO003; F Rehire DEMO904 (Period 2 upcoming, Period 1 Last Assignment); G period without assignment ES0015 (empty state + Add Initial Assignment); H Ended DEMO003 (Last Assignment, effective through 31 Dec 2025); I Relationship Change DEMO905 (future-period row Upcoming with period context and secondary Change Assignment); voided row DEMO906 (Not operational, no actions); Overview DEMO802 with the D-UI-12 info treatment |
 | Responsive / smoke | 1280 px readable; one column and no horizontal scroll at phone width; Employees → DEMO905 → Assignment → Change Assignment (period row) → Cancel after restart; Correct opens the existing correction form in place; no app console or server errors |
+
+## 15. UI-7 — Employee History (implemented 2026-10-10)
+
+Scope: the History tab only — a business-readable timeline, not an audit viewer. No event model, audit model, lifecycle / correction rule, permission or API changed. Decisions D-UI-15 and D-UI-16 recorded in §8 (register C-97).
+
+### Sources (nothing invented)
+
+Only facts already in the Employee Detail response: each period's recorded employment events (`start`, `end` with its structured End Reason, `end_reversed`, `cancel_planned_start`, `employment_voided`) and the effective-dated assignment rows. **Not shown, because no approved audit-read API exists (D-UI-7):** corrections (period / assignment / personal), Work Email added / changed / cleared, personal-information updates, recorded-at times and actors. The tab says so in one line: "Corrections, Work Email and personal-information changes are kept in the audit trail and are not shown here." Free-text reasons are never part of the response (C-24); only the structured End Reason is shown.
+
+### Event taxonomy (`historyModel.ts`)
+
+| Entry | Built from | Notes |
+|---|---|---|
+| Employment started / starts | `start` of the first operational period (or of a voided period, decorated Voided) | |
+| Employee rehired | `start` of a later operational period that is not a Relationship Change (only Rehire creates such a period, S4.8) | "New Employment Period N · <type>. The previous Employment Period ended <date>." |
+| Employment relationship changed | predecessor's active End with reason `RELATIONSHIP_CHANGE` + operational successor starting the next day | One entry at the new period's start: "<old type> → <new type>" + last day / new start; the End and start are not listed separately. If the successor was cancelled, nothing is merged (End + cancelled period stay separate) |
+| Employment ended / scheduled to end | `end` | "Last day of employment · <End Reason>"; a reversed End stays visible, struck through, badge **Reversed**, "This end was later reversed." |
+| End reversed | `end_reversed` | "The employment end recorded for <date> was reversed." (dated with the reversed End) |
+| Planned Employment Period cancelled | cancelled period (its start and cancel events) | One entry at the planned start: "This planned period did not take effect." + planned dates; never "ended" |
+| Employment Period voided | `employment_voided` (dated at the period start: void ab initio) | "Entered in error and not operational…"; the period's own events and assignments stay visible, badge **Voided** |
+| Assignment added / changed | assignment rows | Added = first row of a period (values); Changed = later rows, only changed fields vs the previous row of the **same** period (UI-6 helper); rows of cancelled / voided periods decorated (D-UI-15) |
+
+Titles come from the i18n catalogue; unknown future event types fall back to the existing event-type labels or "Employment event" — never a raw code. Tense follows the effective date ("starts", "scheduled to end") independently of the Reversed / Voided badges.
+
+### Ordering
+
+Ascending sort key: **effective date** → **Employment Period order** (chronological) → **lifecycle step** (period begins / relationship change / rehire → assignment added → assignment changed → other events → End → End reversed → cancelled → voided, matching the API's per-period order with the void listed last) → the API's own event order. Displayed as date groups **most recent first**; inside a date, the lifecycle order (first step on top). Future-dated entries carry a **Planned** badge (INFO, D-UI-12).
+
+### Presentation
+
+Compact vertical timeline: date column (120 px) + one small item per entry (title, badge, one or two lines, and "Employment Period N · <type>" context when the person has several periods — omitted where the description already names the period). Reversed / Cancelled / Voided items are muted (Voided dashed). No filters (event volume per person is small — Phase 1 recommendation). Empty state: "No history recorded yet."
+
+### Privacy / minimisation
+
+No personal values, Work Email, full-name history, recorded-at, actor or reason text are used — unit-tested by feeding personal data and Work Email into the model and asserting none appears. Read access is unchanged (`employees.read` for the detail; personal data only via its own permission, not used here).
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| Unit `tests/unit/history-tab.test.ts` (14) | deterministic order and same-date lifecycle order; most-recent-first groups; assignment change summary (changed fields only, same period); Planned marking; End + Reverse End (old End kept, Reversed, tense by date); Rehire; Relationship Change merged only when reliable (not when the successor was cancelled); Cancelled single entry; Voided evidence kept; D-UI-15 (rows of cancelled / voided periods visible, never Current/Upcoming, no eligible mutation, decorated in history); minimisation; every title free of technical codes; no role names |
+| Unit suite / typecheck / lint / build | 148/148 unit tests; typecheck, lint, production build pass. Frontend-only: DB/UAT suites not re-run |
+| Visual QA (synthetic data, HR Admin test identity, 1440 px) | A/C simple start + planned End DEMO903; B assignment changes DEMO002; D End + Reverse End DEMO006; E Rehire DEMO004; F Relationship Change DEMO005; G Cancelled period with reversed End, unmerged Relationship-Change End and Rehire ES0015; H Voided DEMO906; I/J DEMO801 (personal update and Date of Birth correction from UI-4 QA) — no personal value, correction or Work Email entry appears; empty state ES0010 |
+| Responsive / smoke | one column, no horizontal scroll at phone width; Employees → DEMO005 → History (tab in URL) after restart; no app console or server errors |
 
