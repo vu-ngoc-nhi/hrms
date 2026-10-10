@@ -13,7 +13,8 @@ import { NewPeriodForm } from "./NewPeriodForm";
 import { OverviewTab } from "./OverviewTab";
 import { PersonalCorrectionForm, PersonalTab } from "./PersonalTab";
 import { PeriodWorkflow, actionLabel, groupedMenu } from "./PeriodWorkflow";
-import { AssignmentTab, HistoryTab, type TabContext } from "./RecordTabs";
+import { HistoryTab, type TabContext } from "./RecordTabs";
+import { AssignmentTab } from "./AssignmentTab";
 import { EmploymentTab } from "./EmploymentTab";
 import { headerActions, latestPeriod, overview, type ActionId, type Detail } from "./detailModel";
 

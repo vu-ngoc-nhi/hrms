@@ -1,15 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
 import { formatDate, t, tMaybe } from "@/i18n";
-import { AssignmentChangeForm } from "./AssignmentChangeForm";
-import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
-import { InitialAssignmentForm } from "./InitialAssignmentForm";
 import { periodHeading } from "./PeriodWorkflow";
-import { isDisposed, periodEligibility, type Detail, type HistoryEvent, type Period } from "./detailModel";
+import { isDisposed, type Detail, type HistoryEvent, type Period } from "./detailModel";
 
-// UI-3: the pre-UI-3 Employee Detail content for the Assignment and History tabs (Personal: UI-4, Employment: UI-5). Layout
+// UI-3: the pre-UI-3 Employee Detail content for the History tab (Personal: UI-4, Employment: UI-5, Assignment: UI-6). Layout
 // and wording inside these tabs are unchanged (they are refactored in UI-4 … UI-7). Workflows of the representative
 // period are opened from the header (Change Assignment / More actions); other periods keep their inline buttons.
 
@@ -33,116 +28,6 @@ function PeriodHeader({ d, e }: { d: Detail; e: Period }) {
         )
       )}
     </div>
-  );
-}
-
-export function AssignmentTab({ ctx }: { ctx: TabContext }) {
-  const { d, can, targetId, onSaved } = ctx;
-  const [correctingRow, setCorrectingRow] = useState<string | null>(null);
-  return (
-    <>
-      <h2>{t("detail.assignmentsTitle")}</h2>
-      {d.employments.length === 0 && <p className="muted">{t("detail.noEmployment")}</p>}
-      {d.employments.map((e) => {
-        const el = periodEligibility(d, e, can);
-        const inline = e.id !== targetId;
-        return (
-          <section key={e.id} className="card" style={{ marginBottom: 12, opacity: isDisposed(e) ? 0.7 : 1 }}>
-            <PeriodHeader d={d} e={e} />
-            {inline && el.initialAssignment && (
-              <InitialAssignmentForm<Detail>
-                key={`${e.id}-${d.revision}-initial`}
-                employmentId={e.id}
-                personId={d.id}
-                periodStart={e.start_date}
-                periodEnd={e.end_date}
-                today={d.status_as_of}
-                revision={d.revision}
-                onSaved={(u) => onSaved(u)}
-              />
-            )}
-            {inline && el.changeAssignment && (
-              <AssignmentChangeForm<Detail>
-                key={`${e.id}-${d.revision}`}
-                employmentId={e.id}
-                personId={d.id}
-                current={e.assignments.at(-1) ?? null}
-                revision={d.revision}
-                minDate={can("employment.correct") ? undefined : d.status_as_of}
-                onSaved={(u) => onSaved(u)}
-              />
-            )}
-            <div className="table-wrap" style={{ marginTop: 12 }}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>{t("detail.effectiveFrom")}</th>
-                    <th>{t("detail.effectiveTo")}</th>
-                    <th>{t("employees.columns.department")}</th>
-                    <th>{t("employees.columns.jobTitle")}</th>
-                    <th>{t("detail.jobLevel")}</th>
-                    <th>{t("detail.manager")}</th>
-                    {el.correctAssignmentRows && <th>{t("detail.actions")}</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {e.assignments.map((a) => (
-                    <tr key={a.id}>
-                      <td>{formatDate(a.effective_from)}</td>
-                      <td>{a.effective_to ? formatDate(a.effective_to) : "—"}</td>
-                      <td>{a.department.name}</td>
-                      <td>{a.job_title.name_en}</td>
-                      <td>{a.job_level?.name ?? "—"}</td>
-                      <td>
-                        {a.manager ? (
-                          <Link href={`/employees/${a.manager.person_id}`}>
-                            {a.manager.full_name} ({a.manager.employee_code})
-                          </Link>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      {el.correctAssignmentRows && (
-                        <td>
-                          <button type="button" onClick={() => setCorrectingRow(a.id)} disabled={correctingRow === a.id}>
-                            {t("assignmentCorrection.open")}
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                  {e.assignments.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="muted">
-                        {t("detail.noAssignments")}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {el.correctAssignmentRows &&
-              e.assignments.map(
-                (a, i) =>
-                  correctingRow === a.id && (
-                    <AssignmentCorrectionForm<Detail>
-                      key={`${a.id}-${d.revision}`}
-                      row={a}
-                      previous={i > 0 ? e.assignments[i - 1] : null}
-                      personId={d.id}
-                      revision={d.revision}
-                      onSaved={(u) => {
-                        setCorrectingRow(null);
-                        onSaved(u);
-                      }}
-                      onClose={() => setCorrectingRow(null)}
-                    />
-                  ),
-              )}
-          </section>
-        );
-      })}
-    </>
   );
 }
 

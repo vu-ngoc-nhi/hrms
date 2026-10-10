@@ -6,7 +6,7 @@ import { formatDate, t, tMaybe } from "@/i18n";
 import type { AssignmentSummary, Overview, UpcomingChange } from "./detailModel";
 
 // UI-3 Overview: the HR snapshot of one person. Everything shown comes from the pure view model (detailModel.ts);
-// current and upcoming information are visually distinct (upcoming cards carry the light accent and say so in words).
+// current and upcoming information are visually distinct (upcoming cards carry the INFO accent, D-UI-12, and say so in words).
 
 const endReasonLabel = (r: { code: string; label: string } | null) => (r ? tMaybe(`endReason.${r.code}`) ?? r.label : null);
 const assignmentLine = (a: AssignmentSummary) => `${a.department} / ${a.jobTitle}`;
@@ -205,7 +205,7 @@ export function OverviewTab({ o, status, statusAsOf }: { o: Overview; status: st
       <section className={o.upcoming.length ? "card upcoming span-2" : "card span-2"} aria-labelledby="ov-upcoming">
         <div className="card-header">
           <h2 id="ov-upcoming">{t("overview.upcomingTitle")}</h2>
-          {o.upcoming.length > 0 && <span className="badge primary">{t("overview.upcomingBadge")}</span>}
+          {o.upcoming.length > 0 && <span className="badge info">{t("overview.upcomingBadge")}</span>}
         </div>
         {o.upcoming.length === 0 ? (
           <p className="muted">{t("overview.noUpcoming")}</p>

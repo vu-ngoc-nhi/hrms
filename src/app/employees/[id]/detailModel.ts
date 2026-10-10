@@ -93,7 +93,7 @@ export type AssignmentSummary = {
   level: string | null;
   manager: { personId: string; name: string; code: string } | null;
 };
-const summary = (a: Assignment): AssignmentSummary => ({
+export const summary = (a: Assignment): AssignmentSummary => ({
   id: a.id,
   effectiveFrom: a.effective_from,
   department: a.department.name,
@@ -146,7 +146,7 @@ export type Overview = {
   health: { status: "complete" | "incomplete"; missing: string[]; ruleVersion: string };
 };
 
-function changedFields(from: Assignment | null, to: Assignment): ChangedField[] {
+export function changedFields(from: Assignment | null, to: Assignment): ChangedField[] {
   if (!from) return ["department", "job_title", "level", "manager"];
   const out: ChangedField[] = [];
   if (from.department.id !== to.department.id) out.push("department");

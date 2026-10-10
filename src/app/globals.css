@@ -241,10 +241,10 @@ tbody tr:hover td { background: var(--color-surface-2); }
 .overview-grid dl.kv { grid-template-columns: 150px minmax(0, 1fr); }
 .overview-grid dl.kv dd { overflow-wrap: anywhere; }
 .overview-grid .card > p:last-child { margin-bottom: 0; }
-/* Upcoming information: light red accent (not the destructive red, not a status colour) and always labelled in words. */
-.card.upcoming { border-left: 3px solid var(--color-primary-border); }
+/* Upcoming / future-effective information (D-UI-12): semantic INFO treatment, always labelled in words. */
+.card.upcoming { border-left: 3px solid var(--color-info-border); }
 .change-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
-.change-item { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius); background: var(--color-primary-subtle); }
+.change-item { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius); background: var(--color-info-subtle); }
 .change-date { font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
 .change-title { font-weight: var(--font-weight-semibold); }
 .change-body { display: grid; gap: 2px; min-width: 0; }
@@ -294,6 +294,18 @@ tbody tr:hover td { background: var(--color-surface-2); }
 .period-workflow { margin-top: var(--space-3); }
 .period-workflow:focus { outline: none; }
 .period-workflow > .card, .period-workflow > form { margin: 0; }
+/* Assignment tab (UI-6): same card language as Employment; upcoming = INFO (D-UI-12); records of cancelled/voided
+   periods muted and labelled "Not operational". */
+.assignment-card { margin: 0; }
+.assignment-card.current { border-left: 3px solid var(--color-success-border); }
+.assignment-card.upcoming { border-left: 3px solid var(--color-info-border); }
+.assignment-card.not_operational { background: var(--color-surface-2); border-style: dashed; }
+.assignment-card.not_operational .info-grid dd { color: var(--color-text-2); }
+.assignment-card.empty { border-style: dashed; }
+.assignment-empty { margin: 0; }
+.badge.period-label.last { background: var(--color-neutral-subtle); color: var(--color-text); }
+.badge.period-label.not_operational { background: transparent; color: var(--color-text-2); border: 1px dashed var(--color-border-strong); }
+.change-summary strong { color: var(--color-text); }
 
 /* ---------------- Filter bar (lists) ---------------- */
 .filter-bar {
