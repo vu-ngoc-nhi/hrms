@@ -18,6 +18,7 @@ How to use: run each scenario in order with a new synthetic person; tick a step 
 | 1.5 | Edit Profile: change Full Name (Editor) | Reason required; saved |
 | 1.6 | Repeat 1.2 on another person with a start date in the past (Editor) | Reason required (Initial Data Capture); saved |
 | 1.7 | Repeat 1.2 with a start date of today | Notice that a period starting today is effective immediately and cannot be cancelled as planned |
+| 1.8 | Future period whose first assignment starts later than the start date | Department shown from that assignment, but Operational Profile *Incomplete* (Department / Job Title not ready on the start date, C-78) |
 
 ## 2. Organisational changes
 
@@ -32,11 +33,11 @@ How to use: run each scenario in order with a new synthetic person; tick a step 
 
 | # | Step (role) | Expected result |
 |---|---|---|
-| 3.1 | End Employment in 30 days, reason *Voluntary Resignation* (Editor) | End date set; still *Active* until then; event "End of employment · Voluntary Resignation"; current assignment ends the day after |
+| 3.1 | End Employment in 30 days, reason *Voluntary Resignation* (Editor) | End date set; still *Active* until then; event "Planned end of employment · Voluntary Resignation" with a *Current end* badge; current assignment ends the day after |
 | 3.2 | Try End Employment again | Not offered (an End is already recorded) |
 | 3.3 | End Reason *Other* without a note | Save disabled / refused |
 | 3.4 | Correct Period: move the end date 5 days later (Admin) | End date and the End event date both change; reason required |
-| 3.5 | Reverse End Employment (Admin) | Shows original end date, End Reason and the state to restore; after saving the period is open again exactly as before End Employment (the corrected date in 3.4 is not kept); history shows "End of employment reversed" |
+| 3.5 | Reverse End Employment (Admin) | Shows original end date, End Reason and the state to restore; after saving the period is open again exactly as before End Employment (the corrected date in 3.4 is not kept); the End is struck through with a *Reversed* badge and "End of employment reversed" names the End it reverses |
 | 3.6 | End Employment on a period that has not started yet | Guidance shown: use Cancel Planned Period if it should never start |
 | 3.7 | Change Assignment before a future End, then Reverse End (Admin) | Reversal refused: the assignment closed by End Employment changed since |
 
@@ -45,7 +46,7 @@ How to use: run each scenario in order with a new synthetic person; tick a step 
 | # | Step (role) | Expected result |
 |---|---|---|
 | 4.1 | On an ended period, Rehire starting today (Editor) | New Period 2, same person and Employee Code; nothing copied (no assignment, no Work Email unless entered); reason required |
-| 4.2 | Rehire while the previous end date is still in the future | Shown as a planned future Rehire; earliest start = previous end + 1 day |
+| 4.2 | Rehire while the previous end date is still in the future | Action shown as *Plan Rehire* with "The current employment is scheduled to end on <date>…"; earliest start = previous end + 1 day |
 | 4.3 | Rehire after a previous End Employment | Warning that the previous End cannot be reversed while the new period exists |
 | 4.4 | Cancel Planned Period on the planned Rehire (Editor) | Period shown *Cancelled*; previous period unchanged; Rehire can be planned again |
 | 4.5 | Rehire with a past date (Editor) | Refused (HR Admin only) |
@@ -56,6 +57,7 @@ How to use: run each scenario in order with a new synthetic person; tick a step 
 |---|---|---|
 | 5.1 | On a *Service Contractor* or *Intern*, Relationship Change to *Employee* in 20 days (Editor) | Screen shows type change, old end date (day before), new start, assignment impact, Work Email choice (default: none), optional suggested Initial Assignment, and the note that Phase 1 has no automatic reversal |
 | 5.2 | Choose the same Employee Type | Not offered / refused |
+| 5.2a | Try a Relationship Change after End Employment was recorded | Not offered; if the End was wrong because the relationship continued: Reverse End Employment first, then Relationship Change; a genuine return after a gap is a Rehire (C-79) |
 | 5.3 | Save with "Keep current Work Email" | Old period ends with End Reason *Relationship Change*; new period starts the next day with the same address |
 | 5.4 | Cancel Planned Period on the NEW period (Editor) | New period *Cancelled*; HR Admin sees: "The planned relationship change was cancelled, but the previous Employment Period is still ended. Review whether Reverse End Employment is required." |
 | 5.5 | Reverse End Employment on the old period (Admin) | Old period restored exactly; guidance disappears |
