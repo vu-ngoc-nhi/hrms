@@ -21,10 +21,14 @@ import { checkFields, insertPeriod } from "./new-period";
 import { correctionDbError } from "./period-correction";
 import { loadWritableEmployment, operationalEmploymentWhere } from "./queries";
 
-const activeEndExists = () =>
+// C-79: an Active End Event always blocks (never replaced). The guidance depends on the business situation:
+// a genuine gap after the recorded end is a Rehire; a continuous transition means the End was wrong → reverse it first.
+const activeEndExists = (endDate?: string | null, newStart?: string) =>
   rule(
     "ACTIVE_END_EVENT_EXISTS",
-    "This employment period already has a recorded End Employment. If it was recorded by mistake, use Reverse End Employment first.",
+    endDate && newStart && newStart > addDays(endDate, 1)
+      ? `This employment ended on ${endDate}. A return after a gap is a Rehire: use Rehire for the new period.`
+      : "This employment period already has a recorded End Employment. If the relationship actually continued, use Reverse End Employment first, then Relationship Change. If the person genuinely left and returns later, use Rehire.",
   );
 
 export async function createRelationshipChange(
@@ -66,7 +70,8 @@ export async function createRelationshipChange(
       if (later > 0) {
         throw rule("NOT_LATEST_PERIOD", "A later employment period exists for this person. Relationship Change is only available on the latest period.");
       }
-      if (await findActiveEndEvent(tx, employmentId)) throw activeEndExists();
+      const activeEnd = await findActiveEndEvent(tx, employmentId);
+      if (activeEnd) throw activeEndExists(fromDbDate(activeEnd.effectiveDate), start);
 
       // Employee Type must change. An unknown old type cannot prove a change of relationship.
       if (!old.employeeTypeId) {

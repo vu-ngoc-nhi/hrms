@@ -227,6 +227,13 @@ describe("Existing end date of the current period", () => {
     const r = await rc(p, { start_date: addDays(today, 21) });
     expect(r.status).toBe(422);
     expect(r.body.details[0].code).toBe("ACTIVE_END_EVENT_EXISTS");
+    // C-79: continuous transition → reverse the wrong End first, then Relationship Change.
+    expect(r.body.details[0].message).toContain("Reverse End Employment first, then Relationship Change");
+    // UX-1: a genuine gap after the recorded End guides to Rehire, not to Reverse End.
+    const gap = await rc(p, { start_date: addDays(today, 40) });
+    expect(gap.body.details[0].code).toBe("ACTIVE_END_EVENT_EXISTS");
+    expect(gap.body.details[0].message).toContain("use Rehire");
+    expect(gap.body.details[0].message).not.toContain("Reverse End");
     const ends = (await events(p.employmentId)).filter((x) => x.eventType === "end");
     expect(ends.map((x) => x.endReasonCode)).toEqual(["PLANNED_TERM_COMPLETED"]);
     expect(await periods(p.personId)).toHaveLength(1);

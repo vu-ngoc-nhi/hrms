@@ -538,6 +538,8 @@ describe("UAT Round 1 — list, completeness, effective mistakes, concurrency, r
     const naE = await ok(initialEmploymentRoute, na.id, na.id, { start_date: today, employee_type_id: ids.et.EMPLOYEE }, "editor");
     rec("NO_ASSIGNMENT_YET", await send(changeRoute, naE.employments[0].id, na.id, { effective_date: today, reason: "x", department_id: ids.d.QA }, "editor"));
     note("UAT-23", out);
+    // UX-1 (resolved after Round 1): a gap after a normal End now guides to Rehire.
+    expect((out.RC_AFTER_GAP_WITH_END_EVENT as { message: string }).message).toContain("use Rehire");
     expect(Object.values(out).every((x) => !(x as { leak: boolean }).leak)).toBe(true);
     expect(Object.fromEntries(Object.entries(out).map(([k, v]) => [k, (v as { detail: string | null; error: string }).detail ?? (v as { error: string }).error]))).toEqual({
       REVISION_CONFLICT: "STALE_REVISION",
