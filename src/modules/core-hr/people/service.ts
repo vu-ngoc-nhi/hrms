@@ -16,7 +16,7 @@ import {
   operationalPeriods,
 } from "../employments/queries";
 import { activeEndEventOf } from "../employments/lifecycle-events";
-import { employmentStatus, representativeAssignment, representativeEmployment } from "../employments/status";
+import { completenessAssignment, employmentStatus, representativeAssignment, representativeEmployment } from "../employments/status";
 import { completenessView, missingOperationalItems, type OperationalInput } from "./completeness";
 import { normalizePersonalEmail, validateDateOfBirth, validateFullName, validateMobilePhone, validateWorkEmail } from "./validation";
 
@@ -475,8 +475,9 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
     .map(toApiPeriod)
     .map((e) => ({ startDate: e.start_date, endDate: e.end_date, e }));
   const rep = representativeEmployment(dates, today);
+  // Operational completeness = readiness for the period (C-78): a pre-start period needs an assignment on its start date.
   const repAssignment = rep
-    ? representativeAssignment(
+    ? completenessAssignment(
         rep,
         rep.e.assignments.map((a) => ({ effectiveFrom: a.effective_from, effectiveTo: a.effective_to, a })),
         today,
@@ -616,13 +617,10 @@ type ListPerson = {
 function toListItem(p: ListPerson, today: string): EmployeeListItem {
   const dates = p.employments.map((e) => ({ startDate: fromDbDate(e.startDate), endDate: fromDbDate(e.endDate), e }));
   const rep = representativeEmployment(dates, today);
-  const a = rep
-    ? representativeAssignment(
-        rep,
-        rep.e.assignments.map((x) => ({ effectiveFrom: fromDbDate(x.effectiveFrom), effectiveTo: fromDbDate(x.effectiveTo), x })),
-        today,
-      )?.x ?? null
-    : null;
+  const repRows = rep ? rep.e.assignments.map((x) => ({ effectiveFrom: fromDbDate(x.effectiveFrom), effectiveTo: fromDbDate(x.effectiveTo), x })) : [];
+  // Display / filter (C-76) and completeness readiness (C-78) intentionally use different assignment rules.
+  const a = rep ? representativeAssignment(rep, repRows, today)?.x ?? null : null;
+  const ready = rep ? completenessAssignment(rep, repRows, today)?.x ?? null : null;
   const status = employmentStatus(dates, today);
   const type = rep?.e.employeeType ?? null;
   const facts: OperationalInput = {
@@ -633,8 +631,8 @@ function toListItem(p: ListPerson, today: string): EmployeeListItem {
       startDate: rep.startDate,
       workEmail: rep.e.workEmail,
       employeeType: type && { requiresWorkEmail: type.requiresWorkEmail },
-      departmentId: a?.departmentId ?? null,
-      jobTitleId: a?.jobTitleId ?? null,
+      departmentId: ready?.departmentId ?? null,
+      jobTitleId: ready?.jobTitleId ?? null,
     },
   };
   return {

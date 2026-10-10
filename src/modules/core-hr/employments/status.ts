@@ -42,3 +42,14 @@ export function representativeAssignment<T extends AssignmentDates>(period: Empl
   if (period.endDate !== null && period.endDate < asOf) return ordered.at(-1) ?? null;
   return assignmentOn(ordered, asOf);
 }
+
+/**
+ * Assignment used for OPERATIONAL COMPLETENESS (C-78): readiness for the period. A pre-start period counts only an
+ * assignment already in effect on its start date (first assignment effective_from <= start date); otherwise the
+ * representative assignment. The list Department display and filter keep `representativeAssignment` (C-76).
+ */
+export function completenessAssignment<T extends AssignmentDates>(period: EmploymentDates, assignments: readonly T[], asOf: string): T | null {
+  if (period.startDate > asOf) return assignmentOn([...assignments], period.startDate);
+  return representativeAssignment(period, assignments, asOf);
+}
+

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignmentOn, employmentStatus, representativeAssignment } from "@/modules/core-hr/employments/status";
+import { assignmentOn, completenessAssignment, employmentStatus, representativeAssignment } from "@/modules/core-hr/employments/status";
 import { completenessView, operationalItems, type OperationalInput } from "@/modules/core-hr/people/completeness";
 
 describe("Employment status by date (employment end date is INCLUSIVE)", () => {
@@ -80,6 +80,23 @@ describe("representativeAssignment (C-76)", () => {
   });
   it("no assignment: null", () => {
     expect(representativeAssignment({ startDate: "2026-01-05", endDate: null }, [], "2026-03-01")).toBeNull();
+  });
+});
+
+describe("completenessAssignment (C-78)", () => {
+  const late = [{ id: 1, effectiveFrom: "2026-10-25", effectiveTo: null }];
+  const onStart = [{ id: 2, effectiveFrom: "2026-10-20", effectiveTo: null }];
+  const pre = { startDate: "2026-10-20", endDate: null };
+  it("pre-start: an assignment starting after the start date does not count, even before the start", () => {
+    expect(completenessAssignment(pre, late, "2026-10-10")).toBeNull();
+    expect(representativeAssignment(pre, late, "2026-10-10")?.id).toBe(1); // display keeps C-76
+  });
+  it("pre-start: an assignment in effect on the start date counts", () => {
+    expect(completenessAssignment(pre, onStart, "2026-10-10")?.id).toBe(2);
+  });
+  it("active: the assignment effective today (unchanged)", () => {
+    expect(completenessAssignment(pre, late, "2026-10-22")).toBeNull();
+    expect(completenessAssignment(pre, late, "2026-10-26")?.id).toBe(1);
   });
 });
 

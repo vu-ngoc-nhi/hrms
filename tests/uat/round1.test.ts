@@ -18,7 +18,7 @@ import { EmployeeDetailSchema } from "@/contracts/core-hr/schemas";
 import { addDays, fromDbDate, toDbDate, todayInVietnam } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { completenessView } from "@/modules/core-hr/people/completeness";
-import { employmentStatus, representativeAssignment, representativeEmployment } from "@/modules/core-hr/employments/status";
+import { completenessAssignment, employmentStatus, representativeEmployment } from "@/modules/core-hr/employments/status";
 import { runIntegrityChecks } from "../../scripts/integrity-checks";
 import { call, catalogIds, key, userId, type TestUser } from "../helpers";
 
@@ -428,7 +428,7 @@ describe("UAT Round 1 — list, completeness, effective mistakes, concurrency, r
     const asg = [{ effectiveFrom: d2, effectiveTo: null as string | null, departmentId: ids.d.QA }];
     const at = (asOf: string) => {
       const rep = representativeEmployment(periods, asOf)!;
-      const a = representativeAssignment(rep, asg, asOf);
+      const a = completenessAssignment(rep, asg, asOf); // C-78 readiness rule
       return completenessView({
         fullName: "UAT Diana PreStart",
         personalEmail: "uat.diana.contact@example.test",
@@ -445,7 +445,10 @@ describe("UAT Round 1 — list, completeness, effective mistakes, concurrency, r
       after_D2: at(addDays(d2, 1)).items.filter((i) => !i.satisfied).map((i) => i.code),
     };
     note("UAT-17", result);
-    expect(today_.department).toBe("QA");
+    // C-78 (resolved after Round 1): incomplete for Department/Job Title from the start until D2; display stays QA (C-76).
+    expect(today_).toEqual({ department: "QA", completeness: "incomplete" });
+    expect(result.between_D1_and_D2.missing).toEqual(expect.arrayContaining(["department", "job_title"]));
+    expect(result.after_D2).toEqual(["work_email"]);
   });
 
   it("UAT-18 period starting today entered by mistake (PV-25)", async () => {
