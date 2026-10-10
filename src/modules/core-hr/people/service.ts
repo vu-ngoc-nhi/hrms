@@ -442,6 +442,8 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
       : employmentStatus([{ startDate: fromDbDate(e.startDate), endDate: fromDbDate(e.endDate) }], today),
     // Event type, date and structured End Reason only: free-text notes and reasons are never exposed (C-24).
     events: e.events.map((ev) => ({
+      id: ev.id,
+      reverses_event_id: ev.reversesEventId,
       event_type: ev.eventType as "start" | "suspend" | "resume" | "end" | "end_reversed" | "cancel_planned_start",
       effective_date: fromDbDate(ev.effectiveDate),
       recorded_at: ev.recordedAt.toISOString(),

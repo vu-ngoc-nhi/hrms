@@ -46,7 +46,14 @@ type Detail = {
     start_date: string;
     end_date: string | null;
     period_lifecycle: string | null;
-    events: { event_type: string; effective_date: string; recorded_at: string; end_reason: { code: string; label: string } | null }[];
+    events: {
+      id: string;
+      event_type: string;
+      effective_date: string;
+      recorded_at: string;
+      end_reason: { code: string; label: string } | null;
+      reverses_event_id: string | null;
+    }[];
     has_active_end_event: boolean;
     active_end_event: {
       effective_date: string;
@@ -60,6 +67,33 @@ type Detail = {
     assignments: Assignment[];
   }[];
 };
+
+type HistoryEvent = Detail["employments"][number]["events"][number];
+
+// C-80 history readability (display only): reversed End events are marked and paired with their reversal; the current
+// End is distinguishable; a future-dated End reads "Planned end of employment". Order and data are unchanged.
+function EventLine({ ev, all, today }: { ev: HistoryEvent; all: HistoryEvent[]; today: string }) {
+  const reversed = ev.event_type === "end" && all.some((o) => o.reverses_event_id === ev.id);
+  const label =
+    ev.event_type === "end" && ev.effective_date > today
+      ? t("detail.eventType.end_planned")
+      : tMaybe(`detail.eventType.${ev.event_type}`) ?? ev.event_type;
+  const target = ev.reverses_event_id ? all.find((o) => o.id === ev.reverses_event_id) : undefined;
+  return (
+    <li style={reversed ? { color: "var(--muted)" } : undefined}>
+      <span style={reversed ? { textDecoration: "line-through" } : ev.event_type === "end" ? { fontWeight: 600 } : undefined}>
+        {label} — {formatDate(ev.effective_date)}
+        {ev.end_reason && <> · {tMaybe(`endReason.${ev.end_reason.code}`) ?? ev.end_reason.label}</>}
+      </span>
+      {ev.event_type === "end" && (
+        <span className="badge" style={{ marginLeft: 6 }}>
+          {reversed ? t("detail.reversedBadge") : t("detail.currentEndBadge")}
+        </span>
+      )}
+      {target && <span className="muted"> ({t("detail.reversesEnd", { date: formatDate(target.effective_date) })})</span>}
+    </li>
+  );
+}
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -439,11 +473,8 @@ export default function EmployeeDetailPage() {
             <p className="muted small">{t("detail.noEvents")}</p>
           ) : (
             <ul className="small" style={{ margin: 0 }}>
-              {e.events.map((ev, i) => (
-                <li key={i}>
-                  {tMaybe(`detail.eventType.${ev.event_type}`) ?? ev.event_type} — {formatDate(ev.effective_date)}
-                  {ev.end_reason && <> · {tMaybe(`endReason.${ev.end_reason.code}`) ?? ev.end_reason.label}</>}
-                </li>
+              {e.events.map((ev) => (
+                <EventLine key={ev.id} ev={ev} all={e.events} today={d.status_as_of} />
               ))}
             </ul>
           )}

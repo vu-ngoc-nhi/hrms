@@ -231,8 +231,10 @@ export const EmploymentSchema = reg(
     events: z
       .array(
         z.object({
+          id: z.uuid(),
           event_type: z.enum(["start", "suspend", "resume", "end", "end_reversed", "cancel_planned_start"]),
           effective_date: isoDate(),
+          reverses_event_id: z.uuid().nullable().describe("end_reversed only: the end event it reverses (to pair them in history)."),
           recorded_at: isoDateTime(),
           end_reason: z
             .object({ code: EndReasonCodeSchema, label: z.string() })

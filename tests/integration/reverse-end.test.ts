@@ -129,6 +129,9 @@ describe("Reverse End Employment", () => {
       ["end_reversed", null],
     ]);
     expect(JSON.stringify(r.body)).not.toContain("wrong employee"); // free-text reversal reason never in history
+    // C-80: history pairs the reversal with the exact End event it reverses.
+    const hist = d.employments[0].events;
+    expect(hist.find((e) => e.event_type === "end_reversed")?.reverses_event_id).toBe(hist.find((e) => e.event_type === "end")?.id);
     expect(await rows(p.employmentId)).toEqual([{ ...row, to: null }]);
 
     const all = await events(p.employmentId);
