@@ -187,7 +187,8 @@ export const en = {
     previousEnd: "Previous End Date",
     endRecorded: "End Employment recorded",
     endWithoutEvent: "End date recorded without an End Employment event",
-    plannedNote: "The previous period has not ended yet (it ends on {date}): this is a planned future Rehire.",
+    plannedNote: "The current employment is scheduled to end on {date}. This will create a future employment period starting after that date.",
+    plan: { open: "Plan Rehire", title: "Plan Rehire", save: "Save Planned Rehire" },
     reverseEndWarning:
       "Creating this Rehire creates a later Employment Period. The previous End Employment cannot be reversed while this later period remains valid.",
     relationshipChangeReminder:

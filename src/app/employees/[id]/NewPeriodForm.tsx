@@ -62,10 +62,13 @@ export function NewPeriodForm<T>({
   }, [open]);
 
   const prefix = mode === "initial" ? "initialEmployment" : "rehire";
+  // C-81: when the previous period still ends in the future, the same Rehire action is presented as "Plan Rehire".
+  const plannedRehire = mode === "rehire" && previous!.end_date >= today;
+  const label = (k: "open" | "title" | "save") => (plannedRehire ? t(`rehire.plan.${k}`) : t(`${prefix}.${k}`));
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} style={{ marginBottom: 12 }}>
-        {t(`${prefix}.open`)}
+        {label("open")}
       </button>
     );
   }
@@ -73,7 +76,6 @@ export function NewPeriodForm<T>({
   const backdated = form.start_date !== "" && form.start_date < today;
   const reasonRequired = mode === "rehire" || backdated;
   const minStart = mode === "rehire" ? [earliestRehire!, canBackdate ? "" : today].sort().at(-1) : undefined;
-  const plannedRehire = mode === "rehire" && previous!.end_date >= today;
   const continuousTypeChange =
     mode === "rehire" && form.start_date === earliestRehire && form.employee_type_id !== "" && form.employee_type_id !== (previous!.employee_type?.id ?? "");
 
@@ -108,7 +110,7 @@ export function NewPeriodForm<T>({
 
   return (
     <form onSubmit={save} className="card" style={{ marginBottom: 12 }}>
-      <h2>{t(`${prefix}.title`)}</h2>
+      <h2>{label("title")}</h2>
       <p className="muted small">{t(`${prefix}.help`)}</p>
       {mode === "initial" && hasCancelledPeriods && <p className="muted small">{t("initialEmployment.cancelledNote")}</p>}
       {mode === "rehire" && previous && (
@@ -170,7 +172,7 @@ export function NewPeriodForm<T>({
       <ErrorBox error={error} />
       <div className="row" style={{ marginTop: 12 }}>
         <button className="primary" type="submit" disabled={busy || !form.start_date || (reasonRequired && !form.reason.trim())}>
-          {busy ? t("form.saving") : t(`${prefix}.save`)}
+          {busy ? t("form.saving") : label("save")}
         </button>
         <button type="button" onClick={() => setOpen(false)} disabled={busy}>
           {t("profileEdit.cancel")}
