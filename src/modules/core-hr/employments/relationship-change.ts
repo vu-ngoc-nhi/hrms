@@ -8,6 +8,7 @@
 // effective historical end date, and never inserts a transition into earlier history.
 import { randomUUID } from "node:crypto";
 import type { EmployeeDetail, RelationshipChangeInput } from "@/contracts/core-hr/schemas";
+import { formatDate } from "@/i18n";
 import { addDays, fromDbDate, toDbDate, todayInVietnam } from "@/lib/dates";
 import { pgErrorInfo } from "@/lib/db";
 import { recordAudit, type StructuralChange } from "@/modules/audit/audit";
@@ -27,7 +28,7 @@ const activeEndExists = (endDate?: string | null, newStart?: string) =>
   rule(
     "ACTIVE_END_EVENT_EXISTS",
     endDate && newStart && newStart > addDays(endDate, 1)
-      ? `This employment ended on ${endDate}. A return after a gap is a Rehire: use Rehire for the new period.`
+      ? `This employment ended on ${formatDate(endDate)}. A return after a gap is a Rehire: use Rehire for the new period.`
       : "This employment period already has a recorded End Employment. If the relationship actually continued, use Reverse End Employment first, then Relationship Change. If the person genuinely left and returns later, use Rehire.",
   );
 
@@ -93,10 +94,10 @@ export async function createRelationshipChange(
       // C-64 Case C: an already-ended period is never rewritten to manufacture continuity.
       if (previousEnd !== null && previousEnd < today && previousEnd !== oldEndNew) {
         throw start > addDays(previousEnd, 1)
-          ? rule("GAP_USE_REHIRE", `The current period ended on ${previousEnd}. A start after a gap is a Rehire, not a Relationship Change.`)
+          ? rule("GAP_USE_REHIRE", `The current period ended on ${formatDate(previousEnd)}. A start after a gap is a Rehire, not a Relationship Change.`)
           : rule(
               "HISTORICAL_END_MISMATCH",
-              `The current period already ended on ${previousEnd}. The new period must start on ${addDays(previousEnd, 1)}; correct the historical end date first if it is wrong.`,
+              `The current period already ended on ${formatDate(previousEnd)}. The new period must start on ${formatDate(addDays(previousEnd, 1))}; correct the historical end date first if it is wrong.`,
             );
       }
 

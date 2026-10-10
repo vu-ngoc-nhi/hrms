@@ -8,6 +8,7 @@ import { POST as rcRoute } from "@/app/api/v1/core-hr/employments/[id]/relations
 import { POST as reverseRoute } from "@/app/api/v1/core-hr/employments/[id]/reverse-end/route";
 import { POST as createRoute } from "@/app/api/v1/core-hr/employees/route";
 import { EmployeeDetailSchema } from "@/contracts/core-hr/schemas";
+import { formatDate } from "@/i18n";
 import { addDays, fromDbDate, toDbDate, todayInVietnam } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { call, catalogIds, key, userId, type TestUser } from "../helpers";
@@ -202,8 +203,10 @@ describe("Existing end date of the current period", () => {
     await plannedEnd(p.employmentId, "2023-06-30");
     const gap = await rc(p, { start_date: "2023-08-01" }, "admin");
     expect(gap.body.details[0].code).toBe("GAP_USE_REHIRE");
+    expect(gap.body.details[0].message).toContain("30 Jun 2023"); // F-2: display format, not 2023-06-30
     const earlier = await rc(p, { start_date: "2023-06-15" }, "admin");
     expect(earlier.body.details[0].code).toBe("HISTORICAL_END_MISMATCH");
+    expect(earlier.body.details[0].message).toContain("must start on 01 Jul 2023");
     const before = await rows(p.employmentId);
     const ok = await rc(p, { start_date: "2023-07-01" }, "admin");
     expect(ok.status).toBe(201);
@@ -234,6 +237,9 @@ describe("Existing end date of the current period", () => {
     expect(gap.body.details[0].code).toBe("ACTIVE_END_EVENT_EXISTS");
     expect(gap.body.details[0].message).toContain("use Rehire");
     expect(gap.body.details[0].message).not.toContain("Reverse End");
+    // F-2 (UAT Round 2): dates in guidance use the product display format, never ISO.
+    expect(gap.body.details[0].message).toContain(formatDate(addDays(today, 20)));
+    expect(gap.body.details[0].message).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     const ends = (await events(p.employmentId)).filter((x) => x.eventType === "end");
     expect(ends.map((x) => x.endReasonCode)).toEqual(["PLANNED_TERM_COMPLETED"]);
     expect(await periods(p.personId)).toHaveLength(1);

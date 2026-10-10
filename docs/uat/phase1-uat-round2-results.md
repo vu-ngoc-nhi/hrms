@@ -2,7 +2,7 @@
 
 - Baseline: tag `phase1-uat-ready` (`648e281`, unchanged) plus the accepted UAT Round 1 resolution batch (C-78 to C-81, last commit `52ebd82`).
 - Executed: 2026-10-10 (business date, Asia/Ho_Chi_Minh). Synthetic data only. No product code or business rule changed in this round; PV-25 not implemented.
-- **This is not UAT sign-off.** Items marked *HUMAN VALIDATION* need HR confirmation.
+- **HR sign-off recorded on 2026-10-10** — see *HR sign-off* at the end. Milestone: **Core HR Phase 1 — UAT Passed With Pre-Production Actions**. Not production ready.
 
 ## How the round was run
 
@@ -72,3 +72,18 @@ Free-text note and reversal reason ("UAT R2 secret …") were not visible anywhe
 **READY FOR HR UAT SIGN-OFF**
 
 HR sign-off still has to confirm R2-03 and R2-05 (readability / clarity) and answer the two PV-25 questions. Not production ready: PV-25 remains a pre-production requirement.
+
+## HR sign-off (2026-10-10)
+
+UAT Round 2 is **accepted by HR**. Decisions are recorded as C-82 and C-83 in `docs/decision-register.md`.
+
+| Item | HR decision | Status |
+|---|---|---|
+| R2-03 Employment History readability | **PASS** — accepted for Phase 1 as implemented; no further redesign | Closed |
+| R2-05 Plan Rehire | **PASS** — keep "Plan Rehire" and the scheduled-end explanation | Closed |
+| R2-07 PV-25 | Accepted as a **known limitation for UAT**; **HIGH PRIORITY — MUST BE RESOLVED BEFORE PRODUCTION READINESS**. Blocks Production Readiness, not Phase 1 UAT acceptance | Open (pre-production action) |
+| F-1 URL parameters | Accepted as-is: canonical parameters `search`, `employment_status`, `department_id`, `page`; no aliases | Closed (documented) |
+| F-2 Date in gap guidance | Fixed: guidance messages show dates in the product display format (e.g. "30 Oct 2026"); regression tests added; API values unchanged | Fixed |
+
+**Final status: `Core HR Phase 1 — UAT Passed With Pre-Production Actions`.** Functional UAT is accepted; known limitations remain; Production Readiness has **not** been achieved; PV-25 is a mandatory pre-production action. Baseline tag: `phase1-uat-passed` (local).
+

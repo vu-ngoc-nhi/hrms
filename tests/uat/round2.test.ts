@@ -89,6 +89,7 @@ describe("UAT Round 2", () => {
     expect([gap.status, gap.body.error, gap.body.details[0].code]).toEqual([422, "BUSINESS_RULE_VIOLATION", "ACTIVE_END_EVENT_EXISTS"]);
     expect(gap.body.details[0].message).toContain("use Rehire");
     expect(gap.body.details[0].message).not.toContain("Reverse End");
+    expect(gap.body.details[0].message).not.toMatch(/\d{4}-\d{2}-\d{2}/); // F-2: human-readable date
     expect([next.status, next.body.details[0].code]).toEqual([422, "ACTIVE_END_EVENT_EXISTS"]);
     expect(next.body.details[0].message).toContain("Reverse End Employment first, then Relationship Change");
     expect(await db().employmentEvent.count({ where: { employmentId: p.employmentId, eventType: "end" } })).toBe(1);

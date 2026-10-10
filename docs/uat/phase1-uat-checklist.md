@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UAT Checklist
 
-- Milestone: **Core HR Phase 1 — UAT Ready With Known Limitations** (2026-10-09). **Not production ready.**
+- Milestone: **Core HR Phase 1 — UAT Passed With Pre-Production Actions** (HR sign-off 2026-10-10; results in `phase1-uat-round1-results.md` and `phase1-uat-round2-results.md`). **Not production ready** — PV-25 is a mandatory pre-production action.
 - Environment: local/UAT build with the development test identity (not Microsoft Entra ID). **Use synthetic data only** — never real employee data (C-03).
 - Roles: **HR Admin** (HR_ADMIN), **HR Editor** (HR_EDITOR), **API Docs** (API_DOCS_READER). Sign in from the login page with the matching test account.
 - "Today" means the business date in Asia/Ho_Chi_Minh. End dates are inclusive. Status is computed: **Pre-start / Active / Ended**; **Cancelled** is a history badge, not a status.
@@ -97,6 +97,7 @@ How to use: run each scenario in order with a new synthetic person; tick a step 
 | 9.3 | Same filter plus Employment Status = Active | The Ended employee is excluded (status restricts the lifecycle) |
 | 9.4 | Person currently in ENG with a planned future period in QA | Shown and filtered as ENG until the future period starts |
 | 9.5 | Person whose only periods are cancelled | Status *No Employment Record*; not matched by any Department |
+| 9.6 | Open a filtered list link, e.g. `/employees?search=UAT&employment_status=ended&department_id=<id>&page=1` | Controls and results match the link; refresh keeps them; changing a filter updates the address bar. Canonical parameters: `search`, `employment_status`, `department_id`, `page` (C-83); other names are ignored |
 
 ## 10. Roles
 
@@ -106,9 +107,9 @@ How to use: run each scenario in order with a new synthetic person; tick a step 
 | 10.2 | HR Editor | No "Correct …", "Reverse End Employment", "Clear Work Email"; past-dated business events refused |
 | 10.3 | HR Admin | All actions available, including past dates and corrections |
 
-## Key UAT validation topic: PV-25
+## Key UAT validation topic: PV-25 (accepted for UAT — required before production)
 
-**Effective Employment Period entered by mistake / void effective period (PV-25)** is the highest operational-priority open item. Today an *effective* Initial Employment or Rehire entered for the wrong person or date has no simple safe recovery workflow (Cancel Planned Period only works before the start date). During UAT, please record:
+**Effective Employment Period entered by mistake / void effective period (PV-25)** is the highest operational-priority open item. HR accepted it as a known limitation for UAT (2026-10-10); it **must be resolved before Production Readiness**. Today an *effective* Initial Employment or Rehire entered for the wrong person or date has no simple safe recovery workflow (Cancel Planned Period only works before the start date). During UAT, please record:
 
 - how often this happens and in which situations (wrong person, wrong date, duplicate entry);
 - how HR expects to fix it and who should be allowed to;
