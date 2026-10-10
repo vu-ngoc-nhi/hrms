@@ -23,7 +23,8 @@
     "test": "APP_ENV=test vitest run",
     "test:watch": "APP_ENV=test vitest",
     "test:integrity-baseline": "APP_ENV=test vitest run --config vitest.integrity-baseline.config.ts",
-    "test:uat-round1": "APP_ENV=test vitest run --config vitest.uat.config.ts"
+    "test:uat-round1": "APP_ENV=test vitest run --config vitest.uat.config.ts tests/uat/round1.test.ts",
+    "test:uat-round2": "APP_ENV=test vitest run --config vitest.uat.config.ts tests/uat/round2.test.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
