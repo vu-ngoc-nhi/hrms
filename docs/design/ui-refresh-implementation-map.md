@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95). **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). Next slice (UI-3) not started.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95). **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). Next slice (UI-4) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -201,4 +201,69 @@ Manager filter, Upcoming Changes filter (D-UI-4); Export (D-UI-5, Pending Legal 
 | Smoke | Test login → Employees → Needs Attention + Service Contractor filters (URL updated, state restored after reload) → Clear filters (bare `/employees`, 49 rows, 3 pages) → page 2 → name link → Employee Detail, no console errors |
 
 Known pre-existing item (not UI-2): a `pg` DeprecationWarning ("client.query() when the client is already executing a query") appears in test output from existing assignment/relationship-change paths.
+
+## 11. UI-3 — Employee Detail shell + Overview (implemented 2026-10-10)
+
+Scope: the Employee Detail shell, header, tabs, Overview and action placement only. The content of the Personal, Employment, Assignment and History tabs and of every workflow form is unchanged (moved, not redesigned); no API, business rule or permission changed.
+
+### Shell and header
+
+| Element | Implementation |
+|---|---|
+| Back navigation | "← Back to Employees" returns to the last Employee List view of the browser tab (the list remembers its canonical query in `sessionStorage`; the detail page re-validates it with the list URL parser; falls back to `/employees`) |
+| Header | Full Name (h1) · Employee Code · one line *Job Title · Department · Employee Type* · Employment Status badge (text, not colour only). Values are the representative period/assignment, exactly as the Employee List row (C-76); the status badge qualifies them (e.g. *Pre-start*, *Ended*). No Full-time, tenure or contract status |
+| Tabs | Overview · Personal · Employment · Assignment · History (WAI-ARIA tabs, arrow/Home/End keys). Selected tab in the URL (`?tab=…`, Overview = bare URL). **Documents is not shown** (no function yet; stays on the roadmap) |
+| Tab content | Personal = former Personal Information card. Employment = former period cards (dates, type, work email, period workflows). Assignment = former assignment tables per period (row *Correct* stays inline). History = former event lists per period. Inside wording/layout unchanged until UI-4 … UI-7 |
+
+### Overview information hierarchy
+
+1. **Employment** card — title by state: *Current Employment* (Active), *Upcoming Employment* (Pre-start, light accent), *Last Employment* (Ended), *Employment* (none). Employment Status, Employee Type, **Start Date** (start of this employment period — never Join/Hire/Company Start Date), **Planned End** (end date today or later) or **End Date** (past), End Reason when recorded. Pre-start: "Employment has not started yet. It begins on …"; after a Rehire: "The previous employment period ended on …" (periods never merged). No Tenure (D-UI-6).
+2. **Assignment** card — *Current Assignment* (in effect today), *Upcoming Assignment* (first assignment of a pre-start period; "Takes effect on … Not in effect yet."), *Last Assignment* (ended period; "Not a current assignment."). Department, Job Title, Level, Manager (absent → "—", never an error), Effective Date. No assignment → neutral text; no assignment is invented.
+3. **Upcoming Changes** (full width, light red accent + "Upcoming" label) — see derivation below; "No upcoming changes." otherwise.
+4. **Basic Information** — Full Name, Employee Code, Work Email (of the representative period).
+5. **Record Health** — *Complete* / *Needs Attention* badge from the API completeness (`completeness.operational`); missing items listed from the API items (no frontend reasons); rule version and "Status as of".
+
+No operational period (only Cancelled/Voided, or none): Employment shows **No Employment Record** with a note that cancelled/voided periods are kept in the Employment tab; Assignment "No assignment — there is no employment period"; header shows no job/department/type.
+
+### Upcoming-change derivation (`src/app/employees/[id]/detailModel.ts`, pure, unit-tested)
+
+Input: the existing Employee Detail response only (no new endpoint, no notification system). Operational periods only (Cancelled and Voided excluded).
+
+| Item | Rule |
+|---|---|
+| Assignment change | An assignment with `effective_from` after today, compared with the preceding assignment of the same period; only changed fields are shown (Department / Job Title line, Level, Manager); wording "New assignment takes effect on <date>." (no interval notation) |
+| Planned end | A period whose end date is today or later: "Employment scheduled to end — Last day of the employment period" (+ End Reason) |
+| Employment begins / New Employment Period begins | A period starting after today (first period vs a later one, e.g. Rehire), with its Employee Type and first assignment |
+| Relationship change | A future period starting the day after a period whose active End has reason `RELATIONSHIP_CHANGE`: one item "New Employment Period — <old type> → <new type>" explaining that the current period ends and a new period starts; the predecessor's planned end is not listed separately |
+
+Representative period and assignment use the shared `representativeEmployment` / `representativeAssignment` (C-76), so Overview, header and the Employee List agree.
+
+### Action hierarchy
+
+| Place | Actions (only when the existing capability **and** eligibility allow; same conditions as before UI-3, now in `periodEligibility` / `headerActions`) |
+|---|---|
+| Primary (red) | **Change Assignment**; when the representative period has no assignment yet, the same slot offers **Add Initial Assignment** (existing workflow, D-UI-9 guidance) |
+| More actions — daily | Edit Work Email, End Employment, Change Employment Relationship, Rehire / Plan Rehire, Add Initial Employment Period |
+| More actions — Correct record | Edit Profile, Correct Employment Period, Correct Work Email (ended period), Clear Work Email, Cancel Planned Period, Reverse End Employment |
+| More actions — Advanced | Void Employment Period (red text item; `employment.correct` + existing eligibility) |
+
+Header actions act on the **representative period**; that period's card shows no duplicate inline buttons ("Actions for this period are under the buttons at the top of the page."). **Other periods** (e.g. the planned successor of a Relationship Change, older ended periods) keep their existing inline buttons in the Employment / Assignment tabs, and assignment-row *Correct* stays inline — both to be migrated in UI-9. A selected action opens the unchanged workflow form in a "Selected action" region under the header (focus moves to its first field; Cancel or Save closes it); forms gained only an optional `launched` prop (`launch.ts`). Modal presentation is UI-9. Capabilities come from the server session (`can`), never role names.
+
+Also fixed (UI-0 primitive): a destructive menu item no longer inherits the filled danger-button background (its text was invisible), and long menu items no longer wrap/centre.
+
+### Remaining for later slices
+
+UI-4 Personal, UI-5 Employment, UI-6 Assignment, UI-7 History tab redesigns; UI-9 modal workflows, migration of non-representative period actions and assignment-row corrections into the action hierarchy, and the Change Assignment timeline wording (exclusive end boundary).
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| Unit `tests/unit/detail-overview.test.ts` (23) | Active, Pre-start, Ended, no assignment in effect, future Assignment (changed fields only; effective today is current), planned End (incl. today), Rehire (not merged), planned Rehire, Relationship Change (single item) vs end+start, Cancelled/Voided excluded, only-voided → No Employment Record, no employment, Manager absent neutral, Record Health = API items; header actions for HR_ADMIN / HR_EDITOR / read-only, Pre-start, Ended, no period, planned Relationship Change |
+| Unit `tests/unit/list-query.test.ts` | Back to Employees href re-validated, fallback |
+| Unit suite / typecheck / lint / build | 88/88 unit tests; typecheck, lint, production build pass. Frontend-only change: DB/UAT suites not re-run |
+| Visual QA (synthetic data, HR Admin test identity, 1440 px) | A Active DEMO001; B Pre-start DEMO901; C Ended DEMO003; D upcoming Assignment DEMO802 (planned 01 Nov 2026 change QA → Engineering, created through the header *Change Assignment* during QA — demo batch 8 used for UI-3 QA); E Rehire DEMO904; F Relationship Change DEMO905; G Voided / No Employment Record DEMO906; planned End DEMO903 at 1280 px |
+| Responsive | Header and actions fit at 1280 px; Overview cards in two columns ≥ 1024 px, stacked below; no horizontal page scroll at 900 px or phone width |
+| Accessibility | Tabs and More actions operable by keyboard (ArrowDown opens, End/arrows move, Escape closes and returns focus); every card has a heading; status always has text; focus moves into an opened workflow |
+| Smoke | Employees → DEMO001 (Active) → DEMO901 (Pre-start, back link keeps the list search) → DEMO003 (Ended) → DEMO802 (upcoming change); Void opened from More actions loads its preview and Cancel closes it (nothing submitted); no app console or server errors |
 
