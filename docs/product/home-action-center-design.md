@@ -1,6 +1,6 @@
-# UI-1 Home / Action Center — product and API contract design (revision 1)
+# UI-1 Home / Action Center — product and API contract design (revision 2: approved and implemented)
 
-- Status: **Design only — awaiting approval (register PV-30). Nothing is implemented.**
+- Status: **Implemented and validated (2026-10-11)** — BD-H1 … BD-H9 approved (register **C-100**). Revision 1 design below; the implemented contract and evidence are in §K (it supersedes §D where they differ).
 - Date: 2026-10-11.
 - Inputs:
   - Core HR product checkpoint (`docs/design/core-hr-product-checkpoint.md` §E–F; Option B recommended);
@@ -332,19 +332,19 @@ Naming follows the existing contract: snake_case, `status_as_of` (as in Employee
 | Notifications / email digests / tasks | Out of Phase 1 |
 | Trends, turnover, analytics, AI insights | Out of Phase 1 |
 
-## J. Business decisions requiring approval
+## J. Business decisions (approved 2026-10-11)
 
 | ID | Decision | Recommendation | Type |
 |---|---|---|---|
-| BD-H1 | Snapshot shows **Active · Pre-start · Ended** only. No "Employee Records" total on Home (the API returns it). No-employment people appear via Needs Attention, not as a tile. Never "Headcount" | Approve | **BUSINESS DECISION** |
-| BD-H2 | **Merge** Data Quality into Needs Attention (total + breakdown); no separate card, no score | Approve | **BUSINESS DECISION** |
-| BD-H3 | **Defer** the department snapshot | Approve | **BUSINESS DECISION** |
-| BD-H4 | Integrity scanner **not** on HR Home in Phase 1 | Approve | **BUSINESS DECISION** |
-| BD-H5 | Needs Attention population = the canonical list filter (all statuses, incl. Ended and no-employment); preview order Active → Pre-start (nearest start) → no employment → Ended → code; preview 5 | Approve | **BUSINESS DECISION** |
-| BD-H6 | Upcoming window 30 days: starts / changes T+1 … T+30; planned ends with last day T … T+30 (same as Overview) | Approve | **BUSINESS DECISION** |
-| BD-H7 | Planned End items on Home show **no End Reason** (minimization; visible on Employee Detail) | Approve | **BUSINESS DECISION** |
-| BD-H8 | Upcoming capped at 10 with "Showing the next 10 of N"; **no** Upcoming list / module in Phase 1 | Approve | **BUSINESS DECISION** |
-| BD-H9 | Needs Attention breakdown uses the **raw** authoritative item codes (no "No Employment Period" grouping), so Home equals Record Health | Approve | **BUSINESS DECISION** |
+| BD-H1 | Snapshot shows **Active · Pre-start · Ended** only. No "Employee Records" total on Home (the API returns it). No-employment people appear via Needs Attention, not as a tile. Never "Headcount" | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
+| BD-H2 | **Merge** Data Quality into Needs Attention (total + breakdown); no separate card, no score | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
+| BD-H3 | **Defer** the department snapshot | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
+| BD-H4 | Integrity scanner **not** on HR Home in Phase 1 | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
+| BD-H5 | Needs Attention population = the canonical list filter (all statuses, incl. Ended and no-employment); preview order Active → Pre-start (nearest start) → no employment → Ended → code; preview 5 | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
+| BD-H6 | Upcoming window 30 days: starts / changes T+1 … T+30; planned ends with last day T … T+30 (same as Overview) | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
+| BD-H7 | Planned End items on Home show **no End Reason** (minimization; visible on Employee Detail) | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
+| BD-H8 | Upcoming capped at 10 with "Showing the next 10 of N"; **no** Upcoming list / module in Phase 1 | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
+| BD-H9 | Needs Attention breakdown uses the **raw** authoritative item codes (no "No Employment Period" grouping), so Home equals Record Health | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
 | T-1 | Shared person projection (status + completeness) used by list and dashboard | — | TECHNICAL |
 | T-2 | Move the Upcoming derivation to a shared pure module used by Overview and the dashboard | — | TECHNICAL |
 | T-3 | Service takes `now`; one business date per request; read-only repeatable-read transaction | — | TECHNICAL |
@@ -353,3 +353,71 @@ Naming follows the existing contract: snake_case, `status_as_of` (as in Employee
 | T-6 | Route, schema, fixed limits, strict empty query, error semantics as §D | — | TECHNICAL |
 
 Approving the endpoint (Option B) is part of approving this design: it is a new read API (`employees.read`), additive, with no write and no new permission.
+
+## K. Implementation and validation (2026-10-11)
+
+### K.1 Implemented contract — `GET /api/v1/core-hr/dashboard` → `CoreHrDashboard`
+
+Approval clarifications are applied: there is no `employee_records`, and existing naming is used throughout.
+
+```jsonc
+{
+  "status_as_of": "2026-10-11",
+  "snapshot": { "active": 38, "not_started": 10, "ended": 7 },
+  "needs_attention": {
+    "total": 24,
+    "rule_version": "operational-mvp-2026-10-08.2",
+    "by_requirement": [{ "code": "work_email", "count": 11 }],          // rule order; only count > 0
+    "records": [{ "person_id": "uuid", "employee_code": "DEMO105", "full_name": "…", "employment_status": "active", "missing": ["contact_email"] }]
+  },
+  "upcoming": {
+    "window_days": 30, "from": "2026-10-11", "to": "2026-11-10", "total": 13,
+    "items": [{
+      "type": "assignment_change",                                       // employment_start | new_employment_period_start | relationship_change | employment_end | assignment_change
+      "effective_date": "2026-11-01",
+      "person_id": "uuid", "employee_code": "DEMO802", "full_name": "…",
+      "employee_type": null,                                             // { code, name } for starts and relationship_change
+      "previous_employee_type": null,                                    // { code, name } for relationship_change
+      "assignment": { "department": { "code": "ENG", "name": "Engineering" }, "job_title": { "code": "SE", "name_en": "Software Engineer" } },
+      "previous_assignment": { "department": { "code": "QA", "name": "Quality Assurance" }, "job_title": { "code": "QAE", "name_en": "QA Engineer" } }
+    }]
+  }
+}
+```
+
+**Differences from §D (technical):**
+- Person fields are flat on each upcoming item (`person_id`, `employee_code`, `full_name`), as in `needs_attention.records`.
+- Catalog references carry `code` + `name` only, without database ids (navigation needs only `person_id`).
+- `employee_records` is not returned.
+- `DashboardQuerySchema` is a strict empty object, so any query parameter gives `400 VALIDATION_ERROR`.
+
+### K.2 Architecture (reuse, no dashboard rules)
+
+- **`src/modules/core-hr/dashboard/service.ts`:**
+  - `loadDashboardPeople` is one query tree: operational periods (`operationalEmploymentWhere`), their operational assignments (`operationalAssignmentWhere`, PV-29), Employee Types and the end / end-reversal events. There is no N+1. Sections share one `REPEATABLE READ` transaction.
+  - `assembleDashboard(people, today)` is pure.
+  - `getDashboard(principal, now)` derives `today` with `todayInVietnam(now)` once per request.
+- **T-1:** `personProjection` in `people/service.ts` is the single status + completeness projection. `toListItem` (Employee List) and the dashboard both use it.
+- **T-2:** `src/modules/core-hr/employments/upcoming.ts` is the pure Upcoming derivation moved out of the frontend. `detailModel.upcomingChanges` (Overview) is now a thin mapper over it, and the dashboard uses the same function. The backend never imports frontend code.
+- Requirement codes live in `src/contracts/core-hr/completeness-codes.ts` (contract layer); the completeness rule imports them.
+- **UI:**
+  - `src/app/page.tsx` (Home at `/`) and `src/app/homeModel.ts` (pure).
+  - Labels come only from `src/i18n` (`home.*`, `completeness.items.*`, `employmentStatus.*`).
+  - The sidebar Home item is live (`employees.read`). The "Soon" placeholder and its strings and CSS are removed.
+  - The wordmark and the post-login landing go to Home.
+
+### K.3 Validation result
+
+| Gate | Result |
+|---|---|
+| Dashboard integration tests (`tests/integration/dashboard.test.ts`): snapshot incl. cancelled / voided; Needs Attention incl. Work Email policy, missing assignment, optional fields, once-per-person, breakdown, PV-29; Upcoming T / T+1 / T+30 / T+31, Relationship Change merge, cancelled successor, new period, cancelled / voided / cancelled-assignment exclusion, cap 10 + total, same-date order; time zone 16:59:59Z vs 17:00:00Z; consistency with the list (status totals, incomplete total) and with Overview (per person); security (200 / 403 / 401), privacy (no personal / email / reason / audit keys or values), strict query 400 | 13 / 13 |
+| Home UI unit tests (`tests/unit/home.test.ts`) | 11 / 11 |
+| Full suite (unit, integration, contract incl. OpenAPI validation and the permission registry) | 621 / 621 (51 files) |
+| UAT round 1 / round 2 / integrity baseline | 22 / 22, 5 / 5, 1 / 1 |
+| Typecheck, lint, production build | Pass |
+| Integrity scan `hrms_dev` | 0 errors, 0 warnings |
+| Browser smoke and visual QA (synthetic `hrms_dev`) | Populated Home at 1366 and 1280 px (fits, no horizontal scroll; columns 2 : 3); stacked at ≤ 1023 px (900 px: no overflow); "View all" → `/employees?operational_completeness=incomplete`; metric links → list status filters; no-permission account sees the permission message and no Home / Employees navigation |
+
+- **Healthy, no-upcoming and unavailable states:** `hrms_dev` holds incomplete records. These states were therefore rendered by overriding the dashboard **response in the browser only** (no data changed), and they are also covered by the unit tests.
+- **Limitation — pre-existing, not Home-specific:** at 375 px every signed-in page (Home, Employees, Detail, Organization) is wider than the viewport, because of the app-shell layout. This is tracked as a separate follow-up; Phase 1 is desktop / laptop first.
+

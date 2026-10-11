@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) D-UI-15 … D-UI-16 (register C-97) and D-UI-17 (register C-98) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). **Employee Detail consistency review — completed** (§16). **UI-8 Add Employee implemented** (§17). **UI-9 Workflow & action consolidation implemented** (§18). **UI-10 Organization implemented** (§19). **Core HR product checkpoint completed 2026-10-11** (`docs/design/core-hr-product-checkpoint.md`, audit only; PV-29 raised). UI-1 Home: **design proposed 2026-10-11** (`docs/product/home-action-center-design.md`, PV-30) — not implemented; awaits approval.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) D-UI-15 … D-UI-16 (register C-97) and D-UI-17 (register C-98) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). **Employee Detail consistency review — completed** (§16). **UI-8 Add Employee implemented** (§17). **UI-9 Workflow & action consolidation implemented** (§18). **UI-10 Organization implemented** (§19). **Core HR product checkpoint completed 2026-10-11** (`docs/design/core-hr-product-checkpoint.md`, audit only; PV-29 raised). **UI-1 Home / Action Center implemented 2026-10-11** (§21; register C-100, design `docs/product/home-action-center-design.md`). All planned UI refresh slices are implemented.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -735,4 +735,16 @@ This is a lifecycle capability, not a UI slice. It is recorded here because it a
   - History shows "Planned Assignment cancelled" at the planned date (BD-7).
 - **Guidance:** the End Employment and Relationship Change forms say "use Cancel Planned Assignment on the Assignment tab first" when the blocking assignment is still planned.
 - Details and evidence: `docs/product/pv29-cancel-planned-assignment.md` §14.
+
+## 21. UI-1 — Home / Action Center (implemented 2026-10-11, C-100)
+
+- **Route `/`** (was a redirect to `/employees`). The sidebar Home item is live (`employees.read`; the "Soon" placeholder is removed); the wordmark and the post-login landing open Home.
+- **Layout:** page header "Home" — "Core HR at a glance." with "Status as of <date>".
+  - **Workforce Snapshot:** three compact link tiles (Active / Pre-start / Ended) with a semantic left accent (success / info / neutral) and the status badge, linking to the list status filters.
+  - Below, two columns (2 : 3, stacked under 1024 px):
+    - **Needs Attention:** count badge (warning), breakdown chips (warning-subtle), ≤ 5 rows (name · code, "Missing: …", status badge), "View all →" to the canonical list filter. Healthy state: a success-subtle box "No records need attention."
+    - **Upcoming — Next 30 days:** a compact chronological list (date column, name · code, bold event label · concise detail); "Showing 10 of N upcoming changes" without a link; empty state "No upcoming changes in the next 30 days."
+- **States:** loading; unavailable (one warning message with request id and Try again — never a partly empty dashboard or a raw backend error); no permission (the existing message pattern).
+- **Not on Home (BD-H2 … BD-H4, BD-H8):** charts, department snapshot, Data Quality card or score, integrity-scan state, Upcoming module, notifications.
+- **Evidence:** `docs/product/home-action-center-design.md` §K.
 

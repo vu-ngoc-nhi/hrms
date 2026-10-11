@@ -30,6 +30,13 @@ The contract source is `src/contracts/core-hr/` (Zod registry and operation list
 | list/create/update for Department, JobTitle, JobLevel, EmployeeType | GET, POST /api/v1/core-hr/{departments,job-titles,job-levels,employee-types}; PATCH …/{id} | catalogs.read / catalogs.manage |
 | getInternalOpenApi | GET /api/v1/internal/openapi.json | docs.read |
 
+The authoritative, complete operation list (including every S4 lifecycle action) is the generated contract `contracts/core-hr/openapi.json` (served at `/api/v1/internal/openapi.json`). Recent additions:
+
+| operationId | Method + path | Permission | Decision |
+|---|---|---|---|
+| createAssignmentCancelPlanned | POST /api/v1/core-hr/assignments/{id}/cancel-planned | employment.manage | PV-29 / C-99 — Cancel Planned Assignment; body `{expected_revision, reason}`, Idempotency-Key; 201 `AssignmentCancelled` (EmployeeDetail + `warnings`) |
+| getCoreHrDashboard | GET /api/v1/core-hr/dashboard | employees.read | PV-30 / C-100 — Home / Action Center summary (`CoreHrDashboard`); no query parameters (400); machine codes only, no personal data, reasons or audit data |
+
 Local-only endpoints, not in the spec, return 404 outside local/test: `GET /api/v1/dev/test-users` and `POST /api/v1/dev/test-tokens`.
 
 Breaking changes made on 2026-10-08 (pre-production):
