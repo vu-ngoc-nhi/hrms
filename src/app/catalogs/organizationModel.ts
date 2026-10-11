@@ -1,7 +1,8 @@
 // UI-10 Organization: pure model over the existing catalog API (unchanged). Fields are exactly those the API has:
 // every kind has a code (set once, never editable) and an active flag; Department, Level and Employee Type have a
 // name; Job Title has an English name and an optional Vietnamese name; Level has an optional display order; Employee
-// Type has `requires_work_email` (drives the operational email rule, PV-03). There is no delete — values are deactivated.
+// Type has `requires_work_email` (drives the operational email rule, PV-03; set at creation only in the UI, D-UI-17).
+// There is no delete — values are deactivated.
 
 export const KINDS = ["departments", "job-titles", "job-levels", "employee-types"] as const;
 export type Kind = (typeof KINDS)[number];
@@ -73,7 +74,8 @@ export function updateBody(kind: Kind, row: CatalogRow, f: CatalogForm): Record<
   if (f.name.trim() !== start.name) body[kind === "job-titles" ? "name_en" : "name"] = f.name.trim();
   if (kind === "job-titles" && f.name_vi.trim() !== start.name_vi) body.name_vi = f.name_vi.trim() || null;
   if (kind === "job-levels" && f.sort_order.trim() !== start.sort_order) body.sort_order = f.sort_order.trim() === "" ? null : Number(f.sort_order);
-  if (kind === "employee-types" && f.requires_work_email !== start.requires_work_email) body.requires_work_email = f.requires_work_email;
+  // D-UI-17: the Work Email policy of an existing Employee Type is never changed from the normal edit (it would change
+  // Record Health of existing employees); it is set only when the type is created. The API capability stays.
   return Object.keys(body).length ? body : null;
 }
 

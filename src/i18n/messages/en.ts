@@ -636,7 +636,7 @@ export const en = {
     workEmailColumn: "Work Email",
     workEmailExpected: "Work Email expected for complete records",
     workEmailExpectedHint: "When checked, people of this type need a Work Email from their Start Date for Record Health to be Complete. When unchecked, a personal email is enough.",
-    workEmailChangeWarning: "This changes Record Health for existing employees of this type immediately; no employee data is changed.",
+    workEmailLocked: "This policy setting cannot be changed here after the Employee Type is created.",
     expected: "Expected",
     notExpected: "Not expected",
     status: "Status",

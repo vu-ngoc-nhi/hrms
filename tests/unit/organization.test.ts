@@ -64,9 +64,12 @@ describe("Create / edit request mapping", () => {
     expect(updateBody("job-levels", level, { ...formFromRow(level), sort_order: "" })).toEqual({ sort_order: null });
   });
 
-  it("Employee Type: the Work Email expectation (server flag) is created and edited explicitly", () => {
-    expect(formFromRow(type).requires_work_email).toBe(true);
-    expect(updateBody("employee-types", type, { ...formFromRow(type), requires_work_email: false })).toEqual({ requires_work_email: false });
+  it("Employee Type Work Email policy (D-UI-17): set at creation, never sent by the normal edit", () => {
+    expect(createBody("employee-types", { ...EMPTY_FORM, code: "INTERN", name: "Intern", requires_work_email: true })).toMatchObject({ requires_work_email: true });
+    expect(updateBody("employee-types", type, { ...formFromRow(type), requires_work_email: false })).toBeNull();
+    expect(updateBody("employee-types", type, { ...formFromRow(type), name: "Employee (FT)", requires_work_email: false })).toEqual({ name: "Employee (FT)" });
+    const page = readFileSync("src/app/catalogs/page.tsx", "utf8");
+    expect(page).toContain('t("organization.workEmailLocked")');
   });
 
   it("request-shape checks mirror the contract", () => {

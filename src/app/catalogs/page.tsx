@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
-import { Button, EmptyState, Field, InfoBox, Modal, PageHeader, StatusBadge, Tabs } from "@/components/ui";
+import { Button, EmptyState, Field, Modal, PageHeader, StatusBadge, Tabs } from "@/components/ui";
 import { t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import {
@@ -92,18 +92,25 @@ function CatalogDialog({
             {(c) => <input {...c} type="number" min={0} max={1000} value={form.sort_order} onChange={set("sort_order")} />}
           </Field>
         )}
-        {kind === "employee-types" && (
-          <div className="field">
-            <label className="checkbox-field">
-              <input type="checkbox" checked={form.requires_work_email} onChange={set("requires_work_email")} />
-              <span>{t("organization.workEmailExpected")}</span>
-            </label>
-            <span className="field-hint">{t("organization.workEmailExpectedHint")}</span>
-            {!creating && form.requires_work_email !== dialog.row.requires_work_email && (
-              <InfoBox variant="warning">{t("organization.workEmailChangeWarning")}</InfoBox>
-            )}
-          </div>
-        )}
+        {kind === "employee-types" &&
+          (creating ? (
+            <div className="field">
+              <label className="checkbox-field">
+                <input type="checkbox" checked={form.requires_work_email} onChange={set("requires_work_email")} />
+                <span>{t("organization.workEmailExpected")}</span>
+              </label>
+              <span className="field-hint">{t("organization.workEmailExpectedHint")}</span>
+            </div>
+          ) : (
+            // D-UI-17: policy-affecting, shown read-only after creation.
+            <dl className="info-grid organization-policy">
+              <div>
+                <dt>{t("organization.workEmailExpected")}</dt>
+                <dd>{dialog.row.requires_work_email ? t("organization.expected") : t("organization.notExpected")}</dd>
+                <dd className="field-hint">{t("organization.workEmailLocked")}</dd>
+              </div>
+            </dl>
+          ))}
         <ErrorBox error={error} />
         <div className="form-actions">
           <Button variant="primary" type="submit" disabled={busy || !body}>

@@ -363,6 +363,7 @@ button.stepper-button:hover { border-color: var(--color-border-strong); color: v
 .organization-form { display: grid; gap: var(--space-3); }
 .checkbox-field { display: flex; gap: var(--space-2); align-items: flex-start; font-size: var(--font-size-sm); color: var(--color-text); }
 .checkbox-field input { margin-top: 3px; }
+.organization-policy { grid-template-columns: minmax(0, 1fr); }
 
 /* ---------------- Filter bar (lists) ---------------- */
 .filter-bar {
