@@ -54,7 +54,7 @@ export function AssignmentChangeForm<T>({
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} style={{ marginTop: 8, marginLeft: 8 }}>
+      <button type="button" onClick={() => setOpen(true)}>
         {t("assignmentChange.open")}
       </button>
     );
@@ -111,7 +111,7 @@ export function AssignmentChangeForm<T>({
   );
 
   return (
-    <form onSubmit={save} className="card" style={{ marginTop: 12 }}>
+    <form onSubmit={save} className="card">
       <h2>{t("assignmentChange.title")}</h2>
       <p className="muted small">{t("assignmentChange.help")}</p>
       <div className="grid2">
@@ -155,7 +155,7 @@ export function AssignmentChangeForm<T>({
         />
       </label>
       <ErrorBox error={error} />
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="form-actions">
         <button className="primary" type="submit" disabled={busy || changes.length === 0 || !form.reason.trim()}>
           {busy ? t("form.saving") : t("assignmentChange.save")}
         </button>

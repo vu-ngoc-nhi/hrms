@@ -43,7 +43,7 @@ export function ReverseEndForm<T>({
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} style={{ marginTop: 8, marginLeft: 8 }}>
+      <button type="button" onClick={() => setOpen(true)}>
         {t("reverseEnd.open")}
       </button>
     );
@@ -76,7 +76,7 @@ export function ReverseEndForm<T>({
   }
 
   return (
-    <form onSubmit={save} className="card" style={{ marginTop: 12 }}>
+    <form onSubmit={save} className="card">
       <h2>{t("reverseEnd.title")}</h2>
       <p className="muted small">{t("reverseEnd.help")}</p>
       <dl className="kv">
@@ -123,7 +123,7 @@ export function ReverseEndForm<T>({
         />
       </label>
       <ErrorBox error={error} />
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="form-actions">
         <button className="primary" type="submit" disabled={busy || !reason.trim()}>
           {busy ? t("form.saving") : t("reverseEnd.save")}
         </button>

@@ -44,7 +44,7 @@ export function WorkEmailEditor<T>({
 
   if (!open) {
     return (
-      <div className="row" style={{ marginTop: 8 }}>
+      <div className="row">
         {canEdit && (
           <button type="button" onClick={() => setOpen("edit")}>
             {ended ? t("workEmail.correct") : t("workEmail.edit")}
@@ -80,8 +80,8 @@ export function WorkEmailEditor<T>({
 
   const unchanged = email.trim().toLowerCase() === (current ?? "").toLowerCase();
   return (
-    <form onSubmit={save} style={{ marginTop: 8, display: "grid", gap: 8 }}>
-      <p className="muted small" style={{ margin: 0 }}>
+    <form onSubmit={save} className="stack-form">
+      <p className="muted small flush">
         {t("workEmail.owner", { period: periodLabel })}
         {ended && <> {t("workEmail.endedNote")}</>}
         {clearing && <> {t("workEmail.clearNote")}</>}

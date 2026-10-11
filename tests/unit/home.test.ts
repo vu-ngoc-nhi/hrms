@@ -82,7 +82,7 @@ describe("Upcoming", () => {
       }),
     );
     expect(v.rows.map((r) => [r.date, r.title, r.detail, r.href])).toEqual([
-      ["2026-10-31", "Employment ends", "Last day of employment", "/employees/p1?tab=employment"],
+      ["2026-10-31", "Employment scheduled to end", "Last day of employment", "/employees/p1?tab=employment"],
       ["2026-11-01", "Assignment change", "Quality Assurance / QA Engineer → Engineering / Software Engineer", "/employees/p2?tab=assignment"],
     ]);
     expect(v.overflow).toBeNull();

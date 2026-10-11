@@ -6,16 +6,17 @@ export function ErrorBox({ error }: { error: { status?: number; body?: ApiErrorB
   if (!error) return null;
   const body = error.body;
   const title = (body && tMaybe(`errors.${body.error}`)) ?? body?.message ?? error.message ?? t("errors.generic");
+  // Detail lines in plain words: catalogued codes replace server text that may name internal ids; technical field
+  // names are never shown; repeated lines (one per blocking record) are shown once.
+  const lines = [...new Set((body?.details ?? []).map((d) => tMaybe(`errors.detail.${d.code}`) ?? d.message))];
   return (
     <div className="alert error" role="alert">
       <strong>{title}</strong>
       {!body?.details?.length && body?.message && body.message !== title ? <div>{body.message}</div> : null}
-      {body?.details?.length ? (
+      {lines.length ? (
         <ul>
-          {body.details.map((d, i) => (
-            <li key={i}>
-              {d.field ? <code>{d.field}</code> : null} {d.message}
-            </li>
+          {lines.map((line) => (
+            <li key={line}>{line}</li>
           ))}
         </ul>
       ) : null}

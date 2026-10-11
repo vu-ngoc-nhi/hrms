@@ -434,3 +434,10 @@ button.stepper-button:hover { border-color: var(--color-border-strong); color: v
 .home-empty { margin: 0; }
 .home-overflow { margin: var(--space-2) 0 0; }
 .home-unavailable p { margin: 0 0 var(--space-2); }
+
+/* Workflow form helpers (Phase 1 final polish): replace the legacy inline styles of the S4 workflow forms. */
+.choice-group { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: var(--space-2); }
+.choice-group legend { padding: 0; margin-bottom: var(--space-1); font-size: var(--font-size-sm); }
+.list-lead { margin: 0 0 var(--space-1); }
+.flush { margin: 0; }
+.stack-form { display: grid; gap: var(--space-2); }

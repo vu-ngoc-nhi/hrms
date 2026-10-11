@@ -45,7 +45,7 @@ export function InitialAssignmentForm<T>({
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} style={{ marginTop: 8, marginLeft: 8 }}>
+      <button type="button" onClick={() => setOpen(true)}>
         {t("initialAssignment.open")}
       </button>
     );
@@ -101,7 +101,7 @@ export function InitialAssignmentForm<T>({
   );
 
   return (
-    <form onSubmit={save} className="card" style={{ marginTop: 12 }}>
+    <form onSubmit={save} className="card">
       <h2>{t("initialAssignment.title")}</h2>
       <p className="muted small">{t("initialAssignment.help")}</p>
       <div className="grid2">
@@ -134,7 +134,7 @@ export function InitialAssignmentForm<T>({
         />
       </label>
       <ErrorBox error={error} />
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="form-actions">
         <button
           className="primary"
           type="submit"

@@ -79,7 +79,7 @@ export function RelationshipChangeForm<T>({
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} style={{ marginTop: 8, marginLeft: 8 }}>
+      <button type="button" onClick={() => setOpen(true)}>
         {t("relationshipChange.open")}
       </button>
     );
@@ -168,7 +168,7 @@ export function RelationshipChangeForm<T>({
     (form.with_assignment && (!form.department_id || !form.job_title_id));
 
   return (
-    <form onSubmit={save} className="card" style={{ marginTop: 12 }}>
+    <form onSubmit={save} className="card">
       <h2>{t("relationshipChange.title")}</h2>
       <p className="muted small">{t("relationshipChange.help")}</p>
       <div className="grid2">
@@ -199,28 +199,28 @@ export function RelationshipChangeForm<T>({
       {ended && <p className="muted small">{t("relationshipChange.endedNote", { date: formatDate(period.end_date) })}</p>}
       {form.start_date === today && <p className="alert small">{t("sameDay.note")}</p>}
 
-      <fieldset style={{ border: "none", padding: 0, margin: "12px 0 0" }}>
+      <fieldset className="choice-group">
         <legend className="small">
           <strong>{t("detail.workEmail")}</strong>
         </legend>
         {period.work_email && (
-          <label className="small" style={{ display: "flex", gap: 6 }}>
+          <label className="checkbox-field">
             <input type="radio" name="email" checked={form.email_choice === "keep"} onChange={() => setForm((f) => ({ ...f, email_choice: "keep" }))} />
             {t("relationshipChange.emailKeep", { email: period.work_email })}
           </label>
         )}
-        <label className="small" style={{ display: "flex", gap: 6 }}>
+        <label className="checkbox-field">
           <input type="radio" name="email" checked={form.email_choice === "different"} onChange={() => setForm((f) => ({ ...f, email_choice: "different" }))} />
           {t("relationshipChange.emailDifferent")}
         </label>
         {form.email_choice === "different" && <input type="email" required maxLength={254} value={form.work_email} onChange={set("work_email")} />}
-        <label className="small" style={{ display: "flex", gap: 6 }}>
+        <label className="checkbox-field">
           <input type="radio" name="email" checked={form.email_choice === "none"} onChange={() => setForm((f) => ({ ...f, email_choice: "none" }))} />
           {t("relationshipChange.emailNone")}
         </label>
       </fieldset>
 
-      <label className="small" style={{ display: "flex", gap: 6, marginTop: 12 }}>
+      <label className="checkbox-field">
         <input type="checkbox" checked={form.with_assignment} onChange={(e) => toggleAssignment(e.target.checked)} />
         {t("relationshipChange.addAssignment")}
       </label>
@@ -279,7 +279,7 @@ export function RelationshipChangeForm<T>({
         />
       </label>
       <ErrorBox error={error} />
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="form-actions">
         <button className="primary" type="submit" disabled={invalid}>
           {busy ? t("form.saving") : t("relationshipChange.save")}
         </button>

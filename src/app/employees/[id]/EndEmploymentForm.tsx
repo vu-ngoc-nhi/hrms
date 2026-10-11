@@ -44,7 +44,7 @@ export function EndEmploymentForm<T>({
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} style={{ marginTop: 8, marginLeft: 8 }}>
+      <button type="button" onClick={() => setOpen(true)}>
         {t("endEmployment.open")}
       </button>
     );
@@ -86,7 +86,7 @@ export function EndEmploymentForm<T>({
   const minDate = canBackdate ? startDate : startDate > today ? startDate : today;
 
   return (
-    <form onSubmit={save} className="card" style={{ marginTop: 12 }}>
+    <form onSubmit={save} className="card">
       <h2>{t("endEmployment.title")}</h2>
       <p className="muted small">{t("endEmployment.help")}</p>
       {startDate > today && <p className="alert small">{t("endEmployment.preStartGuidance")}</p>}
@@ -148,7 +148,7 @@ export function EndEmploymentForm<T>({
         </p>
       )}
       <ErrorBox error={error} />
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="form-actions">
         <button
           className="primary"
           type="submit"

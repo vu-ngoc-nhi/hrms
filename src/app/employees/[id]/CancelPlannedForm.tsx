@@ -32,7 +32,7 @@ export function CancelPlannedForm<T>({
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} style={{ marginTop: 8, marginLeft: 8 }}>
+      <button type="button" onClick={() => setOpen(true)}>
         {t("cancelPlanned.open")}
       </button>
     );
@@ -60,7 +60,7 @@ export function CancelPlannedForm<T>({
   }
 
   return (
-    <form onSubmit={save} className="card" style={{ marginTop: 12 }}>
+    <form onSubmit={save} className="card">
       <h2>{t("cancelPlanned.title")}</h2>
       <p className="muted small">{t("cancelPlanned.help")}</p>
       <dl className="kv">
@@ -88,7 +88,7 @@ export function CancelPlannedForm<T>({
         />
       </label>
       <ErrorBox error={error} />
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="form-actions">
         <button className="primary" type="submit" disabled={busy || blockedBy !== null || !reason.trim()}>
           {busy ? t("form.saving") : t("cancelPlanned.save")}
         </button>

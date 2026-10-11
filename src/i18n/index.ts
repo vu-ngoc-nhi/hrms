@@ -33,10 +33,13 @@ export function tMaybe(key: string, vars?: Record<string, string | number>, loca
   return found === undefined ? undefined : format(found, vars);
 }
 
+// English uses fixed three-letter months ("02 Sep 2024"): Intl en-GB writes "Sept", which looked inconsistent next
+// to every other month. The value is a business date (YYYY-MM-DD) and is never shifted by a time zone.
+const EN_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+
 export function formatDate(iso: string | null | undefined, locale = DEFAULT_LOCALE): string {
   if (!iso) return "—";
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
-  return new Intl.DateTimeFormat(locale === "en" ? "en-GB" : locale, { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(
-    new Date(Date.UTC(y, m - 1, d)),
-  );
+  if (locale === "en") return `${String(d).padStart(2, "0")} ${EN_MONTHS[m - 1]} ${y}`;
+  return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
 }

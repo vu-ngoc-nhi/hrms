@@ -56,7 +56,7 @@ export function PeriodCorrectionForm<T>({
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} style={{ marginTop: 8, marginLeft: 8 }}>
+      <button type="button" onClick={() => setOpen(true)}>
         {t("periodCorrection.open")}
       </button>
     );
@@ -104,7 +104,7 @@ export function PeriodCorrectionForm<T>({
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   return (
-    <form onSubmit={save} className="card" style={{ marginTop: 12 }}>
+    <form onSubmit={save} className="card">
       <h2>{t("periodCorrection.title")}</h2>
       <p className="muted small">{t("periodCorrection.help")}</p>
       <div className="grid2">
@@ -130,7 +130,7 @@ export function PeriodCorrectionForm<T>({
               <input type="date" required={!form.clear_end} disabled={form.clear_end} min={form.start_date} value={form.end_date} onChange={set("end_date")} />
             </label>
             {!hasActiveEndEvent && (
-              <label className="small" style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
+              <label className="checkbox-field">
                 <input type="checkbox" checked={form.clear_end} onChange={(e) => setForm((f) => ({ ...f, clear_end: e.target.checked }))} />
                 {t("periodCorrection.clearEnd")}
               </label>
@@ -167,7 +167,7 @@ export function PeriodCorrectionForm<T>({
         />
       </label>
       <ErrorBox error={error} />
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="form-actions">
         <button className="primary" type="submit" disabled={busy || changes.length === 0 || !form.reason.trim()}>
           {busy ? t("form.saving") : t("periodCorrection.save")}
         </button>

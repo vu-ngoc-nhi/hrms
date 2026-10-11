@@ -71,7 +71,7 @@ export function NewPeriodForm<T>({
   const label = (k: "open" | "title" | "save") => (plannedRehire ? t(`rehire.plan.${k}`) : t(`${prefix}.${k}`));
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} style={{ marginBottom: 12 }}>
+      <button type="button" onClick={() => setOpen(true)}>
         {label("open")}
       </button>
     );
@@ -113,7 +113,7 @@ export function NewPeriodForm<T>({
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   return (
-    <form onSubmit={save} className="card" style={{ marginBottom: 12 }}>
+    <form onSubmit={save} className="card">
       <h2>{label("title")}</h2>
       <p className="muted small">{t(`${prefix}.help`)}</p>
       {mode === "initial" && hasCancelledPeriods && <p className="muted small">{t("initialEmployment.cancelledNote")}</p>}
@@ -173,7 +173,7 @@ export function NewPeriodForm<T>({
         />
       </label>
       <ErrorBox error={error} />
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="form-actions">
         <button className="primary" type="submit" disabled={busy || !form.start_date || (reasonRequired && !form.reason.trim())}>
           {busy ? t("form.saving") : label("save")}
         </button>

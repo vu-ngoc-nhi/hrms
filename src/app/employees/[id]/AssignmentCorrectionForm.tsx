@@ -101,7 +101,7 @@ export function AssignmentCorrectionForm<T>({
   );
 
   return (
-    <form onSubmit={save} className="card" style={{ marginTop: 12 }}>
+    <form onSubmit={save} className="card">
       <h2>{t("assignmentCorrection.title", { from: formatDate(row.effective_from) })}</h2>
       <p className="muted small">{t("assignmentCorrection.help")}</p>
       <div className="grid2">
@@ -140,7 +140,7 @@ export function AssignmentCorrectionForm<T>({
         />
       </label>
       <ErrorBox error={error} />
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="form-actions">
         <button className="primary" type="submit" disabled={busy || changes.length === 0 || !form.reason.trim()}>
           {busy ? t("form.saving") : t("assignmentCorrection.save")}
         </button>

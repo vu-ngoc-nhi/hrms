@@ -110,7 +110,7 @@ export function VoidPeriodForm<T>({
           setOpen(true);
           void load();
         }}
-        style={{ marginTop: 8, marginLeft: 8 }}
+       
       >
         {t("voidPeriod.open")}
       </button>
@@ -147,7 +147,7 @@ export function VoidPeriodForm<T>({
 
   const internal = preview?.affected_internal_records;
   return (
-    <form onSubmit={save} className="card" style={{ marginTop: 12 }}>
+    <form onSubmit={save} className="card">
       <h2>{t("voidPeriod.title")}</h2>
       <p className="alert small">
         <strong>{t("voidPeriod.definition")}</strong>
@@ -175,7 +175,7 @@ export function VoidPeriodForm<T>({
               <FindingList findings={preview.warnings} />
             </div>
           )}
-          <p className="small" style={{ marginBottom: 4 }}>
+          <p className="small list-lead">
             <strong>{t("voidPeriod.internalTitle")}</strong>
           </p>
           <ul className="small">
@@ -196,7 +196,7 @@ export function VoidPeriodForm<T>({
             {internal.work_email && <li>{t("voidPeriod.internalWorkEmail", { email: internal.work_email })}</li>}
             {internal.planned_end_date && <li>{t("voidPeriod.internalPlannedEnd", { date: formatDate(internal.planned_end_date) })}</li>}
           </ul>
-          <p className="small" style={{ marginBottom: 4 }}>
+          <p className="small list-lead">
             <strong>{t("voidPeriod.consequencesTitle")}</strong>
           </p>
           <ul className="small">
@@ -218,7 +218,7 @@ export function VoidPeriodForm<T>({
         </>
       )}
       <ErrorBox error={error} />
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="form-actions">
         {/* Destructive and exceptional: the danger style, never the ordinary primary action (UI-9). */}
         <button className="danger" type="submit" disabled={busy || !preview?.eligible || !reason.trim()}>
           {busy && preview ? t("form.saving") : t("voidPeriod.confirm")}
