@@ -1,6 +1,7 @@
-# PV-29 — Cancel Planned Assignment (design proposal, revision 1)
+# PV-29 — Cancel Planned Assignment (revision 2: approved and implemented)
 
-- Status: **Pending Validation — design only, awaiting approval. Nothing is implemented.**
+- Status: **Implemented and validated (2026-10-11)** — design approved with BD-1 … BD-10 (register **C-99**). Revision 1 (design proposal) is kept below with the implementation notes of §14.
+- Not a production deployment: the forward migration was applied to the guarded local `hrms_dev` / `hrms_test` only.
 - Date: 2026-10-11. Raised by the Core HR product checkpoint (`docs/design/core-hr-product-checkpoint.md` §D).
 - Priority: **P0 before go-live** (recovery capability).
 - Governing principles:
@@ -272,20 +273,20 @@ Body:    { "expected_revision": <int ≥ 1>, "reason": "<1–1000 chars>" }   (s
 
 **Contract:** OpenAPI includes the operation, the strict body and the additive `cancelled_at`.
 
-## 12. Open decisions
+## 12. Decisions (all approved 2026-10-11; technical items implemented)
 
 | ID | Item | Recommendation | Type |
 |---|---|---|---|
-| BD-1 | Capability `employment.manage` (HR_EDITOR may cancel) | Yes — same capability that schedules the plan | **BUSINESS DECISION** |
-| BD-2 | Strictly after today; a row effective today is not cancellable | Yes — consistent with C-70 | **BUSINESS DECISION** |
-| BD-3 | Latest-only: a middle planned row cannot be cancelled while a later plan exists (cancel the later one first) | Yes — simpler and safer than relinking; chains are rare | **BUSINESS DECISION** |
-| BD-4 | Cancelling a planned Initial Assignment is allowed and may leave the period without an assignment (Needs Attention) | Yes — C-41 already allows a period without assignment | **BUSINESS DECISION** |
-| BD-5 | A plan closed by an Active End Event: block; Reverse End first | Yes — preserves exact reversal (C-54), mirrors Cancel Planned Period | **BUSINESS DECISION** |
-| BD-6 | Reason mandatory; stored in audit only; never displayed | Yes — same as Assignment Change (C-23, C-24) | **BUSINESS DECISION** |
-| BD-7 | History label "Planned Assignment cancelled", dated with the planned date, recording time not shown | Yes | **BUSINESS DECISION** |
-| BD-8 | Predecessor's manager not employed through the restored range → warning only | Yes — C-73 precedent | **BUSINESS DECISION** |
-| BD-9 | End Employment / Relationship Change: guidance to the new action only; no inline cancellation in Phase 1 | Yes | **BUSINESS DECISION** |
-| BD-10 | Cancellation is terminal (no un-cancel); re-plan with a new Assignment Change | Yes | **BUSINESS DECISION** |
+| BD-1 | Capability `employment.manage` (HR_EDITOR may cancel) | Yes — same capability that schedules the plan | **BUSINESS DECISION — APPROVED 2026-10-11** |
+| BD-2 | Strictly after today; a row effective today is not cancellable | Yes — consistent with C-70 | **BUSINESS DECISION — APPROVED 2026-10-11** |
+| BD-3 | Latest-only: a middle planned row cannot be cancelled while a later plan exists (cancel the later one first) | Yes — simpler and safer than relinking; chains are rare | **BUSINESS DECISION — APPROVED 2026-10-11** |
+| BD-4 | Cancelling a planned Initial Assignment is allowed and may leave the period without an assignment (Needs Attention) | Yes — C-41 already allows a period without assignment | **BUSINESS DECISION — APPROVED 2026-10-11** |
+| BD-5 | A plan closed by an Active End Event: block; Reverse End first | Yes — preserves exact reversal (C-54), mirrors Cancel Planned Period | **BUSINESS DECISION — APPROVED 2026-10-11** |
+| BD-6 | Reason mandatory; stored in audit only; never displayed | Yes — same as Assignment Change (C-23, C-24) | **BUSINESS DECISION — APPROVED 2026-10-11** |
+| BD-7 | History label "Planned Assignment cancelled", dated with the planned date, recording time not shown | Yes | **BUSINESS DECISION — APPROVED 2026-10-11** |
+| BD-8 | Predecessor's manager not employed through the restored range → warning only | Yes — C-73 precedent | **BUSINESS DECISION — APPROVED 2026-10-11** |
+| BD-9 | End Employment / Relationship Change: guidance to the new action only; no inline cancellation in Phase 1 | Yes | **BUSINESS DECISION — APPROVED 2026-10-11** |
+| BD-10 | Cancellation is terminal (no un-cancel); re-plan with a new Assignment Change | Yes | **BUSINESS DECISION — APPROVED 2026-10-11** |
 | T-1 | Migration: `cancelled_at`, partial exclusion constraint, trigger ignores cancelled rows, terminal guard trigger | As §5.3 | TECHNICAL |
 | T-2 | Shared `operationalAssignmentWhere` / `operationalAssignments`; all readers and writers listed in §5.4 | As §5.4 | TECHNICAL |
 | T-3 | Endpoint, schema, error codes, additive `cancelled_at`, OpenAPI | As §6 | TECHNICAL |
@@ -294,7 +295,7 @@ Body:    { "expected_revision": <int ≥ 1>, "reason": "<1–1000 chars>" }   (s
 | T-6 | UI placement, Modal, Cancelled section, hint, copy through `src/i18n` | As §8 | TECHNICAL (after BD approval) |
 | T-7 | DB CHECK "cancelled before effective" | Not added: time-zone-dependent expression; application rule + scanner check instead | TECHNICAL |
 
-## 13. Implementation outline (after approval only)
+## 13. Implementation outline (done)
 
 1. Migration (T-1), applied to the guarded local `hrms_dev` only after approval; never staging / production without explicit approval.
 2. Shared predicate and caller updates (T-2), with regression tests on the existing workflows.
@@ -302,3 +303,69 @@ Body:    { "expected_revision": <int ≥ 1>, "reason": "<1–1000 chars>" }   (s
 4. Scanner (T-5).
 5. UI (T-6).
 6. Docs: register PV-29 → Confirmed / MVP Decision with the approved BDs; UAT checklist addition.
+
+## 14. Implementation notes and validation result (2026-10-11)
+
+### 14.1 Approval clarifications applied
+
+- **BD-5:** only an Active End Event whose `closed_assignment_id` is the planned row blocks. Reversed / historical End events never block, and an Active End that closed the *predecessor* does not block either (the boundary is restored exactly and Reverse End still works).
+- **BD-7:** the History entry reads "Planned Assignment cancelled" — "This Assignment was planned to take effect on <date> but was cancelled before it began." It is placed at the planned date. No Recorded At or actor is shown.
+- **BD-8:** the warning is returned with the result, not as a separate preview call (no new preview API). The page shows it as a non-blocking notice after success.
+
+### 14.2 Deviations from revision 1 (technical, documented)
+
+| Revision 1 | Implemented | Why |
+|---|---|---|
+| `ASSIGNMENT_TIMELINE_NOT_CONTIGUOUS` | **`ASSIGNMENT_TIMELINE_GAP`** (422) | The same code Assignment Correction already uses for the identical condition |
+| Predecessor audit action `assignment.effective_to` | **`assignment.restore_end`** (structural `assignment.effective_to` old → new) | An action name, like End Employment's `assignment.close` |
+| Response = `EmployeeDetail` | **`AssignmentCancelled`** = `EmployeeDetail` + `warnings[]` (empty on replay) | Same pattern as `EmployeeCreated`; carries the BD-8 warning `MANAGER_NOT_EMPLOYED_FOR_RESTORED_RANGE` |
+| Closed-by-End rule in the service only | Service **and** database (`job_assignment_cancel_closed_by_end` inside the terminal trigger) | Hard constraint for an objectively invalid state |
+| "Cancelled" derived per caller | One predicate in `queries.ts` (`OPERATIONAL_ASSIGNMENT`, `operationalAssignmentWhere`, `operationalAssignments`, `operationalAssignmentViews`, `markAssignmentCancelled`); the contract boundary test fails if `cancelledAt` appears anywhere else | Centralized, like period dispositions |
+
+### 14.3 What was built
+
+- **Migration** `20261014000000_cancel_planned_assignment` (forward-only, non-destructive):
+  - `job_assignment.cancelled_at`;
+  - `job_assignment_no_overlap_ex` with `WHERE (cancelled_at IS NULL)`;
+  - `job_assignment_within_employment()` ignores cancelled rows;
+  - `job_assignment_cancelled_is_terminal_trg`: no insert as cancelled; no change or un-cancel of a cancelled row; cancelling must not change dates or values; refused while an Active End closes the row.
+- **Command** `src/modules/core-hr/employments/cancel-planned-assignment.ts`, route `POST /api/v1/core-hr/assignments/{id}/cancel-planned`, contract `AssignmentCancelPlannedCreate` / `AssignmentCancelled`, OpenAPI regenerated.
+  - One transaction, in this order: Idempotency-Key claim, period write guard, `ASSIGNMENT_CANCELLED` check, revision bump.
+  - Eligibility rules as in §4.
+  - Mark cancelled first (the partial exclusion then allows the extension), then `predecessor.effective_to := cancelled.effective_to`.
+  - Audit `assignment.cancel_planned` + `assignment.restore_end`.
+  - "Today" and `cancelled_at` come from one instant.
+- **Consumers on the shared predicate:**
+  - Employee Detail representative / completeness; Employee List include and department candidates;
+  - Assignment Change, Assignment Correction (cancelled target → 409 `ASSIGNMENT_CANCELLED`), Add Initial Assignment;
+  - Period Correction, End Employment, Relationship Change, Reverse End;
+  - Void `manager_dependency`.
+  - The detail response keeps every row with `cancelled_at`; the reason and actor are never returned.
+- **Guidance (BD-9):** End Employment and Relationship Change keep blocking (C-28). When every blocking row is still planned, the server message and the form copy point to *Cancel Planned Assignment*. When the blocking row already took effect, the correction guidance stays. Nothing is chained.
+- **UI:**
+  - Assignment tab → Upcoming card: *Cancel Planned Assignment* (secondary button; `employment.manage`) on the latest upcoming row only. Earlier rows show "To cancel this planned assignment, first cancel the later one."
+  - Modal with the approved helper, "What happens" (will not take effect / predecessor continues to apply on and after <date>, or the period has no Assignment and may show Needs Attention / stays in the history as Cancelled) and a required Reason.
+  - A muted "Cancelled planned assignments" section with the Cancelled badge.
+  - History entry per §14.1. Overview Upcoming Changes, the header and Add Initial Assignment eligibility ignore cancelled rows.
+- **Scanner:**
+  - Operational checks (`assignment_overlap`, `assignment_outside_period`, `assignment_gap_after_first`, `last_assignment_not_aligned_with_period_end`, `manager_not_employed_on_date`, `voided_period_referenced_as_manager`) consider `cancelled_at IS NULL` rows only.
+  - New errors `cancelled_assignment_was_effective` and `active_end_event_closes_cancelled_assignment`.
+  - The BD-8 situation stays at most the existing C-73 warning — not an integrity error.
+
+### 14.4 Validation result
+
+| Gate | Result |
+|---|---|
+| Migration from zero (`hrms_test` rebuilt by the test global setup; `db-schema-guarantees` asserts the chain, the partial exclusion, the column and the trigger) | Pass |
+| Migration status `hrms_dev` / `hrms_test` | 10 migrations, both up to date (applied with the guarded `npm run db:migrate`; no reset, no data removed) |
+| PV-29 integration tests (`tests/integration/cancel-planned-assignment.test.ts`, matrix A–V + manager warning + `cancelled_at` exposed + reason not exposed) | 23 / 23 pass |
+| PV-29 UI unit tests (`tests/unit/cancel-planned-assignment-ui.test.ts`) | 10 / 10 pass |
+| Full suite (`npm test`: unit, integration, contract incl. OpenAPI validation, baseline) | 596 / 596 pass (49 files) |
+| UAT regression (`test:uat-round1`, `test:uat-round2`) and integrity baseline | 22 / 22, 5 / 5, 1 / 1 pass |
+| Integrity scan `hrms_dev` (after visual QA) | 0 errors, 0 warnings |
+| Typecheck, lint, production build | Pass |
+| Visual QA (1366 px, synthetic ES0034–ES0037) | A → B; cancel preview; A continues; Cancelled section and History; planned Initial cancelled → Needs Attention and Add Initial Assignment; A → B → C latest-only hint; End blocked with guidance → cancelled → End available; HR Editor allowed; an account without the permission has no access (403) |
+
+- Pre-existing test fix: `void-employment.test.ts` still expected the old copy "Line Manager". UI-9 had renamed it to "Manager", so only the test expectation was aligned.
+- **Limitation:** Phase 1 has no read-only HR role (PV-07), so "no action without `employment.manage`" is proven by unit tests (capability gate) and the 403 matrix rather than by a read-only screen.
+

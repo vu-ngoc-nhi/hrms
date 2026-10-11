@@ -719,3 +719,20 @@ Org chart, reporting-line editor, department hierarchy / head / budget / cost ce
 | Browser QA (local synthetic data) | A/D Departments with an inactive value; B Add Department (validation; duplicate code "eng" refused on the field); C Edit Department; E Job Titles (Vietnamese names); F Levels (display order); G Employee Types (Work Email expected / not expected); H Employee Type edit — originally with a Record Health warning, superseded by D-UI-17 (policy read-only on edit; re-verified 2026-10-11: no checkbox in edit, checkbox kept in create); I read-only HR Editor (no Add, no Actions column); J ~900 px fits, phone width scrolls inside the table card only |
 | Mutation test (synthetic, supported actions only) | created **UI10-QA "UI10 QA Department (Synthetic)"**, renamed it, then deactivated it through Deactivate (no SQL, no delete); confirmed it is listed as inactive and absent from new-record options |
 
+## 20. PV-29 — Cancel Planned Assignment in the Assignment tab (implemented 2026-10-11, C-99)
+
+This is a lifecycle capability, not a UI slice. It is recorded here because it adds one action and one section to UI-6 / UI-7.
+
+- **Action ownership (extends D-UI-13):**
+  - *Cancel Planned Assignment* belongs to the specific **Upcoming Assignment** card (latest upcoming row of an operational period; `employment.manage`).
+  - It is a secondary button next to Correct (`employment.correct`).
+  - It is never in the header, on the period card or on Overview.
+  - Earlier upcoming rows show "To cancel this planned assignment, first cancel the later one."
+- **Surface:** Modal (short form, like Cancel Planned Period). Success lands on the Assignment tab with "Planned Assignment cancelled.". A non-blocking manager warning (BD-8, C-73) is shown as a separate notice.
+- **Display:**
+  - Cancelled planned assignments sit in a muted section "Cancelled planned assignments" with the **Cancelled** badge and "Was planned for <date>".
+  - They are never Current, Upcoming, representative, in Upcoming Changes or a "previous" row.
+  - History shows "Planned Assignment cancelled" at the planned date (BD-7).
+- **Guidance:** the End Employment and Relationship Change forms say "use Cancel Planned Assignment on the Assignment tab first" when the blocking assignment is still planned.
+- Details and evidence: `docs/product/pv29-cancel-planned-assignment.md` §14.
+

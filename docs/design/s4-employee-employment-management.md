@@ -316,3 +316,14 @@ Behaviour is approved (C-38). With C-28 (End Employment is blocked when any assi
 
 **Reversal checks (S4.7R):** the event is an `end` event of this period and not already reversed; the period is not cancelled; the period end date still equals the End event date and the closed row's `effective_to` still equals end date + 1 (otherwise 409 `END_EFFECT_CHANGED`); no later lifecycle event on the period; no other non-cancelled period of the person starting after this period's start (409 `LATER_PERIOD_EXISTS` — covers Rehire and Relationship Change); overlap and Work Email ranges re-validated by the DB constraints. Then, atomically: restore `end_date` to `previous_end_date`, restore the closed row's `effective_to`, insert `end_reversed` (actor, reason, `reverses_event_id`), record audit, bump `person.revision`.
 
+## 14. PV-29 — Cancel Planned Assignment (implemented 2026-10-11, C-99)
+
+A planned assignment (effective_from after today, Asia/Ho_Chi_Minh) that will no longer take effect is cancelled with `POST /api/v1/core-hr/assignments/{id}/cancel-planned`. This is a normal lifecycle action (`employment.manage`) — not a correction and not a delete.
+
+- Only the latest operational row of its period can be cancelled (409 `LATER_ASSIGNMENT_EXISTS`).
+- The predecessor takes back the cancelled row's end, the exact inverse of scheduling it. A malformed chain fails with 422 `ASSIGNMENT_TIMELINE_GAP`.
+- The action is blocked only while an Active End Event closes that row (422 `ACTIVE_END_EVENT_EXISTS`: Reverse End first).
+- The row keeps its dates and values with `job_assignment.cancelled_at` set. This is permanent, has no operational effect and remains visible in history.
+- C-28 is unchanged: End Employment and Relationship Change still never change a later assignment. Their message now points to Cancel Planned Assignment when the blocking rows are still planned.
+- Full design, decisions BD-1 … BD-10 and validation: `docs/product/pv29-cancel-planned-assignment.md`.
+
