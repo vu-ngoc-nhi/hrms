@@ -140,7 +140,11 @@ export function EndEmploymentForm<T>({
       {later && <p className="alert small">{t("endEmployment.laterNotAllowed")}</p>}
       {blocking.length > 0 && (
         <p className="alert small">
-          {t("endEmployment.blocked", { list: blocking.map((a) => `${formatDate(a.effective_from)} ${a.department.name}`).join(", ") })}
+          {t(
+            // PV-29 / BD-9: a still-planned assignment is cancelled with Cancel Planned Assignment, never auto-changed.
+            blocking.every((a) => a.effective_from > today) ? "endEmployment.blockedPlanned" : "endEmployment.blocked",
+            { list: blocking.map((a) => `${formatDate(a.effective_from)} ${a.department.name}`).join(", ") },
+          )}
         </p>
       )}
       <ErrorBox error={error} />

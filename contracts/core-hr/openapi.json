@@ -2098,6 +2098,126 @@
         }
       }
     },
+    "/api/v1/core-hr/assignments/{id}/cancel-planned": {
+      "post": {
+        "operationId": "createAssignmentCancelPlanned",
+        "summary": "Cancel Planned Assignment",
+        "description": "PV-29: a planned assignment (effective_from after today, Asia/Ho_Chi_Minh) will not take effect — 422 ASSIGNMENT_ALREADY_EFFECTIVE otherwise. A normal lifecycle action, not a correction: HR_EDITOR and HR_ADMIN (employment.manage); reason, expected_revision and Idempotency-Key required. Only the latest operational assignment of its period (409 LATER_ASSIGNMENT_EXISTS — cancel from latest to earliest). Its predecessor, which must end exactly where it starts (422 ASSIGNMENT_TIMELINE_NOT_CONTIGUOUS otherwise; never repaired silently), takes back the cancelled row's end (predecessor.effective_to := cancelled.effective_to); a first (initial) assignment has no predecessor and the period simply has no assignment afterwards. Blocked while an Active End Event closes this row (422 ACTIVE_END_EVENT_EXISTS — Reverse End first). The row is kept unchanged with cancelled_at set (permanent; no un-cancel) and has no operational effect. Cancelled or voided period: 409 EMPLOYMENT_PERIOD_READ_ONLY; already cancelled: 409 ASSIGNMENT_CANCELLED. Warning (never blocking, C-73): MANAGER_NOT_EMPLOYED_FOR_RESTORED_RANGE. Audit: assignment.cancel_planned, plus assignment.restore_end (structural effective_to change) on the predecessor; same request ID and reason.\n\nRequired permission: `employment.manage`.",
+        "tags": [
+          "Employments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignmentCancelPlannedCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Owning employee profile after the cancellation (or replayed result), with warnings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentCancelled"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/core-hr/departments": {
       "get": {
         "operationId": "listDepartments",
@@ -4118,6 +4238,19 @@
           },
           "record_source": {
             "type": "string"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "PV-29: set when this planned assignment was cancelled before it took effect. It stays in history unchanged but has no operational effect (never current, upcoming or representative). Reason and actor are kept in audit only."
           }
         },
         "required": [
@@ -4128,7 +4261,8 @@
           "job_title",
           "job_level",
           "manager",
-          "record_source"
+          "record_source",
+          "cancelled_at"
         ],
         "additionalProperties": false
       },
@@ -5596,6 +5730,167 @@
         "required": [
           "expected_revision",
           "reason"
+        ],
+        "additionalProperties": false
+      },
+      "AssignmentCancelPlannedCreate": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Mandatory cancellation reason; stored in audit only, never returned or shown in history."
+          }
+        },
+        "required": [
+          "expected_revision",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "AssignmentCancelled": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "employee_code": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "employment_status": {
+            "type": "string",
+            "enum": [
+              "no_employment",
+              "not_started",
+              "active",
+              "ended"
+            ],
+            "description": "Computed from employment periods at status_as_of. Value set is an MVP Decision."
+          },
+          "status_as_of": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "completeness": {
+            "$ref": "#/components/schemas/ProfileCompleteness"
+          },
+          "personal": {
+            "description": "Present only when the caller has employees.read_personal.",
+            "type": "object",
+            "properties": {
+              "gender": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "male",
+                      "female",
+                      "other"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "date_of_birth": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "personal_email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mobile_phone": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "gender",
+              "date_of_birth",
+              "personal_email",
+              "mobile_phone"
+            ],
+            "additionalProperties": false
+          },
+          "restricted_field_groups": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "personal",
+                "sensitive"
+              ]
+            }
+          },
+          "employments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Employment"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            },
+            "description": "Items to review; they never block the cancellation (e.g. MANAGER_NOT_EMPLOYED_FOR_RESTORED_RANGE, C-73). Empty on an idempotent replay."
+          }
+        },
+        "required": [
+          "id",
+          "employee_code",
+          "full_name",
+          "employment_status",
+          "status_as_of",
+          "revision",
+          "completeness",
+          "restricted_field_groups",
+          "employments",
+          "created_at",
+          "updated_at",
+          "warnings"
         ],
         "additionalProperties": false
       },

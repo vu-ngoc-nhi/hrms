@@ -11,7 +11,7 @@ import { RelationshipChangeForm } from "./RelationshipChangeForm";
 import { ReverseEndForm } from "./ReverseEndForm";
 import { VoidPeriodForm } from "./VoidPeriodForm";
 import { WorkEmailEditor } from "./WorkEmailEditor";
-import { operationalPeriods, type ActionId, type Detail, type Period } from "./detailModel";
+import { liveAssignments, operationalPeriods, type ActionId, type Detail, type Period } from "./detailModel";
 
 // The existing workflow forms of one Employment Period, opened in "launched" mode inside the single workflow surface
 // (UI-9 Drawer / Modal). Props are exactly those the inline forms used before; form content is unchanged.
@@ -45,6 +45,7 @@ export function actionLabel(a: ActionId, plannedRehire = false): string {
     void_period: t("voidPeriod.open"),
     edit_personal: t("personal.edit"),
     correct_assignment: t("detail.actionLabel.correctAssignment"),
+    cancel_planned_assignment: t("cancelPlannedAssignment.open"),
   }[a];
 }
 
@@ -90,7 +91,7 @@ export function PeriodWorkflow({
           <AssignmentChangeForm<Detail>
             employmentId={tp.id}
             personId={d.id}
-            current={tp.assignments.at(-1) ?? null}
+            current={liveAssignments(tp).at(-1) ?? null}
             revision={d.revision}
             minDate={can("employment.correct") ? undefined : d.status_as_of}
             onSaved={(u) => onSaved(u)}
@@ -133,7 +134,7 @@ export function PeriodWorkflow({
             employeeType={tp.employee_type?.name ?? null}
             startDate={tp.start_date}
             currentEnd={tp.end_date}
-            assignments={tp.assignments}
+            assignments={liveAssignments(tp)}
             today={d.status_as_of}
             canBackdate={can("employment.correct")}
             revision={d.revision}
@@ -182,7 +183,7 @@ export function PeriodWorkflow({
             employmentId={tp.id}
             activeEnd={tp.active_end_event}
             currentEnd={tp.end_date}
-            assignments={tp.assignments}
+            assignments={liveAssignments(tp)}
             today={d.status_as_of}
             revision={d.revision}
             onSaved={(u) => onSaved(u)}

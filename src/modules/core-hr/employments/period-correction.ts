@@ -18,7 +18,7 @@ import { bumpPersonRevision } from "../people/revision";
 import { assignmentTimelineConflict } from "./assignment-change";
 import { personIdForEmployment, reasonRequired, rule, runIdempotentCommand } from "./command";
 import { findActiveEndEvent } from "./lifecycle-events";
-import { loadWritableEmployment } from "./queries";
+import { loadWritableEmployment, operationalAssignmentWhere } from "./queries";
 
 const OPERATION = "createPeriodCorrection";
 
@@ -101,7 +101,8 @@ export async function createPeriodCorrection(
         if (!type) throw new ApiError(422, "BUSINESS_RULE_VIOLATION", "The request violates a business rule.", [unknownRef("employee_type_id", "Employee Type")]);
       }
 
-      const rows = await tx.jobAssignment.findMany({ where: { employmentId }, orderBy: { effectiveFrom: "asc" } });
+      // Operational rows only (PV-29): cancelled planned assignments keep their recorded dates as evidence.
+      const rows = await tx.jobAssignment.findMany({ where: operationalAssignmentWhere({ employmentId }), orderBy: { effectiveFrom: "asc" } });
       // Per-row patch: a row moves only when it was aligned with the old period boundary.
       const patches = new Map<string, Move>();
       const patch = (row: Row) => {

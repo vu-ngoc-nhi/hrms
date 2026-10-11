@@ -17,6 +17,7 @@ export type HistoryKind =
   | "period_voided"
   | "assignment_added"
   | "assignment_changed"
+  | "assignment_plan_cancelled"
   | "other";
 
 /** Decoration shown as a text badge next to the entry. */
@@ -55,6 +56,7 @@ const RANK: Record<HistoryKind, number> = {
   relationship_changed: 0,
   assignment_added: 1,
   assignment_changed: 2,
+  assignment_plan_cancelled: 2,
   other: 3,
   employment_ended: 4,
   end_reversed: 5,
@@ -176,6 +178,21 @@ export function historyEntries(d: Detail): HistoryEntry[] {
       date: v.assignment.effective_from,
       kind: v.firstOfPeriod ? "assignment_added" : "assignment_changed",
       status: v.disposition ?? (v.assignment.effective_from > today ? "planned" : null),
+      periodNumber: v.periodNumber,
+      periodType: v.period.employee_type?.name ?? null,
+      assignment: summary(v.assignment),
+      changes: v.changes,
+    });
+  }
+
+  // PV-29: a planned assignment cancelled before it began — placed at its planned date (not the date HR cancelled it;
+  // recording time and actor are not exposed in Phase 1).
+  for (const v of s.cancelledPlans) {
+    push({
+      key: `asg-cancelled-${v.assignment.id}`,
+      date: v.assignment.effective_from,
+      kind: "assignment_plan_cancelled",
+      status: "cancelled",
       periodNumber: v.periodNumber,
       periodType: v.period.employee_type?.name ?? null,
       assignment: summary(v.assignment),

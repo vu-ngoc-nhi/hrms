@@ -18,7 +18,7 @@ import { bumpPersonRevision } from "../people/revision";
 import { reasonRequired, rule, runIdempotentCommand } from "./command";
 import { activeEndEventWhere } from "./lifecycle-events";
 import { correctionDbError } from "./period-correction";
-import { loadWritableEmployment, operationalEmploymentWhere } from "./queries";
+import { loadWritableEmployment, operationalAssignmentWhere, operationalEmploymentWhere } from "./queries";
 
 const OPERATION = "createReverseEnd";
 
@@ -118,7 +118,8 @@ export async function createReverseEnd(
         if (restoredEnd !== null && (previousTo === null || previousTo > addDays(restoredEnd, 1))) {
           throw effectChanged("restoring would extend the assignment beyond the restored end date");
         }
-        const laterRows = await tx.jobAssignment.count({ where: { employmentId, effectiveFrom: { gt: row.effectiveFrom } } });
+        // A cancelled planned assignment (PV-29) is history only and never blocks the reversal.
+        const laterRows = await tx.jobAssignment.count({ where: operationalAssignmentWhere({ employmentId, effectiveFrom: { gt: row.effectiveFrom } }) });
         if (laterRows > 0) throw effectChanged("a later assignment exists after it");
         restoredRow = { id: row.id, from: currentTo, to: previousTo };
       }

@@ -20,7 +20,8 @@ import { assertEffectiveDateAllowed } from "./effective-date-policy";
 import { findActiveEndEvent } from "./lifecycle-events";
 import { checkFields, insertPeriod } from "./new-period";
 import { correctionDbError } from "./period-correction";
-import { loadWritableEmployment, operationalEmploymentWhere } from "./queries";
+import { futureAssignmentBlock } from "./planned-assignment-guidance";
+import { loadWritableEmployment, operationalAssignmentWhere, operationalEmploymentWhere } from "./queries";
 
 // C-79: an Active End Event always blocks (never replaced). The guidance depends on the business situation:
 // a genuine gap after the recorded end is a Rehire; a continuous transition means the End was wrong → reverse it first.
@@ -102,15 +103,10 @@ export async function createRelationshipChange(
       }
 
       // C-65: assignments starting on or after the transition block it; the applicable one closes at the new start.
-      const rows = await tx.jobAssignment.findMany({ where: { employmentId }, orderBy: { effectiveFrom: "asc" } });
+      // Operational rows only (PV-29): a cancelled planned assignment never blocks and is never closed.
+      const rows = await tx.jobAssignment.findMany({ where: operationalAssignmentWhere({ employmentId }), orderBy: { effectiveFrom: "asc" } });
       const after = rows.filter((a) => fromDbDate(a.effectiveFrom) >= start);
-      if (after.length) {
-        throw rule(
-          "FUTURE_ASSIGNMENT_OUTSIDE_END",
-          "An assignment of the current period starts on or after the Relationship Change date. Correct it first; it is never changed automatically.",
-          after.map((a) => ({ field: "start_date", code: "FUTURE_ASSIGNMENT_OUTSIDE_END", message: `Assignment ${a.id} starts on ${fromDbDate(a.effectiveFrom)}.` })),
-        );
-      }
+      if (after.length) throw futureAssignmentBlock("start_date", "the Relationship Change date", after, today, true);
       const last = rows.at(-1);
       const lastTo = last ? fromDbDate(last.effectiveTo) : null;
       // The last row follows the period boundary when it is open, ends with the old (planned) end, or extends past it.

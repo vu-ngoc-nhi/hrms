@@ -32,6 +32,8 @@ export function historyEntryTitle(e: HistoryEntry): string {
       return t("history.title.assignmentAdded");
     case "assignment_changed":
       return t("history.title.assignmentChanged");
+    case "assignment_plan_cancelled":
+      return t("history.title.assignmentPlanCancelled");
     default:
       return tMaybe(`detail.eventType.${e.eventType}`) ?? t("history.title.other");
   }
@@ -92,9 +94,13 @@ function Description({ e, showPeriod }: { e: HistoryEntry; showPeriod: boolean }
         );
       if (!e.changes?.length) lines.push(t("history.desc.noFieldChange"));
       break;
+    case "assignment_plan_cancelled":
+      if (e.assignment) lines.push(`${e.assignment.department} / ${e.assignment.jobTitle}`);
+      lines.push(t("history.desc.assignmentPlanCancelled", { date: formatDate(e.date) }));
+      break;
   }
   if (e.status === "voided" && e.kind !== "period_voided") lines.push(t("history.desc.partOfVoided"));
-  if (e.status === "cancelled") lines.push(t("history.desc.partOfCancelled"));
+  if (e.status === "cancelled" && e.kind !== "assignment_plan_cancelled") lines.push(t("history.desc.partOfCancelled"));
   return (
     <>
       {lines.map((l, i) => (

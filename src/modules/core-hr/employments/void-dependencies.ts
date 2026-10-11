@@ -14,7 +14,7 @@
 import { addDays, fromDbDate } from "@/lib/dates";
 import type { Tx } from "@/lib/db";
 import { findActiveEndEvent } from "./lifecycle-events";
-import { operationalEmploymentWhere } from "./queries";
+import { operationalAssignmentWhere, operationalEmploymentWhere } from "./queries";
 
 /** Ids, codes and dates only — enough for HR to find and correct the dependent record. */
 export type VoidReference = {
@@ -111,7 +111,8 @@ const managerDependency: VoidDependencyCheck = {
   key: "manager_dependency",
   run: async ({ tx, period }) => {
     const rows = await tx.jobAssignment.findMany({
-      where: { managerEmploymentId: period.id, employmentId: { not: period.id }, employment: { is: operationalEmploymentWhere() } },
+      // Operational references only: a cancelled planned assignment (PV-29) never depends on its manager period.
+      where: operationalAssignmentWhere({ managerEmploymentId: period.id, employmentId: { not: period.id }, employment: { is: operationalEmploymentWhere() } }),
       include: { employment: { include: { person: true } } },
       orderBy: [{ effectiveFrom: "asc" }, { id: "asc" }],
     });

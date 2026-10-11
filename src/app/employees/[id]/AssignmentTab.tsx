@@ -12,7 +12,9 @@ import { periodEligibility, type Detail, type Period } from "./detailModel";
 // operational). Business date wording only: "Effective since", "Takes effect on", "Effective from … / Replaced on …"
 // — an exclusive end boundary is never shown next to the next row's start. Change Assignment for the representative
 // period stays the red header action and other periods' assignment actions are on their Employment Period card
-// (D-UI-13, UI-9); each row owns only its correction; nothing here is primary red.
+// (D-UI-13, UI-9); each row owns only its correction; nothing here is primary red. PV-29: the latest upcoming row of a
+// period also owns Cancel Planned Assignment (employment.manage; a normal lifecycle action, not Correct, not Delete);
+// cancelled planned assignments stay visible in their own muted section.
 
 const periodContext = (d: Detail, p: Period, n: number) =>
   t("assignmentTab.periodContext", { n, type: p.employee_type?.name ?? "—", start: formatDate(p.start_date) }) +
@@ -60,6 +62,13 @@ function DateRows({ w }: { w: DateWording }) {
           </div>
         </>
       );
+    case "planned_for":
+      return (
+        <div>
+          <dt>{t("assignmentTab.wasPlannedFor")}</dt>
+          <dd>{formatDate(w.date)}</dd>
+        </div>
+      );
     default:
       return (
         <div>
@@ -77,13 +86,19 @@ function AssignmentCard({ v, ctx, showPeriod }: { v: AssignmentView; ctx: TabCon
   // D-UI-14: rows of cancelled / voided periods never get mutation actions (eligibility is already false for them).
   // UI-9: the row owns only its correction; Change Assignment lives in the header (representative period) or on the
   // Employment Period card (other periods).
-  const canCorrect = v.disposition === null && el.correctAssignmentRows;
+  const canCorrect = v.disposition === null && v.label !== "cancelled" && el.correctAssignmentRows;
+  // BD-1 / BD-3: employment.manage; only the latest upcoming row of an operational period.
+  const manage = v.disposition === null && can("employment.manage");
+  const canCancel = manage && v.cancellable;
+  const cancelLaterFirst = manage && v.label === "upcoming" && !v.cancellable;
   const fromDate = formatDate(v.assignment.effective_from);
   const notes: ReactNode[] = [];
   if (v.label === "upcoming") notes.push(t("assignmentTab.notInEffectYet"));
   if (v.changesOn) notes.push(t("assignmentTab.changesOnNote", { date: formatDate(v.changesOn) }));
   if (v.label === "last") notes.push(t("assignmentTab.lastNote"));
   if (v.disposition) notes.push(t(v.disposition === "voided" ? "assignmentTab.voidedNote" : "assignmentTab.cancelledNote"));
+  if (v.label === "cancelled") notes.push(t("assignmentTab.cancelledPlanNote", { date: fromDate }));
+  if (cancelLaterFirst) notes.push(t("assignmentTab.cancelLaterFirst"));
 
   return (
     <article className={`card assignment-card ${v.disposition ?? v.label}`} aria-labelledby={`asg-${v.assignment.id}`}>
@@ -129,7 +144,7 @@ function AssignmentCard({ v, ctx, showPeriod }: { v: AssignmentView; ctx: TabCon
       ))}
       {v.changes.length > 0 && (
         <p className="period-note change-summary">
-          <span>{t("assignmentTab.changedFromPrevious")}</span>{" "}
+          <span>{t(v.label === "cancelled" ? "assignmentTab.plannedChangeFromPrevious" : "assignmentTab.changedFromPrevious")}</span>{" "}
           {v.changes.map((c, i) => (
             <span key={c.field}>
               {i > 0 && " · "}
@@ -140,16 +155,27 @@ function AssignmentCard({ v, ctx, showPeriod }: { v: AssignmentView; ctx: TabCon
       )}
       {showPeriod && v.firstOfPeriod && !v.disposition && v.label !== "current" && <p className="period-note">{t("assignmentTab.firstOfPeriod", { n: v.periodNumber })}</p>}
 
-      {canCorrect && (
+      {(canCorrect || canCancel) && (
         <div className="period-actions">
-          <Button
-            size="small"
-            variant="ghost"
-            onClick={() => ctx.launch("correct_assignment", { periodId: v.period.id, assignmentId: v.assignment.id })}
-            aria-label={t("assignmentTab.correctFor", { date: fromDate })}
-          >
-            {t("assignmentTab.correct")}
-          </Button>
+          {canCancel && (
+            <Button
+              size="small"
+              onClick={() => ctx.launch("cancel_planned_assignment", { periodId: v.period.id, assignmentId: v.assignment.id })}
+              aria-label={t("assignmentTab.cancelPlannedFor", { date: fromDate })}
+            >
+              {t("assignmentTab.cancelPlanned")}
+            </Button>
+          )}
+          {canCorrect && (
+            <Button
+              size="small"
+              variant="ghost"
+              onClick={() => ctx.launch("correct_assignment", { periodId: v.period.id, assignmentId: v.assignment.id })}
+              aria-label={t("assignmentTab.correctFor", { date: fromDate })}
+            >
+              {t("assignmentTab.correct")}
+            </Button>
+          )}
         </div>
       )}
     </article>
@@ -199,6 +225,9 @@ export function AssignmentTab({ ctx }: { ctx: TabContext }) {
         {[...s.upcoming.map(card), ...empty("upcoming")]}
       </Section>
       <Section title={t("assignmentTab.historyTitle")}>{[...s.history.map(card), ...empty("history")]}</Section>
+      <Section title={t("assignmentTab.cancelledPlansTitle")} note={t("assignmentTab.cancelledPlansNote")}>
+        {s.cancelledPlans.map(card)}
+      </Section>
       <Section title={t("assignmentTab.notOperationalTitle")} note={t("assignmentTab.notOperationalNote")}>
         {s.notOperational.map(card)}
       </Section>

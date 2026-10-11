@@ -4,10 +4,11 @@ import { useRef } from "react";
 import { InfoBox, Modal } from "@/components/ui";
 import { formatDate, t } from "@/i18n";
 import { AssignmentCorrectionForm } from "./AssignmentCorrectionForm";
+import { CancelPlannedAssignmentForm } from "./CancelPlannedAssignmentForm";
 import { NewPeriodForm } from "./NewPeriodForm";
 import { PersonalCorrectionForm, PersonalEditForm } from "./PersonalTab";
 import { PeriodWorkflow, actionLabel } from "./PeriodWorkflow";
-import { latestPeriod, type Detail } from "./detailModel";
+import { latestPeriod, liveAssignments, type Detail } from "./detailModel";
 import { isDataCorrection, shouldClose, surfaceFor, type OpenWorkflow } from "./workflowModel";
 
 // UI-9: the one place an Employee Detail workflow opens — a Drawer (multi-field workflows, long previews) or a Modal
@@ -24,13 +25,14 @@ export function WorkflowHost({
   wf: OpenWorkflow;
   d: Detail;
   can: (permission: string) => boolean;
-  onSaved: (updated: Detail, message?: string) => void;
+  onSaved: (updated: Detail, message?: string, warning?: string) => void;
   onClose: () => void;
 }) {
   const dirty = useRef(false);
   const { action, target } = wf;
   const period = target.periodId ? (d.employments.find((p) => p.id === target.periodId) ?? null) : null;
-  const rows = period ? [...period.assignments].sort((a, b) => (a.effective_from < b.effective_from ? -1 : 1)) : [];
+  // The live timeline only (PV-29: a cancelled planned assignment is never a workflow target or a previous row).
+  const rows = period ? [...liveAssignments(period)].sort((a, b) => (a.effective_from < b.effective_from ? -1 : 1)) : [];
   const rowIndex = rows.findIndex((r) => r.id === target.assignmentId);
   const row = rowIndex >= 0 ? rows[rowIndex] : null;
   const latest = latestPeriod(d);
@@ -91,6 +93,17 @@ export function WorkflowHost({
           personId={d.id}
           revision={d.revision}
           onSaved={(u) => onSaved(u)}
+          onClose={onClose}
+        />
+      ) : null;
+      break;
+    case "cancel_planned_assignment":
+      content = row ? (
+        <CancelPlannedAssignmentForm<Detail>
+          row={row}
+          predecessor={rowIndex > 0 ? rows[rowIndex - 1] : null}
+          revision={d.revision}
+          onSaved={(u, warnings) => onSaved(u, t("cancelPlannedAssignment.done"), warnings.length ? t("cancelPlannedAssignment.managerWarning") : undefined)}
           onClose={onClose}
         />
       ) : null;

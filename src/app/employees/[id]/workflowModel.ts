@@ -6,19 +6,27 @@ export type DetailTab = "overview" | "personal" | "employment" | "assignment" | 
 export type WorkflowTarget = { periodId?: string; assignmentId?: string };
 export type OpenWorkflow = { action: ActionId; target: WorkflowTarget; n: number };
 
-const MODAL_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>(["edit_work_email", "correct_work_email", "clear_work_email", "cancel_planned", "reverse_end"]);
+const MODAL_ACTIONS: ReadonlySet<ActionId> = new Set<ActionId>([
+  "edit_work_email",
+  "correct_work_email",
+  "clear_work_email",
+  "cancel_planned",
+  "cancel_planned_assignment",
+  "reverse_end",
+]);
 
 /** Drawer for multi-field workflows and long previews (End Employment, Void); Modal for short, focused ones. */
 export const surfaceFor = (action: ActionId): "drawer" | "modal" => (MODAL_ACTIONS.has(action) ? "modal" : "drawer");
 
 // Corrections of wrongly recorded data carry the "Correct record" explanation (never shown on business changes).
-// Cancel Planned / Reverse End are recovery actions with their own explanation; Correct Name or Date of Birth has its own.
+// Cancel Planned (period or assignment, PV-29) and Reverse End are lifecycle / recovery actions with their own
+// explanation, never "Correct record"; Correct Name or Date of Birth has its own.
 const DATA_CORRECTIONS: ReadonlySet<ActionId> = new Set<ActionId>(["correct_period", "correct_work_email", "clear_work_email", "correct_assignment"]);
 export const isDataCorrection = (action: ActionId) => DATA_CORRECTIONS.has(action);
 
 /** Where HR lands after a successful workflow. */
 export function successTab(action: ActionId): DetailTab {
-  if (action === "change_assignment" || action === "initial_assignment" || action === "correct_assignment") return "assignment";
+  if (action === "change_assignment" || action === "initial_assignment" || action === "correct_assignment" || action === "cancel_planned_assignment") return "assignment";
   if (action === "edit_personal" || action === "correct_personal") return "personal";
   return "employment";
 }

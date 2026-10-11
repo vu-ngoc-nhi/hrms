@@ -9,6 +9,11 @@
 //   current period       - operational and covering a given date (end date inclusive)
 //   future planned       - operational and starting after a given date
 //   employment history   - ALL periods including cancelled and voided ones, each flagged (see `historyFlags`)
+//
+// The same module owns the assignment disposition (PV-29): a planned assignment cancelled before it took effect
+// (`job_assignment.cancelled_at`). Operational assignment = cancelled_at IS NULL; every reader and writer that resolves
+// current / upcoming / representative assignments or walks an assignment timeline uses `operationalAssignmentWhere` or
+// `operationalAssignments`; history reads keep every row, flagged (see `assignmentHistoryFlags`).
 import type { Prisma } from "@/generated/prisma/client";
 import type { Db, Tx } from "@/lib/db";
 import { ApiError, notFound } from "@/lib/http/errors";
@@ -51,6 +56,50 @@ export function historyFlags(row: Dispositions): { cancelled_at: string | null; 
     cancelled_at: row.cancelledAt ? row.cancelledAt.toISOString() : null,
     voided_at: row.voidedAt ? row.voidedAt.toISOString() : null,
   };
+}
+
+// ---------------- Assignments (PV-29) ----------------
+// cancelled_at IS NULL
+const OPERATIONAL_ASSIGNMENT: Prisma.JobAssignmentWhereInput = { cancelledAt: null };
+
+/** Where-clause for operational (non-cancelled) assignment rows, optionally combined with extra conditions. */
+export function operationalAssignmentWhere(extra?: Prisma.JobAssignmentWhereInput): Prisma.JobAssignmentWhereInput {
+  return extra ? { AND: [OPERATIONAL_ASSIGNMENT, extra] } : OPERATIONAL_ASSIGNMENT;
+}
+
+/** In-memory counterpart for already-loaded database rows. */
+export function operationalAssignments<T extends { cancelledAt: Date | null }>(rows: readonly T[]): T[] {
+  return rows.filter((r) => r.cancelledAt === null);
+}
+
+/** In-memory counterpart for API-shaped rows (`cancelled_at`), e.g. the detail payload's assignments. */
+export function operationalAssignmentViews<T extends { cancelled_at: string | null }>(rows: readonly T[]): T[] {
+  return rows.filter((r) => r.cancelled_at === null);
+}
+
+/** History presentation flag for a loaded assignment row. */
+export function assignmentHistoryFlags(row: { cancelledAt: Date | null }): { cancelled_at: string | null } {
+  return { cancelled_at: row.cancelledAt ? row.cancelledAt.toISOString() : null };
+}
+
+export const ASSIGNMENT_CANCELLED = "ASSIGNMENT_CANCELLED";
+export const assignmentCancelled = () =>
+  new ApiError(409, ASSIGNMENT_CANCELLED, "This planned assignment was cancelled and is read-only history.", [
+    { field: "assignment_id", code: ASSIGNMENT_CANCELLED, message: "Cancelled assignments cannot be changed." },
+  ]);
+
+/** Rejects a loaded assignment row that is cancelled (read-only history). */
+export function assertAssignmentWritable(row: { cancelledAt: Date | null }): void {
+  if (row.cancelledAt !== null) throw assignmentCancelled();
+}
+
+/**
+ * Sets the assignment cancellation marker (PV-29) — the only write of `job_assignment.cancelled_at`. Conditional on the
+ * row still being operational, so a concurrent cancellation can never set it twice; nothing else on the row changes.
+ */
+export async function markAssignmentCancelled(tx: Tx, assignmentId: string, at: Date): Promise<void> {
+  const { count } = await tx.jobAssignment.updateMany({ where: { id: assignmentId, ...OPERATIONAL_ASSIGNMENT }, data: { cancelledAt: at } });
+  if (count !== 1) throw assignmentCancelled();
 }
 
 // ---------------- Write guard (C-29 clarification, PV-25) ----------------

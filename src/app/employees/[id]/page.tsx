@@ -38,6 +38,7 @@ export default function EmployeeDetailPage() {
   // UI-8: arriving from Add Employee (…?created=1) shows a success notice; the parameter is then dropped from the URL.
   const created = useSearchParams().get("created") === "1";
   const [notice, setNotice] = useState<string | null>(created ? t("wizard.created") : null);
+  const [warning, setWarning] = useState<string | null>(null);
   const router = useRouter();
   useEffect(() => {
     if (created) router.replace(`/employees/${id}`, { scroll: false });
@@ -70,12 +71,14 @@ export default function EmployeeDetailPage() {
   const latest = latestPeriod(d);
   const launch = (action: ActionId, wfTarget: WorkflowTarget = {}) => {
     setNotice(null);
+    setWarning(null);
     setWorkflow((current) => openWorkflow(current, action, wfTarget));
   };
   // Success: refresh the record, close the workflow and show the most relevant tab with a short confirmation.
-  const saved = (updated: Detail, message = t("detail.saved")) => {
+  const saved = (updated: Detail, message = t("detail.saved"), warning?: string) => {
     setD(updated);
     setNotice(message);
+    setWarning(warning ?? null);
     setTab((current) => (workflow ? successTab(workflow.action) : current));
     setWorkflow(null);
   };
@@ -114,6 +117,12 @@ export default function EmployeeDetailPage() {
       {notice && (
         <p className="alert ok-note small" role="status">
           {notice}
+        </p>
+      )}
+      {/* A non-blocking item to review after a successful action (e.g. PV-29 manager coverage, C-73). */}
+      {warning && (
+        <p className="alert warn small" role="status">
+          {warning}
         </p>
       )}
 

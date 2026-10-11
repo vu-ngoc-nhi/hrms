@@ -330,7 +330,7 @@ describe("Void — manager dependency (design §4)", () => {
     expect(r.body.details[0].code).toBe("MANAGER_DEPENDENCY");
     // Understandable corrective direction (API message and UI copy).
     expect(r.body.details[0].message).toContain("Correct those assignments first (Assignment Change, or Historical Assignment Correction for past rows)");
-    expect(en.voidPeriod.findings.MANAGER_DEPENDENCY).toMatch(/change their Line Manager first \(Change Assignment .*Correct for a past one\).*Check again/);
+    expect(en.voidPeriod.findings.MANAGER_DEPENDENCY).toMatch(/change their Manager first \(Change Assignment .*Correct for a past one\).*Check again/);
     expect(r.body.details[1]).toMatchObject({ field: "assignment_id", code: "MANAGER_DEPENDENCY", message: expect.stringContaining(bCode) });
     expect(JSON.stringify(r.body.details)).not.toContain(pv.blockers[0].references[0].full_name!);
     expect((await db().employment.findUniqueOrThrow({ where: { id: m.employmentId } })).voidedAt).toBeNull();

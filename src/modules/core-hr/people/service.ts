@@ -9,9 +9,12 @@ import { recordAudit } from "@/modules/audit/audit";
 import type { Principal } from "@/modules/identity/authenticate";
 import { claimIdempotencyKey, requestFingerprint } from "@/modules/idempotency/idempotency";
 import {
+  assignmentHistoryFlags,
   currentEmploymentWhere,
   futurePlannedEmploymentWhere,
   historyFlags,
+  operationalAssignmentViews,
+  operationalAssignmentWhere,
   periodDisposition,
   operationalEmploymentWhere,
   operationalPeriods,
@@ -476,6 +479,8 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
           }
         : null,
       record_source: a.recordSource,
+      // PV-29: a cancelled planned assignment stays in the response as history; reason and actor stay in audit.
+      ...assignmentHistoryFlags(a),
     })),
   });
   const employments = person.employments.map(toApiPeriod);
@@ -488,7 +493,7 @@ export async function getEmployee(principal: Principal, id: string): Promise<Emp
   const repAssignment = rep
     ? completenessAssignment(
         rep,
-        rep.e.assignments.map((a) => ({ effectiveFrom: a.effective_from, effectiveTo: a.effective_to, a })),
+        operationalAssignmentViews(rep.e.assignments).map((a) => ({ effectiveFrom: a.effective_from, effectiveTo: a.effective_to, a })),
         today,
       )?.a ?? null
     : null;
@@ -571,7 +576,7 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
   if (q.department_id) {
     // Candidates only (anyone with an operational assignment in this department); the actual match uses the same
     // representative-assignment rule as the displayed row (C-76), applied below before paging.
-    and.push({ employments: { some: operationalEmploymentWhere({ assignments: { some: { departmentId: q.department_id } } }) } });
+    and.push({ employments: { some: operationalEmploymentWhere({ assignments: { some: operationalAssignmentWhere({ departmentId: q.department_id }) } }) } });
   }
   if (q.employee_type_id) {
     // Candidates only; the exact match uses the Employee Type of the representative period shown in the row.
@@ -582,7 +587,8 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
   const include = {
     employments: {
       where: operationalEmploymentWhere(),
-      include: { employeeType: true, assignments: { include: assignmentInclude } },
+      // Operational assignments only (PV-29: a cancelled planned assignment is never representative).
+      include: { employeeType: true, assignments: { where: operationalAssignmentWhere(), include: assignmentInclude } },
     },
   };
   const orderBy = [{ employeeCode: "asc" as const }, { id: "asc" as const }];

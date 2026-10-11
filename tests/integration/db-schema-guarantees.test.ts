@@ -31,8 +31,9 @@ describe("Database guarantees (H7)", () => {
     // The newest migration's objects exist, which proves the full chain ran.
     expect(await q("SELECT count(*)::int AS n FROM end_reason")).toEqual([{ n: 7 }]);
     expect(await q("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'employment' AND column_name = 'voided_at'")).toEqual([{ n: 1 }]);
+    expect(await q("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'job_assignment' AND column_name = 'cancelled_at'")).toEqual([{ n: 1 }]);
     expect(await q("SELECT to_regclass('public.access_audit_event') IS NOT NULL AS ok")).toEqual([{ ok: true }]); // not readable by the app role
-    expect(folders.at(-1)).toBe("20261013000000_access_administration");
+    expect(folders.at(-1)).toBe("20261014000000_cancel_planned_assignment");
   });
 
   it("exclusion, CHECK and partial unique constraints exist (cancelled and voided periods excluded where approved)", async () => {
@@ -45,6 +46,7 @@ describe("Database guarantees (H7)", () => {
     expect(defs.employment_single_disposition_ck).toContain("(cancelled_at IS NULL) OR (voided_at IS NULL)");
     expect(defs.employment_event_event_type_check).toContain("employment_voided");
     expect(defs.job_assignment_no_overlap_ex).toContain("EXCLUDE USING gist");
+    expect(defs.job_assignment_no_overlap_ex).toContain("WHERE ((cancelled_at IS NULL))"); // PV-29: cancelled planned assignments excluded
     expect(defs.job_assignment_dates_ck).toContain("effective_to > effective_from");
     for (const c of [
       "employment_event_event_type_check",
@@ -70,6 +72,7 @@ describe("Database guarantees (H7)", () => {
       "employment_event_date_correction_scope_trg",
       "employment_event_lifecycle_rules_trg",
       "job_assignment_manager_not_voided_trg",
+      "job_assignment_cancelled_is_terminal_trg",
       "access_audit_event_no_update_delete_trg",
       "access_audit_event_no_truncate_trg",
     ]) {

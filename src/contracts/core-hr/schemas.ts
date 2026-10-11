@@ -214,6 +214,11 @@ export const AssignmentSchema = reg(
     job_level: CatalogRefSchema.nullable(),
     manager: PersonRefSchema.nullable(),
     record_source: z.string(),
+    cancelled_at: isoDateTime()
+      .nullable()
+      .describe(
+        "PV-29: set when this planned assignment was cancelled before it took effect. It stays in history unchanged but has no operational effect (never current, upcoming or representative). Reason and actor are kept in audit only.",
+      ),
   }),
 );
 export { END_REASON_CODES, SELECTABLE_END_REASON_CODES };
@@ -556,6 +561,24 @@ export const CancelPlannedCreateSchema = reg(
   "Cancel Planned Period (C-70): the future period will not take effect; it stays in history with all its data.",
 );
 
+export const AssignmentCancelPlannedCreateSchema = reg(
+  "AssignmentCancelPlannedCreate",
+  z.strictObject({
+    expected_revision: z.int().min(1).describe("Revision of the owning person profile; stale values return 409 REVISION_CONFLICT."),
+    reason: z.string().min(1).max(1000).describe("Mandatory cancellation reason; stored in audit only, never returned or shown in history."),
+  }),
+  "Cancel Planned Assignment (PV-29): the latest planned assignment of a period will not take effect; it stays in history unchanged.",
+);
+
+export const AssignmentCancelledSchema = reg(
+  "AssignmentCancelled",
+  EmployeeDetailSchema.extend({
+    warnings: z
+      .array(ErrorDetailSchema)
+      .describe("Items to review; they never block the cancellation (e.g. MANAGER_NOT_EMPLOYED_FOR_RESTORED_RANGE, C-73). Empty on an idempotent replay."),
+  }),
+);
+
 export const VoidEmploymentCreateSchema = reg(
   "VoidEmploymentCreate",
   z.strictObject({
@@ -691,5 +714,6 @@ export type CancelPlannedInput = z.infer<typeof CancelPlannedCreateSchema>;
 export type VoidEmploymentInput = z.infer<typeof VoidEmploymentCreateSchema>;
 export type VoidEligibility = z.infer<typeof VoidEligibilitySchema>;
 export type AssignmentCorrectionInput = z.infer<typeof AssignmentCorrectionCreateSchema>;
+export type AssignmentCancelPlannedInput = z.infer<typeof AssignmentCancelPlannedCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;

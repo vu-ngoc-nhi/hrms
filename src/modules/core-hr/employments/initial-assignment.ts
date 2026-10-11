@@ -13,7 +13,7 @@ import { bumpPersonRevision } from "../people/revision";
 import { assignmentTimelineConflict, resolveAssignmentValues } from "./assignment-change";
 import { personIdForAssignment, reasonRequired, rule, runIdempotentCommand } from "./command";
 import { assertEffectiveDateAllowed } from "./effective-date-policy";
-import { loadWritableEmployment } from "./queries";
+import { loadWritableEmployment, operationalAssignmentWhere } from "./queries";
 
 const OPERATION = "createInitialAssignment";
 
@@ -46,7 +46,8 @@ export async function createInitialAssignment(
       const period = await loadWritableEmployment(tx, employmentId); // 404, or 409 when cancelled
       // Lock the aggregate first so a concurrent first assignment cannot pass the eligibility check as well.
       await bumpPersonRevision(tx, period.personId, input.expected_revision);
-      if ((await tx.jobAssignment.count({ where: { employmentId } })) > 0) {
+      // PV-29: a cancelled planned (initial) assignment does not count; the period may receive a new first assignment.
+      if ((await tx.jobAssignment.count({ where: operationalAssignmentWhere({ employmentId }) })) > 0) {
         throw rule(
           "ASSIGNMENT_ALREADY_EXISTS",
           "This employment period already has an assignment. Use Assignment Change or a historical assignment correction.",

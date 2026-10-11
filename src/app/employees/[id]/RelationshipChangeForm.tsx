@@ -260,7 +260,11 @@ export function RelationshipChangeForm<T>({
       </ul>
       {blocking.length > 0 && (
         <p className="alert small">
-          {t("relationshipChange.blocked", { list: blocking.map((a) => `${formatDate(a.effective_from)} ${a.department.name}`).join(", ") })}
+          {t(
+            // PV-29 / BD-9: a still-planned assignment is cancelled with Cancel Planned Assignment, never auto-changed.
+            blocking.every((a) => a.effective_from > today) ? "relationshipChange.blockedPlanned" : "relationshipChange.blocked",
+            { list: blocking.map((a) => `${formatDate(a.effective_from)} ${a.department.name}`).join(", ") },
+          )}
         </p>
       )}
       <p className="muted small">{t("relationshipChange.noReversal")}</p>

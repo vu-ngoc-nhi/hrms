@@ -200,6 +200,8 @@ model JobAssignment {
   managerEmploymentId String?           @map("manager_employment_id") @db.Uuid
   recordSource        String            @default("form") @map("record_source")
   changeReason        String            @map("change_reason")
+  /// PV-29: set when a planned assignment is cancelled before it takes effect (record disposition, terminal).
+  cancelledAt         DateTime?         @map("cancelled_at") @db.Timestamptz
   createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz
   createdBy           String            @map("created_by") @db.Uuid
   employment          Employment        @relation("AssignmentEmployment", fields: [employmentId], references: [id])

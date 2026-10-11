@@ -14,6 +14,9 @@ const PERSON = (alias: string) => `($2::uuid[] IS NULL OR ${alias}.person_id = A
 const ACTIVE_END = `e.event_type = 'end' AND NOT EXISTS (SELECT 1 FROM employment_event r WHERE r.reverses_event_id = e.id)`;
 // Operational ("valid") period: neither cancelled (C-29) nor voided (PV-25) — the SQL form of the shared query module.
 const VALID = (alias: string) => `(${alias}.cancelled_at IS NULL AND ${alias}.voided_at IS NULL)`;
+// Operational assignment (PV-29): not cancelled — the SQL form of operationalAssignmentWhere() in the shared query
+// module, and the same predicate as the job_assignment_no_overlap_ex exclusion and the containment trigger.
+const OP_ASSIGNMENT = (alias: string) => `${alias}.cancelled_at IS NULL`;
 
 const CHECKS: Check[] = [
   {
@@ -42,20 +45,22 @@ const CHECKS: Check[] = [
     sql: `SELECT p.person_id, a.employment_id, a.id AS assignment_id, b.id AS other_assignment_id FROM job_assignment a
           JOIN job_assignment b ON a.employment_id = b.employment_id AND a.id < b.id
           JOIN employment p ON p.id = a.employment_id
-          WHERE daterange(a.effective_from, a.effective_to, '[)') && daterange(b.effective_from, b.effective_to, '[)') AND ${PERSON("p")}`,
+          WHERE ${OP_ASSIGNMENT("a")} AND ${OP_ASSIGNMENT("b")}
+            AND daterange(a.effective_from, a.effective_to, '[)') && daterange(b.effective_from, b.effective_to, '[)') AND ${PERSON("p")}`,
   },
   {
     check: "assignment_outside_period",
     severity: "error",
     sql: `SELECT p.person_id, p.id AS employment_id, a.id AS assignment_id FROM job_assignment a JOIN employment p ON p.id = a.employment_id
-          WHERE (a.effective_from < p.start_date OR (p.end_date IS NOT NULL AND (a.effective_to IS NULL OR a.effective_to > p.end_date + 1)))
+          WHERE ${OP_ASSIGNMENT("a")} AND (a.effective_from < p.start_date OR (p.end_date IS NOT NULL AND (a.effective_to IS NULL OR a.effective_to > p.end_date + 1)))
             AND ${PERSON("p")}`,
   },
   {
     check: "assignment_gap_after_first",
     severity: "warning",
     sql: `SELECT p.person_id, p.id AS employment_id, x.id AS assignment_id, x.effective_to::text AS ends, x.next_from::text AS next_starts
-          FROM (SELECT a.*, lead(a.effective_from) OVER (PARTITION BY a.employment_id ORDER BY a.effective_from) AS next_from FROM job_assignment a) x
+          FROM (SELECT a.*, lead(a.effective_from) OVER (PARTITION BY a.employment_id ORDER BY a.effective_from) AS next_from
+                FROM job_assignment a WHERE ${OP_ASSIGNMENT("a")}) x
           JOIN employment p ON p.id = x.employment_id
           WHERE ${VALID("p")} AND x.next_from IS NOT NULL AND x.effective_to IS DISTINCT FROM x.next_from AND ${PERSON("p")}`,
     detail: (r) => `ends ${r.ends}, next starts ${r.next_starts}`,
@@ -64,7 +69,8 @@ const CHECKS: Check[] = [
     check: "last_assignment_not_aligned_with_period_end",
     severity: "warning",
     sql: `SELECT p.person_id, p.id AS employment_id, x.id AS assignment_id, x.effective_to::text AS ends, p.end_date::text AS period_end
-          FROM (SELECT a.*, row_number() OVER (PARTITION BY a.employment_id ORDER BY a.effective_from DESC) AS rn FROM job_assignment a) x
+          FROM (SELECT a.*, row_number() OVER (PARTITION BY a.employment_id ORDER BY a.effective_from DESC) AS rn
+                FROM job_assignment a WHERE ${OP_ASSIGNMENT("a")}) x
           JOIN employment p ON p.id = x.employment_id
           WHERE x.rn = 1 AND ${VALID("p")} AND ${PERSON("p")}
             AND ((p.end_date IS NULL AND x.effective_to IS NOT NULL) OR (p.end_date IS NOT NULL AND x.effective_to IS DISTINCT FROM p.end_date + 1))`,
@@ -141,7 +147,7 @@ const CHECKS: Check[] = [
                            AND o.start_date <= greatest(a.effective_from, $1::date)
                            AND (o.end_date IS NULL OR o.end_date >= greatest(a.effective_from, $1::date))) AS manager_employed_via_other_period
           FROM job_assignment a JOIN employment p ON p.id = a.employment_id JOIN employment m ON m.id = a.manager_employment_id
-          WHERE ${VALID("p")} AND (a.effective_to IS NULL OR a.effective_to > $1::date) AND ${PERSON("p")}
+          WHERE ${VALID("p")} AND ${OP_ASSIGNMENT("a")} AND (a.effective_to IS NULL OR a.effective_to > $1::date) AND ${PERSON("p")}
             AND (NOT ${VALID("m")} OR m.start_date > greatest(a.effective_from, $1::date)
                  OR (m.end_date IS NOT NULL AND m.end_date < greatest(a.effective_from, $1::date)))`,
     detail: (r) =>
@@ -188,8 +194,26 @@ const CHECKS: Check[] = [
     severity: "error",
     sql: `SELECT p.person_id, p.id AS employment_id, a.id AS assignment_id, m.id AS manager_employment_id
           FROM job_assignment a JOIN employment p ON p.id = a.employment_id JOIN employment m ON m.id = a.manager_employment_id
-          WHERE m.voided_at IS NOT NULL AND p.id <> m.id AND ${VALID("p")} AND ${PERSON("p")}
+          WHERE m.voided_at IS NOT NULL AND p.id <> m.id AND ${VALID("p")} AND ${OP_ASSIGNMENT("a")} AND ${PERSON("p")}
             AND daterange(a.effective_from, a.effective_to, '[)') && daterange(m.start_date, m.end_date, '[]')`,
+  },
+  // ---------------- PV-29 Cancel Planned Assignment ----------------
+  {
+    // A cancellation is only for a plan that never took effect: the Vietnam business date of cancelled_at is before
+    // effective_from (the command derives "today" and cancelled_at from the same instant).
+    check: "cancelled_assignment_was_effective",
+    severity: "error",
+    sql: `SELECT p.person_id, p.id AS employment_id, a.id AS assignment_id FROM job_assignment a JOIN employment p ON p.id = a.employment_id
+          WHERE a.cancelled_at IS NOT NULL AND (a.cancelled_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= a.effective_from AND ${PERSON("p")}`,
+  },
+  {
+    // BD-5: an Active End Event may not operationally depend on (close) a cancelled assignment; reversed End events are
+    // history and never count.
+    check: "active_end_event_closes_cancelled_assignment",
+    severity: "error",
+    sql: `SELECT p.person_id, p.id AS employment_id, e.id AS event_id, a.id AS assignment_id FROM employment_event e
+          JOIN employment p ON p.id = e.employment_id JOIN job_assignment a ON a.id = e.closed_assignment_id
+          WHERE ${ACTIVE_END} AND a.cancelled_at IS NOT NULL AND ${PERSON("p")}`,
   },
 ];
 

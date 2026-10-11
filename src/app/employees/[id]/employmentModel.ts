@@ -2,7 +2,7 @@
 // lifecycle (`period_lifecycle`), dispositions (`cancelled_at`, `voided_at`) and recorded events. Nothing is recomputed
 // or synthesized — a period without recorded events simply has no lifecycle lines (C-24).
 import { addDays } from "@/lib/dates";
-import { isDisposed, type Detail, type HistoryEvent, type Period } from "./detailModel";
+import { isDisposed, liveAssignments, type Detail, type HistoryEvent, type Period } from "./detailModel";
 
 /** Visual label of a period card. Cancelled and Voided are record dispositions, never an Employment Status. */
 export type PeriodLabel = "current" | "upcoming" | "historical" | "cancelled" | "voided";
@@ -113,7 +113,7 @@ export function periodViews(d: Detail): PeriodView[] {
       createdByRelationshipChange: predecessor ? { fromType: predecessor.employee_type?.name ?? null } : null,
       successorStart: successor?.start_date ?? null,
       workEmail: p.work_email,
-      hasAssignment: p.assignments.length > 0,
+      hasAssignment: liveAssignments(p).length > 0,
       lifecycle: lifecycleLines(p, today, Boolean(predecessor)),
     };
   });

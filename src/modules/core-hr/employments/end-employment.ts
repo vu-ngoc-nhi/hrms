@@ -18,7 +18,8 @@ import { rule, runIdempotentCommand } from "./command";
 import { assertEffectiveDateAllowed } from "./effective-date-policy";
 import { findActiveEndEvent } from "./lifecycle-events";
 import { correctionDbError } from "./period-correction";
-import { loadWritableEmployment } from "./queries";
+import { loadWritableEmployment, operationalAssignmentWhere } from "./queries";
+import { futureAssignmentBlock } from "./planned-assignment-guidance";
 
 const OPERATION = "createEndEmployment";
 
@@ -94,19 +95,10 @@ export async function createEndEmployment(
       }
 
       // C-28: never delete, truncate or move a later assignment automatically.
-      const rows = await tx.jobAssignment.findMany({ where: { employmentId }, orderBy: { effectiveFrom: "asc" } });
+      // Operational rows only (PV-29): a cancelled planned assignment never blocks and is never closed.
+      const rows = await tx.jobAssignment.findMany({ where: operationalAssignmentWhere({ employmentId }), orderBy: { effectiveFrom: "asc" } });
       const after = rows.filter((a) => fromDbDate(a.effectiveFrom) > end);
-      if (after.length) {
-        throw rule(
-          "FUTURE_ASSIGNMENT_OUTSIDE_END",
-          "An assignment starts after the requested end date. Correct that assignment first; it is never changed automatically.",
-          after.map((a) => ({
-            field: "end_date",
-            code: "FUTURE_ASSIGNMENT_OUTSIDE_END",
-            message: `Assignment ${a.id} starts on ${fromDbDate(a.effectiveFrom)}.`,
-          })),
-        );
-      }
+      if (after.length) throw futureAssignmentBlock("end_date", "the requested end date", after, today);
       const closeAt = addDays(end, 1);
       const covering = rows.find((a) => fromDbDate(a.effectiveFrom) <= end && (a.effectiveTo === null || fromDbDate(a.effectiveTo) > end));
       const closed = covering && (covering.effectiveTo === null || fromDbDate(covering.effectiveTo) > closeAt) ? covering : null;

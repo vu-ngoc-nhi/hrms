@@ -23,6 +23,7 @@ const DOCUMENTED: Record<string, Permission | null> = {
   createReverseEnd: "employment.correct",
   createPeriodCorrection: "employment.correct",
   createAssignmentCorrection: "employment.correct",
+  createAssignmentCancelPlanned: "employment.manage",
   createInitialEmployment: "employment.manage",
   createRehire: "employment.manage", // past dates additionally need employment.correct
   createRelationshipChange: "employment.manage", // past dates additionally need employment.correct

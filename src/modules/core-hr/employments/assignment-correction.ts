@@ -16,7 +16,7 @@ import type { Principal } from "@/modules/identity/authenticate";
 import { bumpPersonRevision } from "../people/revision";
 import { assignmentTimelineConflict } from "./assignment-change";
 import { personIdForAssignment, reasonRequired, rule, runIdempotentCommand } from "./command";
-import { currentEmploymentWhere, loadWritableEmployment } from "./queries";
+import { assertAssignmentWritable, currentEmploymentWhere, loadWritableEmployment, operationalAssignmentWhere } from "./queries";
 
 const OPERATION = "createAssignmentCorrection";
 
@@ -43,9 +43,13 @@ export async function createAssignmentCorrection(
       const row = await tx.jobAssignment.findUnique({ where: { id: assignmentId } });
       if (!row) throw notFound("Assignment not found.");
       const period = await loadWritableEmployment(tx, row.employmentId); // 409 when the period is cancelled
+      assertAssignmentWritable(row); // PV-29: a cancelled planned assignment is read-only history (409)
       await bumpPersonRevision(tx, period.personId, input.expected_revision);
 
-      const rows = await tx.jobAssignment.findMany({ where: { employmentId: row.employmentId }, orderBy: { effectiveFrom: "asc" } });
+      const rows = await tx.jobAssignment.findMany({
+        where: operationalAssignmentWhere({ employmentId: row.employmentId }),
+        orderBy: { effectiveFrom: "asc" },
+      });
       const index = rows.findIndex((a) => a.id === row.id);
       const previous = index > 0 ? rows[index - 1] : null;
       const oldFrom = fromDbDate(row.effectiveFrom);

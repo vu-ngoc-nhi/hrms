@@ -14,6 +14,8 @@ export type Assignment = {
   job_title: { id: string; name_en: string };
   job_level: Ref;
   manager: { person_id: string; employee_code: string; full_name: string } | null;
+  /** PV-29: set when this planned assignment was cancelled before it took effect (history only, never operational). */
+  cancelled_at?: string | null;
 };
 export type HistoryEvent = {
   id: string;
@@ -59,6 +61,9 @@ export type Detail = {
 // Record dispositions (C-29 Cancelled, PV-25 Voided): history only, never operational, read-only.
 export const isDisposed = (p: Period) => Boolean(p.cancelled_at || p.voided_at);
 export const operationalPeriods = (d: Detail) => d.employments.filter((p) => !isDisposed(p));
+// PV-29: a cancelled planned assignment is history only — never current, upcoming, representative or a timeline row.
+export const isCancelledAssignment = (a: Assignment) => Boolean(a.cancelled_at);
+export const liveAssignments = (p: Period) => p.assignments.filter((a) => !isCancelledAssignment(a));
 
 /** Latest operational period by start date (decides Rehire vs Add Initial Employment Period, S4.8). */
 export function latestPeriod(d: Detail): Period | null {
@@ -74,7 +79,7 @@ export function representativePeriod(d: Detail): Period | null {
 const byEffectiveFrom = (a: Assignment, b: Assignment) => (a.effective_from < b.effective_from ? -1 : a.effective_from > b.effective_from ? 1 : 0);
 
 function repAssignment(p: Period, today: string): Assignment | null {
-  const wrapped = p.assignments.map((a) => ({ effectiveFrom: a.effective_from, effectiveTo: a.effective_to, a }));
+  const wrapped = liveAssignments(p).map((a) => ({ effectiveFrom: a.effective_from, effectiveTo: a.effective_to, a }));
   return representativeAssignment({ startDate: p.start_date, endDate: p.end_date }, wrapped, today)?.a ?? null;
 }
 
@@ -169,7 +174,7 @@ export function upcomingChanges(d: Detail): UpcomingChange[] {
   const out: UpcomingChange[] = [];
   const mergedEnds = new Set<string>();
   for (const [i, p] of periods.entries()) {
-    const assignments = [...p.assignments].sort(byEffectiveFrom);
+    const assignments = [...liveAssignments(p)].sort(byEffectiveFrom);
     if (p.start_date > today) {
       const prev = i > 0 ? periods[i - 1] : null;
       const first = assignments[0] ? summary(assignments[0]) : null;
@@ -230,7 +235,7 @@ export function overview(d: Detail): Overview {
   const a = repAssignment(rep, today);
   const assignment: AssignmentView = a
     ? { kind: state === "active" ? "current" : state === "pre_start" ? "upcoming" : "last", assignment: summary(a), periodEnd: rep.end_date }
-    : { kind: "none", reason: rep.assignments.length === 0 ? "no_assignment" : "none_in_effect" };
+    : { kind: "none", reason: liveAssignments(rep).length === 0 ? "no_assignment" : "none_in_effect" };
   return {
     identity,
     header: { jobTitle: a?.job_title.name_en ?? null, department: a?.department.name ?? null, employeeType: rep.employee_type?.name ?? null },
@@ -285,8 +290,8 @@ export function periodEligibility(d: Detail, p: Period, can: (permission: string
     cancelPlanned: live && p.start_date > today && manage,
     reverseEnd: live && Boolean(p.active_end_event) && correct,
     voidPeriod: p.id === latest?.id && p.start_date <= today && correct,
-    initialAssignment: live && p.assignments.length === 0 && manage,
-    changeAssignment: live && !ended && p.assignments.length > 0 && manage,
+    initialAssignment: live && liveAssignments(p).length === 0 && manage,
+    changeAssignment: live && !ended && liveAssignments(p).length > 0 && manage,
     correctAssignmentRows: live && correct,
   };
 }
@@ -302,6 +307,7 @@ export type ActionId =
   | "correct_personal"
   | "edit_personal"
   | "correct_assignment"
+  | "cancel_planned_assignment"
   | "correct_period"
   | "correct_work_email"
   | "clear_work_email"

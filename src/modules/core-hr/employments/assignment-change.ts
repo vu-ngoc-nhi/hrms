@@ -15,7 +15,7 @@ import { bumpPersonRevision } from "../people/revision";
 import { checkActive } from "../people/service";
 import { personIdForAssignment, rule, runIdempotentCommand } from "./command";
 import { assertEffectiveDateAllowed } from "./effective-date-policy";
-import { currentEmploymentWhere, loadWritableEmployment } from "./queries";
+import { currentEmploymentWhere, loadWritableEmployment, operationalAssignmentWhere } from "./queries";
 
 const OPERATION = "createAssignmentChange";
 
@@ -73,7 +73,8 @@ export async function createAssignmentChange(
         ]);
       }
 
-      const assignments = await tx.jobAssignment.findMany({ where: { employmentId }, orderBy: { effectiveFrom: "asc" } });
+      // Operational rows only (PV-29): a cancelled planned assignment is neither a predecessor nor a later row.
+      const assignments = await tx.jobAssignment.findMany({ where: operationalAssignmentWhere({ employmentId }), orderBy: { effectiveFrom: "asc" } });
       // C-41: the first assignment of a period is recorded with Add Initial Assignment, never with Assignment Change.
       if (assignments.length === 0) {
         throw rule("NO_ASSIGNMENT_YET", "This employment period has no assignment yet. Use Add Initial Assignment.");
