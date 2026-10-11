@@ -1,6 +1,6 @@
 # Mini HRS — Core HR Phase 1 UI Refresh: Audit and Implementation Map
 
-- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) and D-UI-15 … D-UI-16 (register C-97) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). **Employee Detail consistency review — completed** (§16). **UI-8 Add Employee implemented** (§17). **UI-9 Workflow & action consolidation implemented** (§18). Next slice (UI-10) not started.
+- Status: **APPROVED (2026-10-10).** Decisions D-UI-1 … D-UI-11 recorded in §8 (register C-95); D-UI-12 … D-UI-14 (register C-96) and D-UI-15 … D-UI-16 (register C-97) also in §8. **UI-0 implemented** (§9). **UI-2 Employee List implemented** (§10). **UI-3 Employee Detail shell + Overview implemented** (§11). **UI-4 Personal Information implemented** (§12). **UI-5 Employment implemented** (§13). **UI-6 Assignment implemented** (§14). **UI-7 History implemented** (§15). **Employee Detail consistency review — completed** (§16). **UI-8 Add Employee implemented** (§17). **UI-9 Workflow & action consolidation implemented** (§18). **UI-10 Organization implemented** (§19). Next slice (UI-1 Home) not started.
 - Scope: restyle and reorganise the existing Core HR Phase 1 UI to the approved white + red direction (mockup supplied 2026-10-10). Business rules, API semantics, permissions and lifecycle behaviour stay unchanged; where the mockup conflicts with an approved rule the rule wins (§4).
 
 ## 1. Current frontend (facts)
@@ -672,4 +672,49 @@ Void keeps its PV-25 statement ("Use Void only when this Employment Period was e
 | Visual QA (synthetic data) | A header with short More actions (DEMO001); B current period card actions (DEMO001); C future period card with its own Change Assignment (DEMO905 Period 2); D Change Assignment drawer; E Change Employment Relationship drawer; F End Employment drawer; G Rehire drawer (DEMO003); H Correct Employment Period with the correction note; I Correct Assignment from a history row (DEMO002); J Cancel Planned Period modal (DEMO905 Period 2); K Reverse End modal (DEMO903); L Void drawer with dependency preview and danger confirm (DEMO001, not submitted); M no assignment — one Add Initial Assignment on the page (ES0033); N HR Editor — business actions only, no Correct record menu |
 | End-to-end | Add Initial Assignment from the header on synthetic **ES0033** (UI-8 QA record): drawer closed, Assignment tab, "Changes saved.", header primary became Change Assignment |
 | Accessibility / responsive | focus to first field, Tab trap, Escape, focus return, unsaved confirmation, page scroll lock verified; drawer leaves half the page visible at 1440 / 1280, full width on phones with internal scroll; no horizontal page scroll |
+
+## 19. UI-10 — Organization (implemented 2026-10-11)
+
+Scope: the reference-data page (route stays `/catalogs`; endpoints unchanged). No backend, field, rule or permission change.
+
+### Catalog capabilities found (audit before the redesign)
+
+| Kind | Fields (API) | Create | Edit | Status | Delete |
+|---|---|---|---|---|---|
+| Department | code, name, is_active | code + name | name | Deactivate / Reactivate (`is_active`) | none |
+| Job Title | code, name_en, name_vi (optional, official documents), is_active | code + English name (+ Vietnamese) | names | same | none |
+| Level | code, name, sort_order (optional 0–1000), is_active | code + name (+ order) | name, order | same | none |
+| Employee Type | code, name, requires_work_email, is_active | code + name + flag | name, flag | same | none |
+
+Code: 1–30 letters / digits / `.` `_` `-`, unique case-insensitively (409 `DUPLICATE_CATALOG_CODE`), set once and **never editable**. List: active only by default, `include_inactive=true` for all; levels ordered by display order. Permissions: `catalogs.read` to list, `catalogs.manage` to create / edit / change status (HR_ADMIN only today). No reference check on deactivation (no usage counts exist; none added).
+
+Active / inactive semantics verified in the services: new employees, assignment changes, Initial Assignment and new periods accept **active** values only (`checkActive`, `NOT_ACTIVE`); historical corrections may use inactive values (C-44); existing records keep their references and still display the names. `requires_work_email` is read at request time by the operational completeness rule (PV-03), so changing it changes Record Health of existing employees of that type immediately (no data is rewritten).
+
+### Organization page
+
+- Header "Organization" — "Manage the reference data used in employee records."; red **+ Add <Department / Job Title / Level / Employee Type>** for the active tab, only with `catalogs.manage`.
+- Tabs (UI-0 Tabs, arrow keys, tab in the URL): **Departments · Job Titles · Levels · Employee Types**. The word "Catalogs" is no longer shown.
+- Compact table per tab: Name · Code · (Vietnamese Name for Job Titles · Display Order for Levels · Work Email "Expected / Not expected" for Employee Types) · Status (`StatusBadge` Active = success, Inactive = neutral) · Actions (Edit, Deactivate / Reactivate as ghost buttons with accessible names, only with `catalogs.manage`). "N active · M inactive" summary; inactive rows muted, kept in the list.
+- Note under every tab: "Inactive ≠ deleted: values are never deleted, so historical employee records stay readable. Inactive values cannot be chosen for new employees or new assignments." Employee Types keeps the note that it is the working relationship, not full-time / probation.
+- Empty state per tab ("No departments yet." …) with the Add action only for `catalogs.manage`.
+- No search (lists are short), no filters, saved views or configurable columns.
+
+### Create / edit / status
+
+- **Modal** (UI-0) for create and edit: Code (create only; shown read-only in the edit header), name field labelled by kind, Vietnamese Name (Job Titles), Display Order (Levels), "Work Email expected for complete records" with a plain explanation (Employee Types). Field-level validation (code pattern, name, order range); duplicate code shown on the Code field in plain words; edit sends only changed fields and never the code.
+- Employee Type: changing the Work Email expectation shows "This changes Record Health for existing employees of this type immediately; no employee data is changed." before saving. No other rule is configurable.
+- **Deactivate** asks for confirmation: "Existing employee records keep this value, but it will no longer be available for new employees or new assignments. Historical corrections can still use it. You can reactivate it at any time." No reason (none required by the API). **Reactivate** is immediate. Success notices after each action.
+
+### Deliberately excluded
+
+Org chart, reporting-line editor, department hierarchy / head / budget / cost centre / headcount, legal entities, locations, position management, workforce planning, job descriptions, title-to-department mapping, salary bands / career ladders / competencies, Full-time / Part-time or other new Employee Types, contract management, delete, usage counts.
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| Unit `tests/unit/organization.test.ts` (11) | tabs and URL; Active / Inactive badge variants; inactive values displayable but excluded from new-record selection; status change only flips the flag; create / edit request mapping per kind (code never sent on edit, only changed fields); Employee Type Work Email flag; request-shape checks; capabilities (manage vs read-only); mutation controls gated on `catalogs.manage`; no role names |
+| Unit suite / typecheck / lint / build | 191/191 unit tests; typecheck, lint, production build pass. Frontend-only (API unchanged; existing catalog integration tests untouched): DB/UAT suites not re-run |
+| Browser QA (local synthetic data) | A/D Departments with an inactive value; B Add Department (validation; duplicate code "eng" refused on the field); C Edit Department; E Job Titles (Vietnamese names); F Levels (display order); G Employee Types (Work Email expected / not expected); H Employee Type edit with the Record Health warning (cancelled, nothing saved); I read-only HR Editor (no Add, no Actions column); J ~900 px fits, phone width scrolls inside the table card only |
+| Mutation test (synthetic, supported actions only) | created **UI10-QA "UI10 QA Department (Synthetic)"**, renamed it, then deactivated it through Deactivate (no SQL, no delete); confirmed it is listed as inactive and absent from new-record options |
 
