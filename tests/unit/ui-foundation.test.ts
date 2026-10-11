@@ -26,6 +26,27 @@ describe("Design tokens (D-UI-10)", () => {
   });
 });
 
+describe("Phone-width layout (no page-level horizontal scroll at 375 px)", () => {
+  const css = readFileSync("src/app/globals.css", "utf8");
+  const block = (query: string) => {
+    const start = css.indexOf(`@media (${query})`);
+    expect(start).toBeGreaterThan(-1);
+    const end = css.indexOf("\n}", start);
+    return css.slice(start, end === -1 ? undefined : end);
+  };
+  it("the stacked shell column and sidebar footer can shrink below their min-content", () => {
+    const shell = block("max-width: 900px");
+    expect(shell).toMatch(/\.app \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+    expect(shell).toMatch(/\.sidebar-footer \{[^}]*min-width: 0;[^}]*flex-wrap: wrap;/);
+  });
+  it("the list filter bar stacks to one shrinkable column on phones", () => {
+    expect(css).toMatch(/@media \(max-width: 480px\) \{ \.filter-bar \{ grid-template-columns: minmax\(0, 1fr\); \} \}/);
+  });
+  it("wide tables scroll inside their own wrapper", () => {
+    expect(css).toMatch(/\.table-wrap \{ overflow-x: auto;/);
+  });
+});
+
 describe("Status badge variants (red is not a status colour)", () => {
   it("maps stable codes to semantic variants", () => {
     expect(statusVariant("employment", "active")).toBe("success");

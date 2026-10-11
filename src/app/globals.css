@@ -59,7 +59,7 @@ h3 { font-size: var(--font-size-base); font-weight: var(--font-weight-semibold);
 }
 .user-text { min-width: 0; }
 .sidebar-badge { justify-self: start; align-self: flex-start; margin-left: var(--space-2); }
-.sign-out { justify-content: flex-start; }
+.sign-out { justify-content: flex-start; white-space: nowrap; }
 .user-name { font-weight: var(--font-weight-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .user-roles { font-size: var(--font-size-xs); color: var(--color-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .content { min-width: 0; }
@@ -72,10 +72,11 @@ h3 { font-size: var(--font-size-base); font-weight: var(--font-weight-semibold);
 .login-page .login-body { width: 100%; max-width: 640px; }
 
 @media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; }
+  /* minmax(0, …) / min-width: 0 let the stacked shell shrink to the viewport instead of to its min-content. */
+  .app { grid-template-columns: minmax(0, 1fr); }
   .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: var(--space-2) var(--space-4); border-right: 0; border-bottom: 1px solid var(--color-border); }
   .nav { flex-direction: row; flex-wrap: wrap; }
-  .sidebar-footer { margin: 0 0 0 auto; flex-direction: row; border-top: 0; padding-top: 0; align-items: center; }
+  .sidebar-footer { margin: 0 0 0 auto; min-width: 0; flex-direction: row; flex-wrap: wrap; border-top: 0; padding-top: 0; align-items: center; }
   .page { padding: var(--space-4) var(--space-4) var(--space-6); }
 }
 
@@ -374,6 +375,8 @@ button.stepper-button:hover { border-color: var(--color-border-strong); color: v
 .filter-bar input, .filter-bar select { width: 100%; }
 .filter-label { font-size: var(--font-size-xs); font-weight: var(--font-weight-medium); color: var(--color-text-2); }
 .filter-clear { justify-self: start; }
+/* The 220 px search + 150 px filter tracks cannot both fit on a phone; stack the filters instead of widening the page. */
+@media (max-width: 480px) { .filter-bar { grid-template-columns: minmax(0, 1fr); } }
 .list-meta { margin: 0 0 var(--space-2); font-size: var(--font-size-xs); color: var(--color-text-2); }
 .pagination { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3); }
 
