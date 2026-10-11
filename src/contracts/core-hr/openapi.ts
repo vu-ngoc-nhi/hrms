@@ -108,6 +108,7 @@ export function buildOpenApiDocument(): JsonObject {
       { name: "Employees" },
       { name: "Employments" },
       { name: "Catalogs" },
+      { name: "Dashboard" },
       { name: "Docs" },
     ],
     paths,

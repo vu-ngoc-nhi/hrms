@@ -4,6 +4,7 @@
 //   hr:          no approved rule yet.
 //   legal:       Pending Legal Review.
 // DOB, gender, level, legal ID and personal details do NOT affect operational completeness.
+import type { OperationalItemCode } from "@/contracts/core-hr/completeness-codes";
 import type { EmploymentStatus } from "../employments/status";
 
 export const OPERATIONAL_RULE_VERSION = "operational-mvp-2026-10-08.2";
@@ -21,7 +22,7 @@ export type OperationalInput = {
   };
 };
 
-export type OperationalItem = { code: string; satisfied: boolean };
+export type OperationalItem = { code: OperationalItemCode; satisfied: boolean };
 
 /**
  * Email rule (PV-03). Work email and contact email are different fields and never an identity key.

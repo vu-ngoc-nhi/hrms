@@ -24,6 +24,7 @@ const DOCUMENTED: Record<string, Permission | null> = {
   createPeriodCorrection: "employment.correct",
   createAssignmentCorrection: "employment.correct",
   createAssignmentCancelPlanned: "employment.manage",
+  getCoreHrDashboard: "employees.read",
   createInitialEmployment: "employment.manage",
   createRehire: "employment.manage", // past dates additionally need employment.correct
   createRelationshipChange: "employment.manage", // past dates additionally need employment.correct

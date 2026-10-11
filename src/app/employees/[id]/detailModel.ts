@@ -2,8 +2,8 @@
 // business rule, no API call. Representative period / assignment use the same shared functions as the Employee List
 // and completeness (C-76, C-78); dispositions (Cancelled, Voided) are never operational (PV-25, C-86); completeness is
 // taken from the API as is (never re-computed here).
-import { addDays } from "@/lib/dates";
 import { representativeAssignment, representativeEmployment } from "@/modules/core-hr/employments/status";
+import { upcomingEvents } from "@/modules/core-hr/employments/upcoming";
 
 export type Ref = { id: string; code: string; name: string } | null;
 export type Assignment = {
@@ -75,8 +75,6 @@ export function representativePeriod(d: Detail): Period | null {
   const wrapped = operationalPeriods(d).map((p) => ({ startDate: p.start_date, endDate: p.end_date, p }));
   return representativeEmployment(wrapped, d.status_as_of)?.p ?? null;
 }
-
-const byEffectiveFrom = (a: Assignment, b: Assignment) => (a.effective_from < b.effective_from ? -1 : a.effective_from > b.effective_from ? 1 : 0);
 
 function repAssignment(p: Period, today: string): Assignment | null {
   const wrapped = liveAssignments(p).map((a) => ({ effectiveFrom: a.effective_from, effectiveTo: a.effective_to, a }));
@@ -161,50 +159,32 @@ export function changedFields(from: Assignment | null, to: Assignment): ChangedF
   return out;
 }
 
-// A Relationship Change (S4.10) ends the current period with reason RELATIONSHIP_CHANGE and starts the successor on
-// the next day; it is presented as one "new Employment Period" item rather than an end plus an unrelated start.
-const isRelationshipChangeEnd = (p: Period) => p.active_end_event?.end_reason?.code === "RELATIONSHIP_CHANGE";
-
-const KIND_ORDER: Record<UpcomingChange["kind"], number> = { planned_end: 0, relationship_change: 1, period_start: 2, assignment_change: 3 };
-
-/** True future-effective changes only (date after today; a planned end counts from today, its last day). */
+/**
+ * True future-effective changes only (date after today; a planned end counts from today, its last day). The semantics
+ * live in the shared pure module `employments/upcoming.ts` (also used by the Home dashboard, PV-30); this maps its
+ * events onto the Overview presentation. Operational periods and operational (non-cancelled) assignments only.
+ */
 export function upcomingChanges(d: Detail): UpcomingChange[] {
-  const today = d.status_as_of;
-  const periods = [...operationalPeriods(d)].sort((a, b) => (a.start_date < b.start_date ? -1 : 1));
-  const out: UpcomingChange[] = [];
-  const mergedEnds = new Set<string>();
-  for (const [i, p] of periods.entries()) {
-    const assignments = [...liveAssignments(p)].sort(byEffectiveFrom);
-    if (p.start_date > today) {
-      const prev = i > 0 ? periods[i - 1] : null;
-      const first = assignments[0] ? summary(assignments[0]) : null;
-      if (prev?.end_date && addDays(prev.end_date, 1) === p.start_date && isRelationshipChangeEnd(prev)) {
-        mergedEnds.add(prev.id);
-        out.push({
-          kind: "relationship_change",
-          date: p.start_date,
-          periodId: p.id,
-          fromType: prev.employee_type?.name ?? null,
-          toType: p.employee_type?.name ?? null,
-          previousEnd: prev.end_date,
-          assignment: first,
-        });
-      } else {
-        out.push({ kind: "period_start", date: p.start_date, periodId: p.id, first: i === 0, employeeType: p.employee_type?.name ?? null, assignment: first });
-      }
+  const periods = operationalPeriods(d).map((p) => ({
+    id: p.id,
+    startDate: p.start_date,
+    endDate: p.end_date,
+    employeeType: p.employee_type?.name ?? null,
+    activeEndReason: p.active_end_event?.end_reason ?? null,
+    assignments: liveAssignments(p).map((a) => ({ effectiveFrom: a.effective_from, a })),
+  }));
+  return upcomingEvents(periods, d.status_as_of).map((e): UpcomingChange => {
+    switch (e.kind) {
+      case "assignment_change":
+        return { kind: e.kind, date: e.date, periodId: e.periodId, from: e.from ? summary(e.from) : null, to: summary(e.to), changed: changedFields(e.from, e.to) };
+      case "period_start":
+        return { ...e, assignment: e.assignment ? summary(e.assignment) : null };
+      case "relationship_change":
+        return { ...e, assignment: e.assignment ? summary(e.assignment) : null };
+      default:
+        return e;
     }
-    for (const [j, a] of assignments.entries()) {
-      if (a.effective_from <= today) continue;
-      if (p.start_date > today && j === 0) continue; // shown with the start of its period
-      out.push({ kind: "assignment_change", date: a.effective_from, periodId: p.id, from: j > 0 ? summary(assignments[j - 1]) : null, to: summary(a), changed: changedFields(j > 0 ? assignments[j - 1] : null, a) });
-    }
-  }
-  for (const p of periods) {
-    if (p.end_date && p.end_date >= today && !mergedEnds.has(p.id)) {
-      out.push({ kind: "planned_end", date: p.end_date, periodId: p.id, endReason: p.active_end_event?.end_reason ?? null });
-    }
-  }
-  return out.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : KIND_ORDER[a.kind] - KIND_ORDER[b.kind]));
+  });
 }
 
 export function overview(d: Detail): Overview {

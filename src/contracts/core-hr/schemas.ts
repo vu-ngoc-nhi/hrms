@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { OPERATIONAL_ITEM_CODES } from "./completeness-codes";
 import { END_REASON_CODES, SELECTABLE_END_REASON_CODES } from "./end-reasons";
 
 // Single schema registry: route handlers validate with these schemas and OpenAPI is generated from them.
@@ -699,6 +700,67 @@ export const EmployeeListQuerySchema = z.strictObject({
   ),
 });
 
+// ---------------- UI-1 Home / Action Center (PV-30) ----------------
+export const DashboardQuerySchema = z.strictObject({}).describe("No query parameters in Phase 1: the window (30 days) and the limits (5, 10) are fixed.");
+
+const RequirementCodeSchema = z.enum(OPERATIONAL_ITEM_CODES).describe("Operational completeness item code (rule order). The UI maps it to a label.");
+const DashboardCatalogRefSchema = z.object({ code: z.string(), name: z.string() });
+const DashboardAssignmentSchema = z.object({
+  department: DashboardCatalogRefSchema,
+  job_title: z.object({ code: z.string(), name_en: z.string() }),
+});
+export const UPCOMING_EVENT_TYPES = ["employment_start", "new_employment_period_start", "relationship_change", "employment_end", "assignment_change"] as const;
+
+export const CoreHrDashboardSchema = reg(
+  "CoreHrDashboard",
+  z.object({
+    status_as_of: isoDate().describe("Asia/Ho_Chi_Minh business date used for every section."),
+    snapshot: z
+      .object({ active: z.int(), not_started: z.int(), ended: z.int() })
+      .describe("People counted once by employment_status (the same computation as the Employee List). People without a valid Employment Period are not counted here."),
+    needs_attention: z.object({
+      total: z.int().describe("People whose operational completeness is incomplete, each counted once; equals the Employee List total for operational_completeness=incomplete."),
+      rule_version: z.string(),
+      by_requirement: z
+        .array(z.object({ code: RequirementCodeSchema, count: z.int() }))
+        .describe("People missing each item (only items with count > 0, rule order). A person missing several items appears in several rows, so the counts may add up to more than total."),
+      records: z
+        .array(
+          z.object({
+            person_id: z.uuid(),
+            employee_code: z.string(),
+            full_name: z.string(),
+            employment_status: EmploymentStatusSchema,
+            missing: z.array(RequirementCodeSchema),
+          }),
+        )
+        .describe("At most 5: Active, then Pre-start (nearest start first), then no Employment Period, then Ended; then employee_code."),
+    }),
+    upcoming: z.object({
+      window_days: z.literal(30),
+      from: isoDate().describe("status_as_of. Planned ends count from this date (the last working day); other changes from the next day."),
+      to: isoDate().describe("Last business date included (status_as_of + 30)."),
+      total: z.int().describe("All upcoming changes in the window; items holds at most 10."),
+      items: z
+        .array(
+          z.object({
+            type: z.enum(UPCOMING_EVENT_TYPES),
+            effective_date: isoDate().describe("Start date, the date an assignment takes effect, or the last day of employment (employment_end)."),
+            person_id: z.uuid(),
+            employee_code: z.string(),
+            full_name: z.string(),
+            employee_type: DashboardCatalogRefSchema.nullable().describe("Starts and relationship_change: the (new) period's Employee Type."),
+            previous_employee_type: DashboardCatalogRefSchema.nullable().describe("relationship_change only."),
+            assignment: DashboardAssignmentSchema.nullable().describe("Starts and relationship_change: the first assignment of the new period, if any; assignment_change: the assignment that takes effect."),
+            previous_assignment: DashboardAssignmentSchema.nullable().describe("assignment_change: the assignment it replaces (null for a first assignment taking effect later)."),
+          }),
+        )
+        .describe("Nearest first; same date: employment_end, relationship_change, starts, assignment_change; then employee_code."),
+    }),
+  }),
+  "Home / Action Center (PV-30): Workforce Snapshot, Needs Attention and Upcoming — next 30 days. Machine codes only; no labels, personal data, reasons or audit data.",
+);
+
 export type EmployeeCreateInput = z.infer<typeof EmployeeCreateSchema>;
 export type EmployeeUpdateInput = z.infer<typeof EmployeeUpdateSchema>;
 export type WorkEmailUpdateInput = z.infer<typeof WorkEmailUpdateSchema>;
@@ -717,3 +779,4 @@ export type AssignmentCorrectionInput = z.infer<typeof AssignmentCorrectionCreat
 export type AssignmentCancelPlannedInput = z.infer<typeof AssignmentCancelPlannedCreateSchema>;
 export type EmployeeDetail = z.infer<typeof EmployeeDetailSchema>;
 export type EmployeeListItem = z.infer<typeof EmployeeListItemSchema>;
+export type CoreHrDashboard = z.infer<typeof CoreHrDashboardSchema>;

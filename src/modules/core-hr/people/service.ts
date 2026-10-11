@@ -617,7 +617,7 @@ export async function listEmployees(principal: Principal, q: ListQuery) {
   return { data, total, page: q.page, page_size: q.page_size, status_as_of: today };
 }
 
-type ListPerson = {
+export type ListPerson = {
   id: string;
   employeeCode: string;
   fullName: string;
@@ -639,13 +639,18 @@ type ListPerson = {
   }[];
 };
 
-// One list row: representative period + representative assignment (C-76), the same rule as the Department filter.
-function toListItem(p: ListPerson, today: string): EmployeeListItem {
+/**
+ * Status and operational completeness of one person — the single projection shared by the Employee List and the Home
+ * dashboard (PV-30 T-1), so the two can never disagree. Input: the person's OPERATIONAL periods with their OPERATIONAL
+ * assignments only (loaded with `operationalEmploymentWhere` / `operationalAssignmentWhere`).
+ *   display assignment (list Department / Job Title, C-76) and completeness readiness (C-78) intentionally use
+ *   different assignment rules.
+ */
+export function personProjection<P extends ListPerson>(p: P, today: string) {
   const dates = p.employments.map((e) => ({ startDate: fromDbDate(e.startDate), endDate: fromDbDate(e.endDate), e }));
   const rep = representativeEmployment(dates, today);
   const repRows = rep ? rep.e.assignments.map((x) => ({ effectiveFrom: fromDbDate(x.effectiveFrom), effectiveTo: fromDbDate(x.effectiveTo), x })) : [];
-  // Display / filter (C-76) and completeness readiness (C-78) intentionally use different assignment rules.
-  const a = rep ? representativeAssignment(rep, repRows, today)?.x ?? null : null;
+  const assignment = rep ? representativeAssignment(rep, repRows, today)?.x ?? null : null;
   const ready = rep ? completenessAssignment(rep, repRows, today)?.x ?? null : null;
   const status = employmentStatus(dates, today);
   const type = rep?.e.employeeType ?? null;
@@ -662,16 +667,29 @@ function toListItem(p: ListPerson, today: string): EmployeeListItem {
     },
   };
   return {
+    status,
+    period: (rep?.e ?? null) as P["employments"][number] | null,
+    startDate: rep?.startDate ?? null,
+    assignment: assignment as P["employments"][number]["assignments"][number] | null,
+    completeness: completenessView(facts).operational,
+  };
+}
+
+// One list row: representative period + representative assignment (C-76), the same rule as the Department filter.
+function toListItem(p: ListPerson, today: string): EmployeeListItem {
+  const { status, period: rep, startDate, assignment: a, completeness } = personProjection(p, today);
+  const type = rep?.employeeType ?? null;
+  return {
     id: p.id,
     employee_code: p.employeeCode,
     full_name: p.fullName,
     employment_status: status,
-    operational_completeness: completenessView(facts).operational.status,
+    operational_completeness: completeness.status,
     department: a ? ref(a.department) : null,
     job_title: a ? jobTitleRef(a.jobTitle) : null,
     employee_type: ref(type),
     job_level: a ? ref(a.jobLevel) : null,
-    work_email: rep?.e.workEmail ?? null,
-    start_date: rep?.startDate ?? null,
+    work_email: rep?.workEmail ?? null,
+    start_date: startDate,
   };
 }

@@ -29,7 +29,7 @@ export default function LoginPage() {
     setBusy(null);
     if (!r.ok) return setUnavailable(true);
     setToken((await r.json()).access_token);
-    router.replace("/employees");
+    router.replace("/");
   }
 
   return (

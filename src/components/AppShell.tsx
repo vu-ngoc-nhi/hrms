@@ -55,8 +55,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   // Core HR Phase 1 navigation: Home, Employees, Organization — each gated by a capability, never a role name.
-  // Home is a placeholder until UI-1 (no route yet: "/" still opens the Employee List).
   const nav = [
+    { key: "home", href: "/", label: t("nav.home"), icon: <IconHome />, show: session?.can("employees.read") },
     { key: "employees", href: "/employees", label: t("nav.employees"), icon: <IconUsers />, show: session?.can("employees.read") },
     { key: "organization", href: "/catalogs", label: t("nav.organization"), icon: <IconOrganization />, show: session?.can("catalogs.read") },
   ];
@@ -65,21 +65,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     <SessionContext.Provider value={session}>
       <div className="app">
         <aside className="sidebar">
-          <Link href="/employees" className="wordmark">
+          <Link href="/" className="wordmark">
             {t("app.name")}
           </Link>
           <nav className="nav" aria-label={t("nav.main")}>
-            {session?.can("employees.read") && (
-              <span className="nav-item" aria-disabled="true" title={t("nav.homeSoonHint")}>
-                <IconHome />
-                {t("nav.home")}
-                <span className="nav-soon">{t("nav.homeSoon")}</span>
-              </span>
-            )}
             {nav
               .filter((n) => n.show)
               .map((n) => {
-                const active = pathname.startsWith(n.href);
+                // Home ("/") is active only on itself; other items also cover their sub-pages.
+                const active = n.href === "/" ? pathname === "/" : pathname.startsWith(n.href);
                 return (
                   <Link key={n.key} href={n.href} className={active ? "nav-item active" : "nav-item"} aria-current={active ? "page" : undefined}>
                     {n.icon}
