@@ -37,7 +37,7 @@
 
 **GATE C — Post-go-live hardening** (important, not blocking first use at EmeSoft's scale): configurable Access Role editor / self-service access screen, dependency upgrades, periodic restore tests, audit retention answer, Entra "assignment required", idle timeout, rate limiting, idempotency purge, audit viewer, config inventory, migration-compatibility checklist, legal classification guidance (§3).
 
-**Today: Gate A 0/8, Gate B 0/5** (decisions recorded for A1, A4, A5, A6, A7; A4 development evidence complete since C-94 — nothing passed). The longest lead times are A1 (counsel) and A2/A3 (IT platform + Entra). HR decisions in §10 unblock most of the rest.
+**Current authoritative Gate A status: `gate-a-readiness-status.md` (2026-10-12).** As of revision 2: **Gate A 0/8, Gate B 0/5** (decisions recorded for A1, A4, A5, A6, A7; A4 development evidence complete since C-94 — nothing passed). The longest lead times are A1 (counsel) and A2/A3 (IT platform + Entra). HR decisions in §10 unblock most of the rest.
 
 ---
 

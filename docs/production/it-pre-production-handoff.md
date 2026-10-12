@@ -20,7 +20,7 @@ Runtime configuration (values come from the secret store / environment, never fr
 
 | Variable | Notes |
 |---|---|
-| `APP_ENV=production` (or `staging`), `NODE_ENV=production` | the development test identity is impossible in these modes (`/api/v1/dev/*` → 404) |
+| `APP_ENV=production`, `NODE_ENV=production` | **also on staging**: the application accepts only `local`, `test` or `production` and refuses to start otherwise; staging is distinguished by its own database, secrets, Entra values and the access environment record `staging` (runbook §3). The development test identity is impossible in this mode (`/api/v1/dev/*` → 404) |
 | `DATABASE_URL` | runtime login `hrms_app` (least privilege; reads accounts only) |
 | `MIGRATION_DATABASE_URL` | schema-owner login, **only** for the attended migration step, never in the running app |
 | `AUTH_MODE=entra`, `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID`, `ENTRA_API_SCOPE` | from §2 |
