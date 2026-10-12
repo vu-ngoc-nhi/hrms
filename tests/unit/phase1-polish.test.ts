@@ -60,3 +60,13 @@ describe("Error messages", () => {
     expect(en.errors.ASSIGNMENT_CANCELLED).toMatch(/Reload/);
   });
 });
+
+describe("Record Health helper (Product/UI freeze)", () => {
+  it("no rule version, validation status or project terminology is shown to HR users", () => {
+    const text = JSON.stringify(en);
+    expect(text).not.toMatch(/MVP decision|pending HR validation/i);
+    expect(en.overview.healthHelper).toBe("Optional details such as Manager, Level, Date of Birth or Mobile do not affect Record Health.");
+    const overview = readFileSync("src/app/employees/[id]/OverviewTab.tsx", "utf8");
+    expect(overview).not.toMatch(/ruleVersion|rule_version/);
+  });
+});

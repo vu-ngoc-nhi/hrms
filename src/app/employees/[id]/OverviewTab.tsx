@@ -241,9 +241,7 @@ export function OverviewTab({ o, status, statusAsOf }: { o: Overview; status: st
             </div>
           )
         )}
-        <p className="muted small" title={o.health.ruleVersion}>
-          {t("overview.ruleNote")}
-        </p>
+        <p className="muted small">{t("overview.healthHelper")}</p>
         <p className="muted small">{t("overview.statusAsOf", { date: formatDate(statusAsOf) })}</p>
       </section>
     </div>
