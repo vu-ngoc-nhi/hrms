@@ -1,8 +1,8 @@
 # Mini HRS — Gate A Readiness Status (authoritative)
 
-- Date: 2026-10-12. Type: **readiness review / status refresh only.** Nothing was implemented, provisioned, deployed or configured. No real employee data was used.
-- Baseline: release status **`Core HR Phase 1 — UAT Passed With Pre-Production Actions`**; Product/UI baseline frozen for Gate A (no Phase 1 features, no Phase 2). Production Ready is never self-declared (readiness plan Appendix K).
-- Sources: `pre-production-readiness-plan.md` (revision 2), `pre-production-decision-pack-01.md`, `it-pre-production-handoff.md`, `access-administration-runbook.md`, `docs/legal/legal-review-s0-s3.md`, `docs/decision-register.md` (revision 57), the repository code and a fresh local quality gate (§0).
+- Date: 2026-10-12. Revision 2 (same day): the owner **accepted the refresh and approved the execution order**; local hardening L2 → L1 → L3 done; drafts prepared for the Legal pack, the HR mapping template and the IT input request. Nothing was provisioned, deployed, configured or sent. No real employee data was used.
+- Baseline: release status **`Core HR Phase 1 — UAT Passed With Pre-Production Actions`**; product baseline **`Core HR Phase 1 — Product/UI Frozen — Owner Accepted`** (C-101) — reopened only for a P0 production blocker or a regression. Production Ready is never self-declared (readiness plan Appendix K).
+- Sources: `pre-production-readiness-plan.md` (revision 2), `pre-production-decision-pack-01.md`, `it-pre-production-handoff.md`, `access-administration-runbook.md`, `docs/legal/legal-review-s0-s3.md`, `docs/decision-register.md` (revision 59), the repository code and a fresh local quality gate (§0).
 - This document **supersedes the "Today" status line** of the readiness plan. The plan stays the reference for scope, appendices and checklists.
 
 **Status model (only these values):** COMPLETE · DEVELOPMENT COMPLETE · PENDING EXTERNAL INPUT · PENDING REHEARSAL · BLOCKED · NOT REQUIRED.
@@ -17,7 +17,7 @@ Rules used: a gate is COMPLETE only when its closure evidence exists and the acc
 | `npm run typecheck` | pass |
 | `npm test` (guarded `hrms_test`: drop `public` schema → `prisma migrate deploy` of all 10 migrations from empty → suite) | **52 files, 629/629 pass** |
 | `npm run test:integrity-baseline` | 1/1 pass (integrity scan 0/0 on the clean baseline) |
-| `npm audit --omit=dev` | 11 advisories (4 high, 7 low) — see A2; no triage note exists yet |
+| `npm audit --omit=dev` | 11 advisories (4 high, 7 low) — triaged in `dependency-advisory-triage.md` (L3): none reachable from the production request path |
 
 Caveat: "from empty" is **schema-level** on a local cluster where the migration identity can create roles. A fresh cluster with a non-superuser migration identity (the real staging/production case, handoff §4) has **not** been proven.
 
@@ -28,7 +28,7 @@ Caveat: "from empty" is **schema-level** on a local cluster where the migration 
 | Gate | Status | Existing Evidence | Remaining Dependency | Owner | Next Action | Closure Evidence |
 |---|---|---|---|---|---|---|
 | **A1** Legal / privacy | PENDING EXTERNAL INPUT | Questions Q-L1…Q-L12 drafted (plan App. A); data-group table (legal review §2); sensitive groups rejected by the API; C-88 decision to start review. **No evidence the questions were sent; no counsel answer.** | Counsel answers to Q-L1, Q-L2, Q-L4, Q-L5, Q-L6, Q-L7; hosting choice (input to Q-L5); Management scoping of Q-L12 | Legal (answers) — HR Lead sends | HR Lead sends the question pack and names the counsel contact | Written counsel answers recorded in the register (PL items → decided); notice text + delivery record if required; retention values recorded |
-| **A2** Secure production foundation | PENDING EXTERNAL INPUT | Code: least-privilege DB grants (tests), test identity off unless local/test (`/api/v1/dev/*` → 404), log/error hygiene, same-origin API, no CORS headers, minimal `/health`, migration/scan guards. **Gaps in code:** no page security headers; no fail-fast production config validation; no advisory triage note | IT-01…IT-07 (hosting, staging, network, DNS/TLS, secrets, proxy logs, dedicated DB) | IT | IT answers IT-01 (hosting) first; owner approves local items L1–L3 | Platform record; grants re-verified as the real app role; header check on the URL; proxy log sample; secrets inventory; advisory triage note; config review showing no development value |
+| **A2** Secure production foundation | PENDING EXTERNAL INPUT | Code: least-privilege DB grants (tests), test identity off unless local/test (`/api/v1/dev/*` → 404), log/error hygiene, same-origin API, no CORS headers, minimal `/health`, migration/scan guards. **Added 2026-10-12:** production startup check (L2), baseline security headers (L1), advisory triage (L3) — application side DEVELOPMENT COMPLETE except the final CSP (after A3) | IT-01…IT-07 (hosting, staging, network, DNS/TLS, secrets, proxy logs, dedicated DB) | IT | Management/IT answer IT-01 (hosting) first — request: `it-input-request-01.md` | Platform record; grants re-verified as the real app role; header check on the URL; proxy log sample; secrets inventory; advisory triage note; config review showing no development value |
 | **A3** Production Entra | PENDING EXTERNAL INPUT | Verifier proven with local keys (v2 only, `aud` = API client ID, scope, `tid`/`oid`, RS256); test identity impossible in production config. **No browser sign-in exists** (production has no working login page) | IT-08 (non-prod registration E1–E10, PV-11); then MSAL implementation | IT | IT provides non-prod Entra inputs E1–E10 | Staging: real sign-in/sign-out; accepted valid token; rejected v1 / wrong audience / missing scope / other tenant; `/api/v1/dev/test-users` → 404; MFA prompt observed |
 | **A4** Access administration + owners | DEVELOPMENT COMPLETE | C-94: guarded routines, protected operator mapping, audit, CLI, guards; 34 dedicated tests in the 629 suite; runbook with bootstrap and leaver steps | Names (PV-26), operators (PV-28 F), IT-09…IT-12, staging | Management (names) | Management names System Owner, Technical Owner, primary + backup HR admin, ≤ 2 operators | Named list in the register; supervised staging rehearsal record (§A4.3) |
 | **A5** Backup + restore | PENDING EXTERNAL INPUT | Target only: RPO ≤ 4 h, RTO ≤ 1 business day (M-14, provisional); restore scenario defined (plan App. C.3) | IT-13 backup proposal (B1–B8), PV-27; hosting (IT-01); retention value Pending Legal (Q-L4) | IT | IT proposes the backup method that meets RPO/RTO | Signed restore-rehearsal record (§A5.2) |
@@ -38,13 +38,28 @@ Caveat: "from empty" is **schema-level** on a local cluster where the migration 
 
 **Gate A: 0 / 8 COMPLETE. Real employee data remains PROHIBITED.**
 
+### Gate closure vs development evidence
+
+Zero gates closed does **not** mean zero progress. A gate closes only on real-environment evidence accepted by its owner; most of the engineering it depends on is already proven locally.
+
+| Gate | Gate closed? | Development evidence already achieved (local, synthetic) | Local engineering still to do | What closes it (external) |
+|---|---|---|---|---|
+| A1 | No | Data minimisation built in (sensitive groups rejected, no export, no AI); audit without personal values; send-ready Legal pack draft (`docs/legal/legal-pack-01-draft.md`) | None | Counsel's written answers |
+| A2 | No | **DEVELOPMENT COMPLETE (application side):** least-privilege grants, test identity off in production, log hygiene, same-origin API, **L2 startup refusal of unsafe configuration**, **L1 baseline security headers**, **L3 advisory triage (nothing exploitable)** | Final CSP after MSAL (A3) | IT platform + staging verification |
+| A3 | No | Token verifier rules (v2, audience, scope, tenant, RS256) and production test-identity block proven with local keys | MSAL browser sign-in (blocked on IT E1–E5) | IT inputs + staging real-token rehearsal |
+| A4 | No | **DEVELOPMENT COMPLETE:** guarded access administration (C-94), 34 dedicated tests, runbook | None | Names, operator provisioning, supervised staging rehearsal |
+| A5 | No | Restore acceptance scenario defined; synthetic dataset and integrity scan exist | Restore record template (draft) | IT backup + successful restore rehearsal |
+| A6 | No | 10 forward-only migrations applied from an empty schema; migration guard; `/health`; production startup check | Generic deployment/migration runbook (draft) | IT hosting + staging deploy/migrate/rollback rehearsal |
+| A7 | No | Schema supports import provenance (`snapshot_import`); mapping template + import-design skeleton (`onboarding-mapping-template.md`) | Import utility (after HR mapping approval) | HR mapping, synthetic import rehearsal, HR sign-off |
+| A8 | No | Checklist and signatories defined (§A8) | A8 record template (draft) | Signed decision |
+
 ---
 
 ## 1. Executive readiness summary
 
 - The **application** is ready for a real environment: 629 tests, migrations from empty, integrity 0/0, access administration built. The **surroundings** are not: no hosting decision, no staging, no Entra registration, no backup, no counsel answer, no names.
 - Nothing has moved since Decision Pack 01 on the external side: every IT decision IT-01…IT-15 is still *Open*, PV-26/PV-27/PV-28 F are open, and the repository holds no evidence that the legal questions were sent.
-- **Three real code gaps remain** before Gate A can close, all small: (1) browser Entra sign-in (blocked on IT), (2) page security headers + fail-fast production configuration, (3) the one-time import utility (blocked on HR mapping). Plus documentation: deployment/migration runbook, restore runbook, rehearsal evidence templates.
+- **Two code gaps remain** before Gate A can close: (1) browser Entra sign-in + final CSP (blocked on IT), (2) the one-time import utility (blocked on HR mapping). Security headers, the production startup check and the advisory triage were done on 2026-10-12 (L1–L3). Remaining documentation drafts: deployment/migration runbook, restore record template, staging rehearsal record, A8 record.
 - The **critical path** is the longer of: *counsel answers (A1)* and *IT hosting → staging → Entra → sign-in → rehearsals (A2/A3/A5/A6)*. Both start with one action this week: send the legal pack; decide hosting.
 - One documentation inconsistency was found and corrected (handoff said `APP_ENV=staging`; the code accepts only `local | test | production`, so staging runs with `APP_ENV=production`).
 
@@ -75,7 +90,7 @@ Next action: **HR Lead** sends Q-L1…Q-L8 + Q-L12 with Annex A/B and names the 
 
 ### A2 — Secure production foundation
 
-Status: **PENDING EXTERNAL INPUT** (infrastructure), with three local code items awaiting approval.
+Status: **PENDING EXTERNAL INPUT** (infrastructure). Application side **DEVELOPMENT COMPLETE** since L1–L3 (2026-10-12); only the final CSP waits for A3.
 
 | Area | Code ready? | Infrastructure | Status |
 |---|---|---|---|
@@ -90,11 +105,11 @@ Status: **PENDING EXTERNAL INPUT** (infrastructure), with three local code items
 | Least-privilege roles (owner / `hrms_app` / read-only) | Proven locally (`db-schema-guarantees`) | IT-09, IT-14 | DEVELOPMENT COMPLETE (re-verify on staging) |
 | Dev/test endpoint isolation (`/api/v1/dev/*` → 404, test tokens rejected) | Yes — `isTestIdentityAllowed` requires `APP_ENV` local/test and `NODE_ENV≠production` | verify on staging | DEVELOPMENT COMPLETE |
 | Sensitive-data leakage (logs, errors, audit, idempotency HMAC) | Yes | proxy logs (IT-06) | DEVELOPMENT COMPLETE |
-| **L1 Page security headers** (HSTS, `frame-ancestors`/X-Frame-Options, `X-Content-Type-Options`, Referrer-Policy); final CSP after MSAL | **No** — no `next.config` | — | PENDING EXTERNAL INPUT (owner approval to start) |
-| **L2 Fail-fast production configuration** — refuse to start when `APP_ENV=production` and: `AUTH_MODE≠entra`, Entra values missing, `AUTH_TEST_ISSUER_*` present, `COMPANY_EMAIL_DOMAINS` empty or `example.test`, dev password in `DATABASE_URL`. Today a missing Entra value fails *closed but silently* (every request 401) | **No** | — | PENDING EXTERNAL INPUT (owner approval to start) |
-| **L3 Dependency advisory triage note** | **No** — 4 high in the Prisma CLI chain (`deepmerge-ts`, unused `mysql2`; migration-time tooling, not the request path), 7 low in the Scalar API-reference / `ai` chain (internal docs page; agent/telemetry disabled). Dev-only: `eslint-config-next` chain | — | PENDING EXTERNAL INPUT (owner approval to start) |
+| **L1 Page security headers** — `next.config.ts`: HSTS, CSP `frame-ancestors 'self'; base-uri 'self'; object-src 'none'`, X-Frame-Options, nosniff, Referrer-Policy `same-origin`, Permissions-Policy, no `X-Powered-By`; script/connect/frame-src CSP, form-action and COOP deferred to A3 (`security-headers.md`) | **Yes** (2026-10-12) | header check on the staging URL; proxy must not override | DEVELOPMENT COMPLETE |
+| **L2 Fail-fast production configuration** — `next start` exits (code 1, variable names only) unless `APP_ENV=production` with valid Entra values (not the test tenant), strong HMAC key, real company domain, non-development `DATABASE_URL`, and no owner/test/operator credentials or test-issuer variables in the app environment (`security-headers.md` §3) | **Yes** (2026-10-12) | staging start with the real configuration | DEVELOPMENT COMPLETE |
+| **L3 Dependency advisory triage** — `dependency-advisory-triage.md`: 4 high (Prisma CLI chain: `deepmerge-ts`, unused `mysql2`) + 7 low (Scalar docs page / disabled `ai` agent) = 3 distinct advisories, none reachable from the production request path; nothing escalated; no downgrade | **Yes** (2026-10-12) | re-check before rehearsal and A8 | DEVELOPMENT COMPLETE |
 
-Closure evidence: platform record (hosting, network, TLS, secrets location); grants re-verified with the `db-schema-guarantees` checks as the real staging app role; response-header check on the staging URL; proxy log sample without query strings and no CORS header; secrets inventory (names and holders, no values); advisory triage note; configuration review showing no development value (`hrms_local_dev_only`, test tenant, `example.test`, `AUTH_MODE=test`).
+Closure evidence: platform record (hosting, network, TLS, secrets location); grants re-verified with the `db-schema-guarantees` checks as the real staging app role; response-header check on the staging URL; proxy log sample without query strings and no CORS header; secrets inventory (names and holders, no values); advisory triage note (done, re-checked); the startup check passing with the real configuration; configuration review showing no development value (`hrms_local_dev_only`, test tenant, `example.test`, `AUTH_MODE=test`).
 
 ### A3 — Production Entra authentication
 
@@ -262,11 +277,14 @@ The critical path is the **longer** of (a) counsel lead time, which cannot finis
 - Entra non-prod registration (IT).
 - Names for owners, HR admins and operators (Management, HR Lead).
 - Source mapping and catalogs prepared offline (HR).
-- Local engineering items L1–L3 and documentation drafts (Claude, on approval).
+- Remaining documentation drafts (deployment/migration runbook, restore record, staging rehearsal record, A8 record) — local engineering, on request.
 
 The staging rehearsals can run as **one combined session** (A6 → A3 → A4 → A7 → A5) once staging, Entra and names exist — no separate ceremony per gate.
 
 ## 6. External questions / inputs required
+
+Send-ready drafts (prepared, **not sent**): Legal — `docs/legal/legal-pack-01-draft.md`; HR — `onboarding-mapping-template.md` + `onboarding-templates/*.csv`; IT / Management — `it-input-request-01.md`.
+
 
 | To | Inputs |
 |---|---|
@@ -279,14 +297,15 @@ The staging rehearsals can run as **one combined session** (A6 → A3 → A4 →
 
 | Cat. | Task | Notes |
 |---|---|---|
-| **A — can complete now (on approval)** | L1 page security-header baseline (no CSP yet) | Security hardening; no permission change |
-| A | L2 fail-fast production configuration validation | Refuses dev values in `APP_ENV=production`; unit-tested |
-| A | L3 dependency advisory triage note | Documentation; upgrades remain Gate C |
+| **A — done 2026-10-12** | L2 fail-fast production configuration | `src/instrumentation.ts`, `unsafeRuntimeConfig`; 8 focused tests; real `next start` refusal verified |
+| A — done | L1 baseline security headers | `next.config.ts`; verified on `next start` and in the local UI |
+| A — done | L3 dependency advisory triage | `dependency-advisory-triage.md` |
 | **B — prepare, external execution** | Generic deployment/migration runbook (from plan App. D + handoff §4) | Finalised after hosting |
 | B | Restore runbook + restore rehearsal record template (§A5.2) | IT executes |
 | B | Combined staging rehearsal checklist / evidence record (A3–A7) | Technical Owner executes |
-| B | Legal pack as a send-ready document (Q-L1…Q-L12 + Annex A/B) | HR Lead sends; no answers drafted |
-| B | Mapping template with the model's fields (§A7) for HR to fill offline | HR decides optional fields with Legal |
+| B — drafted | Legal pack (Q-L1…Q-L8 + Q-L12, Annex A/B) | `docs/legal/legal-pack-01-draft.md`; HR Lead sends; no answers drafted |
+| B — drafted | HR mapping template + import-design skeleton | `onboarding-mapping-template.md`; HR fills offline |
+| B — drafted | IT / Management input request (IT-01…IT-15, E1–E10, B1–B8, PV-26, P1–P9) + staging rehearsal prerequisites | `it-input-request-01.md` |
 | B | A8 Go/No-Go record template | Management signs |
 | **C — external owner must act** | Everything in §6 | — |
 | **D — blocked** | MSAL sign-in; final CSP | IT-08 |
@@ -300,7 +319,10 @@ Claude has not performed, and will not report as done, any external action (send
 
 Real employee data may enter **any** system (staging included) only after A8 records **REAL DATA ALLOWED**. Until then: synthetic data only; anonymised rehearsal data only if counsel explicitly allows it (Q-L1/Q-L5); real source files stay outside every Mini HRS environment and every AI tool.
 
-## 9. Recommended execution order
+## 9. Execution order (approved by the owner 2026-10-12)
+
+Done so far: step 2 local hardening (L2 → L1 → L3) and the Legal / HR / IT drafts. Everything else waits on the owners below.
+
 
 1. **This week, external:** HR Lead sends the legal pack; Management decides hosting (IT-01) and names owners/operators; IT starts Entra non-prod (IT-08); HR starts mapping + catalogs.
 2. **This week, local (on approval):** L2 → L1 → L3; then category-B drafts (legal pack document, rehearsal checklist, restore template, generic runbook, mapping template).
