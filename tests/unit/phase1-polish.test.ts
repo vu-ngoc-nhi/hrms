@@ -65,7 +65,9 @@ describe("Record Health helper (Product/UI freeze)", () => {
   it("no rule version, validation status or project terminology is shown to HR users", () => {
     const text = JSON.stringify(en);
     expect(text).not.toMatch(/MVP decision|pending HR validation/i);
-    expect(en.overview.healthHelper).toBe("Optional details such as Manager, Level, Date of Birth or Mobile do not affect Record Health.");
+    expect(en.overview.healthHelper).toBe("Record Health reflects required operational information only.");
+    expect(text).not.toMatch(/\bPV-\d+|\bC-\d{2,}\b/);
+    expect(en.voidPeriod.findings.RELATIONSHIP_CHANGE_SUCCESSOR).toBe("This Employment Period was created by a Relationship Change. Reversing that Relationship Change is not available yet.");
     const overview = readFileSync("src/app/employees/[id]/OverviewTab.tsx", "utf8");
     expect(overview).not.toMatch(/ruleVersion|rule_version/);
   });

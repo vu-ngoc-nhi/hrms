@@ -398,7 +398,7 @@ export const en = {
     field: { department: "Department", job_title: "Job Title", level: "Level", manager: "Manager" },
     healthTitle: "Record Health",
     healthCompleteBody: "All required items are recorded.",
-    healthHelper: "Optional details such as Manager, Level, Date of Birth or Mobile do not affect Record Health.",
+    healthHelper: "Record Health reflects required operational information only.",
     healthMissing: "Missing:",
   },
   gender: { male: "Male", female: "Female", other: "Other" },
@@ -578,7 +578,7 @@ export const en = {
       PERIOD_NOT_EFFECTIVE: "This period has not started yet. Use Cancel Planned Period instead.",
       LATER_PERIOD_EXISTS: "A later valid employment period exists. Only the latest valid period can be voided.",
       RELATIONSHIP_CHANGE_SUCCESSOR:
-        "This period was created by a Relationship Change. Void cannot undo a Relationship Change; that workflow (PV-24) is not available yet.",
+        "This Employment Period was created by a Relationship Change. Reversing that Relationship Change is not available yet.",
       MANAGER_DEPENDENCY:
         "Other employees' assignments use this period as their manager. Open each employee listed below and change their Manager first (Change Assignment for a current or future assignment, Correct for a past one); they are never changed automatically. Then use Check again.",
       MANAGER_REFERENCE_WITHOUT_OVERLAP: "Other employees' assignments reference this period as manager for dates outside it. This does not block Void but should be reviewed.",
