@@ -29,6 +29,8 @@ Runtime configuration (values come from the secret store / environment, never fr
 | `COMPANY_EMAIL_DOMAINS` | EmeSoft company e-mail domain(s) |
 | `ACCESS_ADMIN_DATABASE_URL` | **only on the approved operator machine**, personal operator login (§3) |
 
+**Startup check (L2, 2026-10-12).** The application refuses to start (exit 1, one JSON log line listing the offending variable *names*, never values) when, under `next start`, `APP_ENV` is not `production`, or when any of these hold: `AUTH_MODE` ≠ `entra`; `ENTRA_TENANT_ID` / `ENTRA_API_CLIENT_ID` missing or not GUIDs, or the development test tenant; `ENTRA_API_SCOPE` not a bare scope name; `IDEMPOTENCY_HMAC_KEY` shorter than 32 characters or a development value; `COMPANY_EMAIL_DOMAINS` empty or containing a reserved/development domain (`.test`, `.example`, `.invalid`, `.localhost`, `.local`, `example.com|net|org`); `DATABASE_URL` not a PostgreSQL URL, using the public development password or the `hrms_dev` / `hrms_test` database; or `MIGRATION_DATABASE_URL`, `TEST_DATABASE_URL`, `TEST_MIGRATION_DATABASE_URL`, `ACCESS_ADMIN_DATABASE_URL`, `AUTH_TEST_ISSUER_ENABLED` or `AUTH_TEST_ISSUER_SECRET` present in the application's environment. The `NEXT_PUBLIC_ENTRA_*` browser values are checked once the MSAL sign-in exists (A3).
+
 ## 1. Environment / hosting inputs (A2, A6)
 
 | # | IT to provide / decide | Notes |

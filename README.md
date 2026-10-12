@@ -51,6 +51,9 @@ npm run build
 - `npm run db:migrate` refuses non-local or production targets. Staging and production migrations are manual and need explicit approval.
 - `hrms_dev` is never reset by scripts.
 
+## Production startup check
+- `next start` (`npm run start`) runs as `NODE_ENV=production` and refuses to start unless `APP_ENV=production` with a complete, non-development configuration (`unsafeRuntimeConfig` in `src/lib/config.ts`, run by `src/instrumentation.ts`). Local development uses `npm run dev`. Details: `docs/production/security-headers.md`.
+
 ## Layout
 - `src/app/**/route.ts`: HTTP protocol only.
 - `src/app/**/page.tsx`: UI calling REST.
