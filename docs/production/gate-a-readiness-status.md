@@ -277,13 +277,13 @@ The critical path is the **longer** of (a) counsel lead time, which cannot finis
 - Entra non-prod registration (IT).
 - Names for owners, HR admins and operators (Management, HR Lead).
 - Source mapping and catalogs prepared offline (HR).
-- Remaining documentation drafts (deployment/migration runbook, restore record, staging rehearsal record, A8 record) — local engineering, on request.
+- Documentation templates are drafted (Package 02, 2026-10-12): deployment/migration runbook, restore rehearsal record, staging rehearsal checklist, A8 record.
 
 The staging rehearsals can run as **one combined session** (A6 → A3 → A4 → A7 → A5) once staging, Entra and names exist — no separate ceremony per gate.
 
 ## 6. External questions / inputs required
 
-Send-ready drafts (prepared, **not sent**): Legal — `docs/legal/legal-pack-01-draft.md`; HR — `onboarding-mapping-template.md` + `onboarding-templates/*.csv`; IT / Management — `it-input-request-01.md`.
+Package 02 messages (prepared, **not sent**): `package-02/01-legal-submission-email.md`, `02-it-management-submission-email.md`, `03-hr-onboarding-request.md`, `04-owner-nomination-request.md`. Attachments / Legal — `docs/legal/legal-pack-01-draft.md`; HR — `onboarding-mapping-template.md` + `onboarding-templates/*.csv`; IT / Management — `it-input-request-01.md`.
 
 
 | To | Inputs |
@@ -300,17 +300,18 @@ Send-ready drafts (prepared, **not sent**): Legal — `docs/legal/legal-pack-01-
 | **A — done 2026-10-12** | L2 fail-fast production configuration | `src/instrumentation.ts`, `unsafeRuntimeConfig`; 8 focused tests; real `next start` refusal verified |
 | A — done | L1 baseline security headers | `next.config.ts`; verified on `next start` and in the local UI |
 | A — done | L3 dependency advisory triage | `dependency-advisory-triage.md` |
-| **B — prepare, external execution** | Generic deployment/migration runbook (from plan App. D + handoff §4) | Finalised after hosting |
-| B | Restore runbook + restore rehearsal record template (§A5.2) | IT executes |
-| B | Combined staging rehearsal checklist / evidence record (A3–A7) | Technical Owner executes |
+| **B — drafted (Package 02)** | Deployment/migration runbook template | `deployment-migration-runbook.md`; finalised after hosting |
+| B — drafted | Backup/restore rehearsal record | `restore-rehearsal-record.md`; IT + Technical Owner execute |
+| B — drafted | Coordinated staging rehearsal checklist (11 steps + prerequisites) | `staging-rehearsal-checklist.md`; Technical Owner executes |
 | B — drafted | Legal pack (Q-L1…Q-L8 + Q-L12, Annex A/B) | `docs/legal/legal-pack-01-draft.md`; HR Lead sends; no answers drafted |
 | B — drafted | HR mapping template + import-design skeleton | `onboarding-mapping-template.md`; HR fills offline |
 | B — drafted | IT / Management input request (IT-01…IT-15, E1–E10, B1–B8, PV-26, P1–P9) + staging rehearsal prerequisites | `it-input-request-01.md` |
-| B | A8 Go/No-Go record template | Management signs |
+| B — drafted | A8 Real-Data Go/No-Go record | `a8-go-no-go-record.md`; three signatories |
 | **C — external owner must act** | Everything in §6 | — |
 | **D — blocked** | MSAL sign-in; final CSP | IT-08 |
 | D | Import utility | PV-05/06/08 approved |
-| D | Production-safe read-only integrity scan mode | IT-14 |
+| D | Production-safe read-only integrity scan mode — **prerequisite of the staging rehearsal** (the scanner refuses non-local databases by design) | IT-14 |
+| B | Scripted synthetic dataset for staging, entered through the app (seed/demo scripts are local-only by design) — prerequisite P-8 of the rehearsal | Technical Owner; no new tool unless the owner asks |
 | D | Environment-specific runbook | IT-01/02/09 |
 
 Claude has not performed, and will not report as done, any external action (sending, provisioning, configuring, naming).
