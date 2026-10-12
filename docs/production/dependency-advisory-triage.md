@@ -8,13 +8,13 @@
 
 npm counts one *finding* per package on a vulnerable dependency path; a package's severity is the highest of anything below it. The numbers that matter are the **unique advisories** and **where the code runs**.
 
-| Where the code runs | npm findings (packages) | Unique advisories | Advisory severity | Reachable in Mini HRS? |
+| Where the code runs | npm findings (packages) | Unique advisories | Advisory severity | Reachable from the production request path? | Still relevant where? |
 |---|---|---|---|---|
-| **Runtime — server** (request path: `next`, `react`, `pg`, `@prisma/adapter-pg`, `@prisma/client` runtime, `jose`, `zod`) | **0** | **0** | — | — |
-| **Runtime — browser, `/internal/docs` only** (Scalar API reference → disabled AI agent) | 7 (all low) | **1** — GHSA-866g-f22w-33x8 | low | No (agent and MCP disabled, no AI provider) |
-| **Build / migration only** (Prisma CLI: `prisma generate`, attended `prisma migrate deploy`) | 4 (all reported high) | **3** — GHSA-ggr8-5vv4-36mx (`deepmerge-ts`), GHSA-3f6p-5ww8-9rcr (`mysql2`), GHSA-rgwj-5xj2-c3m3 (`mysql2`) | high, high, **moderate** | No (trusted config file; MySQL never used) |
-| **Dev / lint only** (`eslint-config-next`, never shipped) | 5 (all reported high) | **1** — GHSA-vfj7-8cjw-p6xm (`braces`) | high | No (repository's own glob patterns) |
-| **Total** | **16** (9 high, 7 low) | **5** (3 high, 1 moderate, 1 low) | | **0 reachable** |
+| **Runtime — server** (request path: `next`, `react`, `pg`, `@prisma/adapter-pg`, `@prisma/client` runtime, `jose`, `zod`) | **0** | **0** | — | — | — |
+| **Runtime — browser, `/internal/docs` only** (Scalar API reference → disabled AI agent) | 7 (all low) | **1** — GHSA-866g-f22w-33x8 | low | Not reachable from the production request path (agent and MCP disabled, no AI provider) | Browser bundle of the docs page; re-check on Scalar upgrades |
+| **Build / migration only** (Prisma CLI: `prisma generate`, attended `prisma migrate deploy`) | 4 (all reported high) | **3** — GHSA-ggr8-5vv4-36mx (`deepmerge-ts`), GHSA-3f6p-5ww8-9rcr (`mysql2`), GHSA-rgwj-5xj2-c3m3 (`mysql2`) | high, high, **moderate** | Not reachable from the production request path (trusted config file; MySQL never used) | **Yes — attended build / migration and supply chain**: the Prisma CLI runs on the build machine and the migration machine with owner credentials (§3a) |
+| **Dev / lint only** (`eslint-config-next`, never shipped) | 5 (all reported high) | **1** — GHSA-vfj7-8cjw-p6xm (`braces`) | high | Not reachable from the production request path (never shipped) | Developer machines / CI only |
+| **Total** | **16** (9 high, 7 low) | **5** (3 high, 1 moderate, 1 low) | | **None reachable from the production request path** | Build/migration findings stay tracked (§3a) |
 
 How this maps to the two npm commands:
 
@@ -51,6 +51,17 @@ Duplicated findings caused by chains: of the 16 findings, only 4 packages carry 
 ## 3. Escalation check
 
 An advisory would be escalated (and could block Gate A) if it were reachable from an HTTP request, from authentication, from the database driver in use (`pg`, `@prisma/adapter-pg`, `@prisma/client` runtime) or from data handling. None is: `next`, `react`, `pg`, `@prisma/adapter-pg`, `@prisma/client` runtime, `jose` and `zod` have no reported advisory on this date.
+
+## 3a. Build / migration and supply-chain context
+
+"Not reachable from the production request path" is not "irrelevant". The Prisma CLI chain (3 advisories) runs where it matters most: the build machine and the **attended migration step, which holds the schema-owner credentials**. Controls that keep this risk acceptable, all already in the runbook (`deployment-migration-runbook.md`):
+
+- install only from the committed lockfile (`npm ci`) at the release tag; the same artifact for staging and production;
+- the migration machine is an IT-approved operator machine (IT-11); owner credentials only in that shell, never in files or the app environment;
+- `prisma.config.ts` is a trusted repository file; the CLI connects only to Mini HRS PostgreSQL;
+- the re-check rule below runs before every staging rehearsal and before A8.
+
+If a future advisory affects the Prisma CLI's handling of PostgreSQL connections, credentials or migration files, it is escalated even though it is not on the request path.
 
 ## 4. Re-check rule
 

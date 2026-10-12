@@ -17,7 +17,7 @@ Rules used: a gate is COMPLETE only when its closure evidence exists and the acc
 | `npm run typecheck` | pass |
 | `npm test` (guarded `hrms_test`: drop `public` schema → `prisma migrate deploy` of all 10 migrations from empty → suite) | **52 files, 629/629 pass** |
 | `npm run test:integrity-baseline` | 1/1 pass (integrity scan 0/0 on the clean baseline) |
-| `npm audit --omit=dev` | 11 findings (4 high, 7 low) = 4 unique advisories (+1 dev-only with full `npm audit`) — normalized in `dependency-advisory-triage.md` §0: none reachable |
+| `npm audit --omit=dev` | 11 findings (4 high, 7 low) = 4 unique advisories (+1 dev-only with full `npm audit`) — normalized in `dependency-advisory-triage.md` §0: none reachable from the production request path; build/migration findings stay relevant to the attended deployment / supply chain |
 
 Caveat: "from empty" is **schema-level** on a local cluster where the migration identity can create roles. A fresh cluster with a non-superuser migration identity (the real staging/production case, handoff §4) has **not** been proven.
 
@@ -311,7 +311,7 @@ Package 02 messages (prepared, **not sent**): `package-02/01-legal-submission-em
 | **D — blocked** | MSAL sign-in; final CSP | IT-08 |
 | D | Import utility | PV-05/06/08 approved |
 | D | Production-safe read-only integrity scan mode — **prerequisite of the staging rehearsal** (the scanner refuses non-local databases by design) | IT-14 |
-| B | Scripted synthetic dataset for staging, entered through the app (seed/demo scripts are local-only by design) — prerequisite P-8 of the rehearsal | Technical Owner; no new tool unless the owner asks |
+| B | Scripted synthetic dataset for staging, entered through the app (seed/demo scripts are local-only by design) — prerequisite P-8 of the rehearsal; serves smoke / integrity / restore only and **does not close A7** (A7 needs the import-utility rehearsal) | Technical Owner; no new tool unless the owner asks |
 | D | Environment-specific runbook | IT-01/02/09 |
 
 Claude has not performed, and will not report as done, any external action (sending, provisioning, configuring, naming).
