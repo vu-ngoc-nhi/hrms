@@ -16,8 +16,20 @@ export const en = {
   // UI-1 Home / Action Center (PV-30): labels for the dashboard's machine codes; no score, no headcount wording.
   home: {
     title: "Home",
-    subtitle: "Core HR at a glance.",
+    subtitle: "Here’s what’s happening with your workforce today.",
+    greeting: {
+      morning: "Good morning, {name}",
+      afternoon: "Good afternoon, {name}",
+      evening: "Good evening, {name}",
+    },
+    greetingNoName: "Welcome to Mini HRS",
     statusAsOf: "Status as of {date}",
+    summaryLabel: "Workforce summary",
+    cardHint: { employees: "View in Employee List", review: "Review records" },
+    needsCardLabel: "{count} records need attention — open the Employee List",
+    needsNote: "Records missing required operational information (Record Health).",
+    snapshotNote: "Employee records by Employment Status",
+    snapshotBarLabel: "Employee records by Employment Status: {items}",
     noPermission: "Your account has not been granted access to employee profiles.",
     unavailable: "Home is not available right now. Nothing was changed; try again in a moment.",
     retry: "Try again",

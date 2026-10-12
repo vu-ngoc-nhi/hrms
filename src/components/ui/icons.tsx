@@ -58,3 +58,37 @@ export const IconAttention = () => (
     <path d="M12 10v4.5M12 17.2v.1" />
   </Icon>
 );
+export const IconUserCheck = () => (
+  <Icon>
+    <circle cx="9" cy="8" r="3.5" />
+    <path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5 1.6 0 3 .5 4.1 1.3" />
+    <path d="m15.5 18 2 2 4-4.5" />
+  </Icon>
+);
+export const IconUserClock = () => (
+  <Icon>
+    <circle cx="9" cy="8" r="3.5" />
+    <path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5 1 0 2 .2 2.8.5" />
+    <circle cx="17.5" cy="17" r="4" />
+    <path d="M17.5 15v2.2l1.4 1" />
+  </Icon>
+);
+export const IconUserMinus = () => (
+  <Icon>
+    <circle cx="9" cy="8" r="3.5" />
+    <path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5" />
+    <path d="M16 10.5h5.5" />
+  </Icon>
+);
+export const IconCalendar = () => (
+  <Icon>
+    <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+    <path d="M3.5 10h17M8 3v4M16 3v4" />
+  </Icon>
+);
+export const IconBars = () => (
+  <Icon>
+    <path d="M4 20h16" />
+    <path d="M7 16V10M12 16V5M17 16v-3" />
+  </Icon>
+);

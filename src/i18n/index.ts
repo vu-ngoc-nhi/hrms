@@ -37,6 +37,17 @@ export function tMaybe(key: string, vars?: Record<string, string | number>, loca
 // to every other month. The value is a business date (YYYY-MM-DD) and is never shifted by a time zone.
 const EN_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
+/** Day and short month of a business date (YYYY-MM-DD), for compact date blocks; never shifted by a time zone. */
+export function formatDayMonth(iso: string, locale = DEFAULT_LOCALE): { day: string; month: string } {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  if (locale === "en") return { day: String(d).padStart(2, "0"), month: EN_MONTHS[m - 1] };
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return {
+    day: new Intl.DateTimeFormat(locale, { day: "2-digit", timeZone: "UTC" }).format(date),
+    month: new Intl.DateTimeFormat(locale, { month: "short", timeZone: "UTC" }).format(date),
+  };
+}
+
 export function formatDate(iso: string | null | undefined, locale = DEFAULT_LOCALE): string {
   if (!iso) return "—";
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);

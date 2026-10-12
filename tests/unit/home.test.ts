@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { homeCapabilities, NEEDS_ATTENTION_HREF, needsAttentionView, snapshotView, upcomingRow, upcomingView, type Dashboard } from "@/app/homeModel";
+import { greeting, greetingPart, homeCapabilities, NEEDS_ATTENTION_HREF, needsAttentionView, snapshotView, summaryCards, upcomingRow, upcomingView, type Dashboard } from "@/app/homeModel";
 import { OPERATIONAL_ITEM_CODES } from "@/contracts/core-hr/completeness-codes";
 import { UPCOMING_EVENT_TYPES } from "@/contracts/core-hr/schemas";
+import { formatDayMonth } from "@/i18n";
 import { en } from "@/i18n/messages/en";
 
 // UI-1 Home / Action Center (PV-30): presentation of the dashboard's machine codes only.
@@ -137,5 +138,41 @@ describe("Shell, permissions and scope", () => {
       .filter((l) => !l.trim().startsWith("//"))
       .join("\n");
     expect(code).not.toMatch(/integrity|score|percent|department_id|byDepartment/i);
+  });
+});
+
+describe("Visual refresh (owner-approved post-freeze refinement, 2026-10-12)", () => {
+  it("greeting uses the signed-in display name and the viewer's local hour; neutral fallback before either is known", () => {
+    expect([greetingPart(0), greetingPart(11), greetingPart(12), greetingPart(17), greetingPart(18), greetingPart(23)]).toEqual(["morning", "morning", "afternoon", "afternoon", "evening", "evening"]);
+    expect(greeting("Lê Thị Nhung", 9)).toBe("Good morning, Lê Thị Nhung");
+    expect(greeting("Lê Thị Nhung", null)).toBe("Welcome to Mini HRS");
+    expect(greeting(undefined, 15)).toBe("Welcome to Mini HRS");
+  });
+
+  it("four summary cards from existing data only; Needs Attention links to the canonical filter only when it has records", () => {
+    const d = dashboard({ needs_attention: { total: 4, rule_version: "r", by_requirement: [], records: [] } });
+    expect(summaryCards(d).map((c) => [c.label, c.count, c.href])).toEqual([
+      ["Active", 61, "/employees?employment_status=active"],
+      ["Pre-start", 3, "/employees?employment_status=not_started"],
+      ["Ended", 14, "/employees?employment_status=ended"],
+      ["Needs Attention", 4, "/employees?operational_completeness=incomplete"],
+    ]);
+    expect(summaryCards(dashboard()).at(-1)).toMatchObject({ count: 0, href: null });
+  });
+
+  it("timeline rows carry the server event type and a time-zone-free day / month block", () => {
+    expect(upcomingRow(item({ type: "employment_end", effective_date: "2026-11-02" })).type).toBe("employment_end");
+    expect(formatDayMonth("2026-11-02")).toEqual({ day: "02", month: "Nov" });
+    expect(formatDayMonth("2026-09-30")).toEqual({ day: "30", month: "Sep" });
+  });
+
+  it("no Phase 2 content, fake trends or totals on Home", () => {
+    const code = readFileSync("src/app/page.tsx", "utf8")
+      .split("\n")
+      .filter((l) => !l.trim().startsWith("//"))
+      .join("\n");
+    expect(code).not.toMatch(/leave|payroll|contract|recruit|performance|turnover|trend|headcount|total employees|wfh/i);
+    expect(JSON.stringify(en.home)).not.toMatch(/total employees|on leave|trend|turnover|this month/i);
+    expect(en.home.needsNote).toContain("Record Health");
   });
 });

@@ -29,6 +29,25 @@ export function snapshotView(d: Dashboard) {
   }));
 }
 
+/** Greeting by the viewer's local hour — presentation only, never a business date. */
+export type GreetingPart = "morning" | "afternoon" | "evening";
+export const greetingPart = (hour: number): GreetingPart => (hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening");
+
+export function greeting(name: string | null | undefined, hour: number | null): string {
+  const display = name?.trim();
+  if (!display || hour === null) return t("home.greetingNoName");
+  return t(`home.greeting.${greetingPart(hour)}`, { name: display });
+}
+
+/** Summary cards: the three snapshot statuses plus Needs Attention, each linking only to an existing list filter. */
+export function summaryCards(d: Dashboard) {
+  const needs = d.needs_attention.total;
+  return [
+    ...snapshotView(d).map((m) => ({ key: m.status, tone: m.status, label: m.label, count: m.count, href: m.href, hint: t("home.cardHint.employees") })),
+    { key: "needs_attention", tone: "attention", label: t("home.needsTitle"), count: needs, href: needs > 0 ? NEEDS_ATTENTION_HREF : null, hint: t("home.cardHint.review") },
+  ];
+}
+
 export const requirementLabel = (code: OperationalItemCode) => t(`completeness.items.${code}`);
 
 export function needsAttentionView(d: Dashboard) {
@@ -85,7 +104,7 @@ export function upcomingRow(i: UpcomingItem) {
       detail = changeText(i.previous_assignment, i.assignment!);
       break;
   }
-  return { key: `${i.type}-${i.person_id}-${i.effective_date}`, date: i.effective_date, href: `/employees/${i.person_id}?tab=${tab}`, name: i.full_name, code: i.employee_code, title, detail };
+  return { key: `${i.type}-${i.person_id}-${i.effective_date}`, type: i.type, date: i.effective_date, href: `/employees/${i.person_id}?tab=${tab}`, name: i.full_name, code: i.employee_code, title, detail };
 }
 
 export function upcomingView(d: Dashboard) {

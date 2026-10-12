@@ -16,7 +16,7 @@ export function useSession() {
   return useContext(SessionContext);
 }
 
-const initials = (name: string) =>
+export const initials = (name: string) =>
   name
     .split(/\s+/)
     .filter(Boolean)
