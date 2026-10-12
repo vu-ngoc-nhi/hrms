@@ -2,7 +2,7 @@
 
 - Date: 2026-10-11 · Mode: **review / polish only**. Phase 1 feature scope is **frozen**; no new capability, API or P1 work.
 - Baseline: `main` at `f10b547` (phone-width overflow fixed). Polish commit `33e59fb`.
-- Milestone unchanged: **Core HR Phase 1 — UAT Passed With Pre-Production Actions**. **Not Production Ready**: Gate A 0/8 and Gate B 0/5 per `docs/production/pre-production-readiness-plan.md`.
+- **Milestone: Core HR Phase 1 — Product/UI Frozen** (2026-10-12, after the review was accepted). Release status remains **UAT Passed With Pre-Production Actions**. **Not Production Ready**: Gate A 0/8 and Gate B 0/5 per `docs/production/pre-production-readiness-plan.md`.
 - Evidence:
   - browser walk-through on synthetic `hrms_dev` (HR Admin, HR Editor, API Docs test identities);
   - DOM measurements in same-origin iframes at six widths;
@@ -151,7 +151,6 @@ No clear defect found; nothing changed.
 |---|---|
 | History does not show corrections, Work Email / personal changes, actor or Recorded At | No audit-read API (D-UI-7); the technical owner can query audit on request; audit viewer is Gate C |
 | Native date inputs follow the browser / OS locale (e.g. `31/12/2026`) | No date-picker dependency in Phase 1. Mitigated: the Add Employee Review ("Starts 16 Nov 2026") and workflow Timeline Impact ("31 Dec 2026 is the final date…") repeat the chosen date unambiguously |
-| Record Health footnote reads "MVP decision, pending HR validation" | Truthful governance status (PV-04 / MVP rule); plainer copy is P1 |
 | A future assignment in History reads "Assignment changed" + Planned badge | Approved UI-7 pattern (badge carries the tense) |
 | Manager is a plain select | Adequate at ~70–100 people; searchable picker is P1 |
 | No Documents / Contracts, Export (Pending Legal Review), configurable Access Roles, reports, notifications, org chart, duplicate-person engine, AI features, custom date picker, HR_VIEWER role (PV-07) | Deliberately out of Phase 1 scope |
@@ -163,7 +162,7 @@ No clear defect found; nothing changed.
 |---|---|
 | **P0 PRODUCT — COMPLETE** | Core HR lifecycle (create, assignment change / initial / correction / **cancel planned**, end, reverse end, relationship change, rehire, cancel planned period, void, period and personal corrections), Employee List, Employee Detail (5 tabs), Add Employee wizard, Organization reference data, **Home / Action Center**, capability-based UI, responsive layout. **No open P0 product item.** |
 | **P0 PRE-PRODUCTION — REMAINING** | §G (Gate A1–A8, Gate B1–B5) |
-| **P1** (only after go-live or by explicit decision) | Plainer Record Health footnote; searchable Manager picker; duplicate-person warning (needs an HR matching decision, D-UI-8); legacy workflow forms onto the `Field` primitive; per-requirement list filter for Needs Attention |
+| **P1** (only after go-live or by explicit decision) | Searchable Manager picker; duplicate-person warning (needs an HR matching decision, D-UI-8); legacy workflow forms onto the `Field` primitive; per-requirement list filter for Needs Attention |
 | **LATER** | Audit-read History / audit viewer; Export (after Legal); Documents / Contracts; configurable Access Roles / in-app access screen (C-85, Gate C); reports and analytics; notifications; org chart; usage counts before Deactivate; Reverse Relationship Change (PV-24); Working Arrangement (PV-15); probation module (PV-16); custom date picker; HR_VIEWER (PV-07) |
 
 ## G. Pre-production handoff (separate from UI readiness)
@@ -207,3 +206,19 @@ Screenshots were delivered with the review report; they are not committed to the
 - Shared `formatDate` is used in two server messages, so these integration files were run: `relationship-change.test.ts` and `void-employment.test.ts` — **36 / 36**.
 - Typecheck, lint, production build: pass.
 - No DB / UAT suite rerun: no domain or business code changed.
+
+## I. Product/UI freeze (2026-10-12)
+
+The review was accepted with one final copy cleanup (commit after `cfe5269`):
+- Overview → Record Health no longer shows "Completeness rule: MVP decision, pending HR validation." or the rule-version tooltip.
+- It now shows the neutral helper "Optional details such as Manager, Level, Date of Birth or Mobile do not affect Record Health."
+- The unused duplicate string "Rule {version} — MVP decision, pending HR validation." was removed.
+- No rule version, internal validation status or project terminology is shown to HR users. The API still returns `rule_version` for traceability.
+- The completeness rule's governance status is unchanged in the decision register (MVP Decision; PV-04 open).
+
+**Core HR Phase 1 — Product/UI Frozen.** No further product development in Phase 1. The next phase is **Pre-production Readiness, starting from Gate A** (§G).
+
+Checks for the cleanup:
+- unit suite from `main` only: 220 / 220;
+- typecheck, lint, production build: pass.
+
