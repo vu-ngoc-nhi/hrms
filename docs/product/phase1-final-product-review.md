@@ -2,7 +2,7 @@
 
 - Date: 2026-10-11 · Mode: **review / polish only**. Phase 1 feature scope is **frozen**; no new capability, API or P1 work.
 - Baseline: `main` at `f10b547` (phone-width overflow fixed). Polish commit `33e59fb`.
-- **Milestone: Core HR Phase 1 — Product/UI Frozen — Owner Accepted** (2026-10-12, C-101). This is the frozen Phase 1 product baseline; scope is reopened only for a P0 production blocker or a regression. Release status remains **UAT Passed With Pre-Production Actions**. **Not Production Ready**: Gate A 0/8 and Gate B 0/5 per `docs/production/pre-production-readiness-plan.md`.
+- **Milestone: Core HR Phase 1 — Product/UI Frozen — Owner Accepted** (2026-10-12, C-101). This is the frozen Phase 1 product baseline; scope is reopened only for a P0 production blocker or a regression. Reconfirmed 2026-10-12 including the accepted Home visual refresh (C-102). Release status remains **UAT Passed With Pre-Production Actions**. **Not Production Ready**: Gate A 0/8 and Gate B 0/5 per `docs/production/pre-production-readiness-plan.md`.
 - Evidence:
   - browser walk-through on synthetic `hrms_dev` (HR Admin, HR Editor, API Docs test identities);
   - DOM measurements in same-origin iframes at six widths;
