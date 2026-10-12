@@ -17,7 +17,7 @@ Rules used: a gate is COMPLETE only when its closure evidence exists and the acc
 | `npm run typecheck` | pass |
 | `npm test` (guarded `hrms_test`: drop `public` schema → `prisma migrate deploy` of all 10 migrations from empty → suite) | **52 files, 629/629 pass** |
 | `npm run test:integrity-baseline` | 1/1 pass (integrity scan 0/0 on the clean baseline) |
-| `npm audit --omit=dev` | 11 advisories (4 high, 7 low) — triaged in `dependency-advisory-triage.md` (L3): none reachable from the production request path |
+| `npm audit --omit=dev` | 11 findings (4 high, 7 low) = 4 unique advisories (+1 dev-only with full `npm audit`) — normalized in `dependency-advisory-triage.md` §0: none reachable |
 
 Caveat: "from empty" is **schema-level** on a local cluster where the migration identity can create roles. A fresh cluster with a non-superuser migration identity (the real staging/production case, handoff §4) has **not** been proven.
 
@@ -107,7 +107,7 @@ Status: **PENDING EXTERNAL INPUT** (infrastructure). Application side **DEVELOPM
 | Sensitive-data leakage (logs, errors, audit, idempotency HMAC) | Yes | proxy logs (IT-06) | DEVELOPMENT COMPLETE |
 | **L1 Page security headers** — `next.config.ts`: HSTS, CSP `frame-ancestors 'self'; base-uri 'self'; object-src 'none'`, X-Frame-Options, nosniff, Referrer-Policy `same-origin`, Permissions-Policy, no `X-Powered-By`; script/connect/frame-src CSP, form-action and COOP deferred to A3 (`security-headers.md`) | **Yes** (2026-10-12) | header check on the staging URL; proxy must not override | DEVELOPMENT COMPLETE |
 | **L2 Fail-fast production configuration** — `next start` exits (code 1, variable names only) unless `APP_ENV=production` with valid Entra values (not the test tenant), strong HMAC key, real company domain, non-development `DATABASE_URL`, and no owner/test/operator credentials or test-issuer variables in the app environment (`security-headers.md` §3) | **Yes** (2026-10-12) | staging start with the real configuration | DEVELOPMENT COMPLETE |
-| **L3 Dependency advisory triage** — `dependency-advisory-triage.md`: 4 high (Prisma CLI chain: `deepmerge-ts`, unused `mysql2`) + 7 low (Scalar docs page / disabled `ai` agent) = 3 distinct advisories, none reachable from the production request path; nothing escalated; no downgrade | **Yes** (2026-10-12) | re-check before rehearsal and A8 | DEVELOPMENT COMPLETE |
+| **L3 Dependency advisory triage** — `dependency-advisory-triage.md`: 16 npm findings = 5 unique advisories: 0 server runtime, 1 low browser-only (docs page, disabled AI agent), 3 build/migration-only (Prisma CLI), 1 dev/lint-only; none reachable; nothing escalated; no downgrade | **Yes** (2026-10-12) | re-check before rehearsal and A8 | DEVELOPMENT COMPLETE |
 
 Closure evidence: platform record (hosting, network, TLS, secrets location); grants re-verified with the `db-schema-guarantees` checks as the real staging app role; response-header check on the staging URL; proxy log sample without query strings and no CORS header; secrets inventory (names and holders, no values); advisory triage note (done, re-checked); the startup check passing with the real configuration; configuration review showing no development value (`hrms_local_dev_only`, test tenant, `example.test`, `AUTH_MODE=test`).
 
