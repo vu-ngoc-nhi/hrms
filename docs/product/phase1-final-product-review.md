@@ -2,7 +2,7 @@
 
 - Date: 2026-10-11 · Mode: **review / polish only**. Phase 1 feature scope is **frozen**; no new capability, API or P1 work.
 - Baseline: `main` at `f10b547` (phone-width overflow fixed). Polish commit `33e59fb`.
-- **Milestone (candidate): Core HR Phase 1 — Product/UI Freeze Candidate** (2026-10-12) — pending the product owner's local visual review and final acceptance. Release status remains **UAT Passed With Pre-Production Actions**. **Not Production Ready**: Gate A 0/8 and Gate B 0/5 per `docs/production/pre-production-readiness-plan.md`.
+- **Milestone: Core HR Phase 1 — Product/UI Frozen — Owner Accepted** (2026-10-12, C-101). This is the frozen Phase 1 product baseline; scope is reopened only for a P0 production blocker or a regression. Release status remains **UAT Passed With Pre-Production Actions**. **Not Production Ready**: Gate A 0/8 and Gate B 0/5 per `docs/production/pre-production-readiness-plan.md`.
 - Evidence:
   - browser walk-through on synthetic `hrms_dev` (HR Admin, HR Editor, API Docs test identities);
   - DOM measurements in same-origin iframes at six widths;
@@ -217,7 +217,7 @@ The review was accepted with one final copy cleanup (commit after `cfe5269`):
 - The completeness rule's governance status is unchanged in the decision register (MVP Decision; PV-04 open).
 - Void blocker for a period created by a Relationship Change (2026-10-12 defect fix): the project reference "(PV-24)" is no longer shown. It now reads "This Employment Period was created by a Relationship Change. Reversing that Relationship Change is not available yet."
 
-**Core HR Phase 1 — Product/UI Freeze Candidate** (pending the product owner's local visual review; final owner acceptance turns it into Product/UI Frozen). No further product development in Phase 1. The next phase is **Pre-production Readiness, starting from Gate A** (§G).
+**Core HR Phase 1 — Product/UI Frozen — Owner Accepted** (2026-10-12, C-101; was: Freeze Candidate pending the owner's local visual review). No further product development in Phase 1. The next phase is **Pre-production Readiness, starting from Gate A** (§G).
 
 Checks for the cleanup:
 - unit suite from `main` only: 220 / 220;
