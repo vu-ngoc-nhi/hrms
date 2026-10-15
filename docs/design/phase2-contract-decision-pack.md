@@ -1,6 +1,6 @@
 # Eme People — Phase 2 Contract Product & Architecture Decision Pack
 
-- Status: **Revision 4 (2026-10-15) — approved; staged implementation authorized (C-109).** Phase 2A is implemented slice by slice (2A-0 … 2A-6) with an **owner checkpoint between slices**; only **slice 2A-0** (architecture records, ADR-0005, API draft) is in progress. Owner decisions: **C-104 … C-109**, **M-15 … M-18** in `docs/decision-register.md`. Frozen contract design: `docs/adr/0005-contract-domain.md`; API draft: `docs/api/contracts-api-draft.md`. Amendment workflow and Phase 2B are **not** authorized.
+- Status: **Revision 4 (2026-10-15) — approved; staged implementation authorized (C-109).** Phase 2A is implemented slice by slice (2A-0 … 2A-6) with an **owner checkpoint between slices**; **2A-0 done; 2A-1 Contract foundation implemented (2026-10-15, C-110)** — schema, Contract Type catalog API and Organization tab, permissions, shared query foundation; no contract lifecycle API or contract screen yet. Owner decisions: **C-104 … C-109**, **M-15 … M-18** in `docs/decision-register.md`. Frozen contract design: `docs/adr/0005-contract-domain.md`; API draft: `docs/api/contracts-api-draft.md`. Amendment workflow and Phase 2B are **not** authorized.
 - Baseline: **Eme People — Core HR Phase 1 Product/UI Frozen — Owner Accepted** (C-101, C-103). Release status unchanged: *UAT Passed With Pre-Production Actions*, **not Production Ready**; Gate A is in external execution.
 - Governing principles: C-84, C-85, C-13 (Employee Type ≠ Contract Type), C-16, C-17, C-19 (9), PL-10.
 - Data: synthetic only (C-03). No real employee or contract data, template or signed file.
@@ -262,7 +262,7 @@ Void is final. No hard delete of business contract history. Cancel = a plan that
 
 ## 8. Contract Type strategy
 
-- Catalog `contract_type` (code, EN name, `name_vi`, active) managed with `catalogs.manage` on the Organization page; deactivate, never delete; immutable code. **APPROVED RECOMMENDATION.**
+- Catalog `contract_type` (code, EN name, `name_vi`, active) managed with `catalogs.manage` on the Organization page (Contract Types tab, approved C-110); deactivate, never delete; immutable code. **APPROVED RECOMMENDATION.**
 - No behaviour flags in 2A (no `term_kind`): fixed-term vs open-ended is captured per contract (`effective_to` or `is_open_ended`, M-16). Type-specific rules are added additively once approved.
 - Dev/test seed: synthetic placeholders marked as examples (`EXAMPLE_FIXED_TERM`, `EXAMPLE_OPEN_ENDED`, `EXAMPLE_SERVICE`, `EXAMPLE_INTERNSHIP`). **TECHNICAL DECISION.**
 - Real catalog and Employee Type compatibility: **BUSINESS DECISION REQUIRED (PV-31)** + **LEGAL INPUT REQUIRED (PL-12)**.
@@ -385,8 +385,8 @@ No persistent "acknowledged" state in 2A.
 
 | Slice | Scope |
 |---|---|
-| **2A-0** | Architecture records: decision pack, register, ADR-0005, Phase 2A API draft (no schema, no code) |
-| **2A-1** | Contract foundation (catalog, aggregate schema, permissions, shared query) |
+| **2A-0** ✅ | Architecture records: decision pack, register, ADR-0005, Phase 2A API draft (no schema, no code) |
+| **2A-1** ✅ | Contract foundation (catalog, aggregate schema, permissions, shared query); Organization → Contract Types tab (C-110) |
 | **2A-2** | Core lifecycle: create/edit/discard Draft, Finalize, Return to Draft, Confirm signed, history |
 | **2A-3** | Employee Contracts tab + central Contracts module |
 | **2A-4** | Contract reminders / Home integration |

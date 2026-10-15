@@ -1,6 +1,6 @@
 # ADR-0005 — Contract domain (Phase 2A Contract Management)
 
-- Status: **Accepted (2026-10-15)** — freezes C-104 … C-109 and M-15 … M-18 for implementation. Staged delivery (C-109): slice **2A-0** (this ADR, the decision pack, the API draft) only; each later slice needs an owner checkpoint. Amendment workflow and Phase 2B are **not** authorized.
+- Status: **Accepted (2026-10-15)** — freezes C-104 … C-110 and M-15 … M-18 for implementation. Staged delivery (C-109): **2A-0** done; **2A-1 Contract foundation implemented** (migration `20261015000000_contract_foundation`, §16); each later slice needs an owner checkpoint. Amendment workflow and Phase 2B are **not** authorized.
 - Sources: `docs/design/phase2-contract-decision-pack.md` (revision 4), `docs/decision-register.md`, API draft `docs/api/contracts-api-draft.md`.
 - Governing principles: C-84 (*Lightweight HR operations, strong Core HR integrity*), C-85 (permission-based access), ADR-0003 (identity), ADR-0004 (history vs audit).
 - Synthetic data only. Real contract data needs PL-11, PL-12, PL-13 and the Real Data Gate.
@@ -155,3 +155,22 @@ Phase 2B (templates, preview, reproducible document snapshot, Word, PDF) **must 
 - Numbers typed by mistake stay reserved (M-18); HR edits the Draft rather than discarding it.
 - No Employee Type / Contract Type compatibility check until PV-31.
 - Amendments cannot be recorded until the amendment checkpoint (PL-12, PV-38).
+
+## 16. Implementation record — slice 2A-1 (2026-10-15)
+
+Forward, additive migration `prisma/migrations/20261015000000_contract_foundation/migration.sql` (applied to local `hrms_dev` and rebuilt from zero on `hrms_test`; never run elsewhere).
+
+| Object | Implemented as |
+|---|---|
+| `contract_type` | id, code (`^[A-Za-z0-9._-]{1,30}$`, unique `lower(code)`), name, name_vi, is_active, created_at, updated_at — catalog conventions, no behaviour flags |
+| `contract` | id, **employment_id** (existing FK naming for the Employment Period), parent_contract_id, relationship_type, contract_type_id, contract_number, effective_from, effective_to (inclusive), **is_open_ended** (existing boolean naming), summary, finalized_at, finalized_by, signed_at (DATE), cancelled_at, voided_at, revision, created_at, created_by, updated_at (as on the Person aggregate) |
+| `contract_history_event` | id, contract_id, event_type, effective_date, recorded_at, recorded_by, reason, related_contract_id |
+| Constraints | `contract_relationship_type_check` (`renewal` only); `contract_relationship_pair_ck`; `contract_not_own_parent_ck`; `contract_parent_same_period_fk` (composite FK on `contract_id_employment_uq`); `contract_term_exclusive_ck`; `contract_dates_ck`; `contract_finalized_complete_ck`; `contract_finalized_by_ck`; `contract_signed_requires_finalized_ck`; `contract_single_disposition_ck`; `contract_void_requires_finalized_ck`; number CHECK (1–100 chars, no surrounding whitespace); `contract_history_event_reason_required_ck`; `contract_history_event_related_ck` |
+| Indexes | `contract_number_ci_uq` UNIQUE on `lower(contract_number COLLATE "und-x-icu")` — no disposition excluded (M-18; ICU folding is independent of the database default collation, so the server must provide ICU); `contract_one_live_renewal_uq` partial on live renewals |
+| Triggers | `contract_structural_rules_trg`: Effective From inside the period (on insert, on change of the date or period, and on finalization; never on period writes), new records/finalization only on a period that is not Cancelled/Voided (row read-locked), parent must be an agreement, link immutable, period fixed after Finalize. `contract_disposition_is_terminal_trg`: no insert already disposed, no change after Cancel/Void, disposing never changes content |
+| Grants | `hrms_app`: SELECT, INSERT, UPDATE on `contract_type`, `contract`; SELECT, INSERT on `contract_history_event`; no DELETE anywhere |
+| Audit | `audit_field_change_field_check` extended with the seven contract fields of §12 |
+| Permissions | `contracts.read/manage/finalize/correct` in `ROLE_PERMISSIONS` and the `access_role_permission` mirror (HR_ADMIN 4, HR_EDITOR 3) |
+| Code | `src/modules/contracts/model.ts` (number normalization, document state, value sets, `signed_at` business-date rule for later services), `src/modules/contracts/queries.ts` (shared operational predicate) |
+
+Clarification applied in 2A-1: the Effective-From-inside-period rule is enforced on every write that sets the date (Draft included), not only at Finalize — an out-of-period date is objectively invalid for that period; later Phase 1 period corrections remain unblocked (C-107).

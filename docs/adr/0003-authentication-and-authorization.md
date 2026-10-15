@@ -42,6 +42,8 @@ Permissions come from `app_user_role` → an allow-list in `src/modules/identity
 | employees.read_sensitive | — | — | — |
 | catalogs.read | ✓ | ✓ | |
 | catalogs.manage | ✓ | | |
+| contracts.read / contracts.manage / contracts.finalize (Phase 2A, C-106) | ✓ | ✓ | |
+| contracts.correct (Phase 2A, C-106) | ✓ | | |
 | docs.read | | | ✓ |
 
 - Sensitive groups (legal ID, tax, social insurance, bank, dependants, health, contract, salary) are **rejected by the API** with `422 PROTECTED_FIELD_NOT_ENABLED`.

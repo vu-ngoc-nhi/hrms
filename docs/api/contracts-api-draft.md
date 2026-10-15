@@ -1,6 +1,6 @@
 # Contract API — Phase 2A draft (not implemented)
 
-- Status: **Draft for owner review (slice 2A-0, 2026-10-15).** Nothing here is implemented; no route, schema or permission exists yet. Each operation is implemented in the slice shown and enters the generated OpenAPI contract only then.
+- Status: **Draft (2A-0, 2026-10-15); slice 2A-1 implemented the Contract Type catalog operations** (`listContractTypes`, `createContractType`, `updateContractType`, now in the generated OpenAPI contract) and the four `contracts.*` permissions. Every other operation is still a draft and enters the contract only in its slice. Finalize warning acknowledgement (§3) is **not approved** — decided in 2A-2 (PV-43).
 - Frozen design: `docs/adr/0005-contract-domain.md`. Decisions: C-104 … C-109, M-15 … M-18 (`docs/decision-register.md`).
 - **Amendment is not specified as implementation-ready** (gated, C-109). Phase 2B generation is out of scope.
 
@@ -21,9 +21,9 @@ All Core HR conventions apply unchanged (`docs/api/core-hr-api.md`): JSON, snake
 
 | Slice | operationId | Method + path | Permission | Purpose |
 |---|---|---|---|---|
-| 2A-1 | listContractTypes | GET `/contract-types` | catalogs.read | Catalog (`include_inactive` flag) |
-| 2A-1 | createContractType | POST `/contract-types` | catalogs.manage | `{ code, name, name_vi? }`; 409 `DUPLICATE_CATALOG_CODE` |
-| 2A-1 | updateContractType | PATCH `/contract-types/{id}` | catalogs.manage | `name`, `name_vi`, `is_active`; code immutable |
+| 2A-1 ✅ | listContractTypes | GET `/contract-types` | catalogs.read | Catalog (`include_inactive` flag) |
+| 2A-1 ✅ | createContractType | POST `/contract-types` | catalogs.manage | `{ code, name, name_vi? }`; 409 `DUPLICATE_CATALOG_CODE` |
+| 2A-1 ✅ | updateContractType | PATCH `/contract-types/{id}` | catalogs.manage | `name`, `name_vi`, `is_active`; code immutable |
 | 2A-2 | createContract | POST `/contracts` | contracts.manage | Create a Draft |
 | 2A-2 | getContract | GET `/contracts/{id}` | contracts.read | `ContractDetail` |
 | 2A-2 | updateContractDraft | PATCH `/contracts/{id}` | contracts.manage | Edit a Draft |
@@ -64,7 +64,7 @@ Draft-time checks (objectively invalid input only): `effective_to < effective_fr
 
 **createContractDiscard** — `{ expected_revision, reason?: string ≤ 500 }`.
 
-**createContractFinalize** — `{ expected_revision, acknowledged_warnings: ["OVERLAPPING_CONTRACT", …] }`. The server re-evaluates blockers and warnings in the transaction; any current warning not in `acknowledged_warnings` → 422 `WARNINGS_NOT_ACKNOWLEDGED` with the current warnings in `details`.
+**createContractFinalize** — *(acknowledgement mechanism not approved; PV-43, decided in 2A-2)* `{ expected_revision, acknowledged_warnings: ["OVERLAPPING_CONTRACT", …] }`. The server re-evaluates blockers and warnings in the transaction; any current warning not in `acknowledged_warnings` → 422 `WARNINGS_NOT_ACKNOWLEDGED` with the current warnings in `details`.
 
 **createContractReturnToDraft** — `{ expected_revision, reason: string 1–500 }`.
 
@@ -290,12 +290,11 @@ Ordered by `recorded_at`. `reason` present for `returned_to_draft`, `discarded`,
 
 ## 10. Open points
 
-Before or at the 2A-1 checkpoint:
-- **Contract Type management UI.** The decision pack places the catalog on the Organization page, but that page is a frozen Phase 1 screen not listed in the approved extensions (C-108). Recommendation: 2A-1 delivers the catalog **API + synthetic seed only**; a "Contract Types" section on the Organization page needs explicit owner approval.
-- **Number reservation scope (M-18 interpretation).** "Unique across the Contract register" is implemented literally: a number stays reserved by discarded Drafts as well as Voided records. Confirm, or exclude discarded never-finalized Drafts (partial index).
+Resolved at the 2A-1 checkpoint (C-110): Organization gains a **Contract Types** tab (catalog permissions); a number stays occupied by every record that currently holds it — including discarded Drafts and Voided records — while a Draft may still change or clear its own number.
 
 Later checkpoints:
 
+- 2A-2: Finalize warning acknowledgement (PV-43) — warnings stay separate from blocking validation.
 - 2A-5: whether Cancel planned / Void of a contract with a non-cancelled renewal child is blocked (`DEPENDENT_CONTRACTS_EXIST`, recommended, consistent with Return to Draft) — confirm at that checkpoint; PV-39 renewal eligibility.
 - 2A-4: reminder window (PV-36).
 - Amendment operations and representation: separate checkpoint (PL-12, PV-38).
