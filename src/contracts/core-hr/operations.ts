@@ -108,6 +108,17 @@ const employeeTypes = catalogOperations({
   update: S.EmployeeTypeUpdateSchema,
 });
 
+// Phase 2A slice 2A-1 (C-104): Contract Type catalog, same catalog permissions and conventions.
+const contractTypes = catalogOperations({
+  key: "ContractType",
+  path: "/api/v1/core-hr/contract-types",
+  label: "contract type",
+  list: S.ContractTypeListSchema,
+  item: S.ContractTypeSchema,
+  create: S.ContractTypeCreateSchema,
+  update: S.ContractTypeUpdateSchema,
+});
+
 // Only IMPLEMENTED operations are listed. Planned work lives in docs/, not in the trial spec.
 export const operations = {
   getHealth: {
@@ -446,6 +457,9 @@ export const operations = {
   listEmployeeTypes: employeeTypes.list,
   createEmployeeType: employeeTypes.create,
   updateEmployeeType: employeeTypes.update,
+  listContractTypes: contractTypes.list,
+  createContractType: contractTypes.create,
+  updateContractType: contractTypes.update,
   getInternalOpenApi: {
     operationId: "getInternalOpenApi",
     method: "get",

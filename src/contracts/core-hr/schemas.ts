@@ -153,6 +153,29 @@ export const EmployeeTypeUpdateSchema = reg(
 );
 export const EmployeeTypeListSchema = reg("EmployeeTypeList", page(EmployeeTypeSchema));
 
+// Phase 2A (C-104, ADR-0005): Contract Type is reference data for contract records — no business rules (fixed-term,
+// salary, notice, renewal) live on it. The real catalog is pending (PV-31); development data is synthetic.
+export const ContractTypeSchema = reg(
+  "ContractType",
+  z.object({
+    ...catalogBase,
+    name: z.string(),
+    name_vi: z.string().nullable().describe("Optional Vietnamese name for official documents."),
+  }),
+  "Classification of contract records (reference data). Separate from Employee Type; carries no contract rules.",
+);
+export const ContractTypeCreateSchema = reg(
+  "ContractTypeCreate",
+  z.strictObject({ code: code(30), name: name(), name_vi: name().optional() }),
+);
+export const ContractTypeUpdateSchema = reg(
+  "ContractTypeUpdate",
+  z
+    .strictObject({ name: name().optional(), name_vi: name().nullable().optional(), is_active: z.boolean().optional() })
+    .refine(nonEmpty, NON_EMPTY_MESSAGE),
+);
+export const ContractTypeListSchema = reg("ContractTypeList", page(ContractTypeSchema));
+
 // ---------------- Employees ----------------
 export const EmploymentStatusSchema = z
   .enum(["no_employment", "not_started", "active", "ended"])

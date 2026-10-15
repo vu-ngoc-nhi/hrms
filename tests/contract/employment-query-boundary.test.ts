@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 
 // C-29 / PV-25 / PV-29 query design: only the shared employment query module may reference the disposition markers
 // (period cancellation and void, assignment cancellation), so no service can forget the "operational periods" filter by writing its own.
-const ALLOWED = new Set([path.normalize("src/modules/core-hr/employments/queries.ts")]);
+// Phase 2A (ADR-0005 §6): contract dispositions use the same Prisma marker names and are owned by contracts/queries.ts,
+// which reuses the employment predicate for the period part.
+const ALLOWED = new Set([path.normalize("src/modules/core-hr/employments/queries.ts"), path.normalize("src/modules/contracts/queries.ts")]);
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -23,6 +25,12 @@ describe("Employment query boundary", () => {
   it("keeps the operational predicate (cancelled_at IS NULL AND voided_at IS NULL) in one definition", () => {
     const source = readFileSync("src/modules/core-hr/employments/queries.ts", "utf8");
     expect(source).toContain("const OPERATIONAL: Prisma.EmploymentWhereInput = { cancelledAt: null, voidedAt: null };");
+  });
+  it("keeps the operational contract predicate (contract not Cancelled/Voided AND period operational) in one definition", () => {
+    const source = readFileSync("src/modules/contracts/queries.ts", "utf8");
+    expect(source).toContain("const OPERATIONAL_CONTRACT: Prisma.ContractWhereInput = { cancelledAt: null, voidedAt: null };");
+    expect(source).toContain("{ employment: { is: operationalEmploymentWhere() } }");
+    expect(source).not.toMatch(/employment\.(cancelledAt|voidedAt)/); // the period part is delegated, never re-implemented
   });
   it("keeps the operational assignment predicate (cancelled_at IS NULL, PV-29) in one definition", () => {
     const source = readFileSync("src/modules/core-hr/employments/queries.ts", "utf8");

@@ -2,10 +2,14 @@
 // every kind has a code (set once, never editable) and an active flag; Department, Level and Employee Type have a
 // name; Job Title has an English name and an optional Vietnamese name; Level has an optional display order; Employee
 // Type has `requires_work_email` (drives the operational email rule, PV-03; set at creation only in the UI, D-UI-17).
-// There is no delete — values are deactivated.
+// Contract Type (Phase 2A, C-104) is reference data for contract records with a name and an optional Vietnamese name,
+// like Job Title; it carries no contract rules. There is no delete — values are deactivated.
 
-export const KINDS = ["departments", "job-titles", "job-levels", "employee-types"] as const;
+export const KINDS = ["departments", "job-titles", "job-levels", "employee-types", "contract-types"] as const;
 export type Kind = (typeof KINDS)[number];
+
+/** Kinds with an optional Vietnamese name for official documents. */
+export const hasNameVi = (kind: Kind) => kind === "job-titles" || kind === "contract-types";
 
 export type CatalogRow = {
   id: string;
@@ -58,10 +62,9 @@ export function formErrors(kind: Kind, f: CatalogForm, creating: boolean): Parti
 /** POST body for a new value. */
 export function createBody(kind: Kind, f: CatalogForm): Record<string, unknown> {
   const body: Record<string, unknown> = { code: f.code.trim() };
-  if (kind === "job-titles") {
-    body.name_en = f.name.trim();
-    if (f.name_vi.trim()) body.name_vi = f.name_vi.trim();
-  } else body.name = f.name.trim();
+  if (kind === "job-titles") body.name_en = f.name.trim();
+  else body.name = f.name.trim();
+  if (hasNameVi(kind) && f.name_vi.trim()) body.name_vi = f.name_vi.trim();
   if (kind === "job-levels" && f.sort_order.trim() !== "") body.sort_order = Number(f.sort_order);
   if (kind === "employee-types") body.requires_work_email = f.requires_work_email;
   return body;
@@ -72,7 +75,7 @@ export function updateBody(kind: Kind, row: CatalogRow, f: CatalogForm): Record<
   const start = formFromRow(row);
   const body: Record<string, unknown> = {};
   if (f.name.trim() !== start.name) body[kind === "job-titles" ? "name_en" : "name"] = f.name.trim();
-  if (kind === "job-titles" && f.name_vi.trim() !== start.name_vi) body.name_vi = f.name_vi.trim() || null;
+  if (hasNameVi(kind) && f.name_vi.trim() !== start.name_vi) body.name_vi = f.name_vi.trim() || null;
   if (kind === "job-levels" && f.sort_order.trim() !== start.sort_order) body.sort_order = f.sort_order.trim() === "" ? null : Number(f.sort_order);
   // D-UI-17: the Work Email policy of an existing Employee Type is never changed from the normal edit (it would change
   // Record Health of existing employees); it is set only when the type is created. The API capability stays.

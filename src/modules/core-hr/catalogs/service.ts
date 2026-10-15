@@ -5,7 +5,8 @@ import { recordAudit } from "@/modules/audit/audit";
 import type { Principal } from "@/modules/identity/authenticate";
 
 // Catalog values are HR-managed data identified by id/code; the application never depends on their display names.
-export type CatalogKind = "department" | "job_title" | "job_level" | "employee_type";
+// contract_type (Phase 2A, C-104) is reference data for contract records; it carries no business rules.
+export type CatalogKind = "department" | "job_title" | "job_level" | "employee_type" | "contract_type";
 type ListQuery = { page: number; page_size: number; search?: string; include_inactive?: "true" | "false" };
 type Row = Record<string, unknown> & { id: string; code: string; isActive: boolean; createdAt: Date; updatedAt: Date };
 type CatalogDelegate = {
@@ -22,6 +23,7 @@ function delegate(kind: CatalogKind, client: Tx | ReturnType<typeof db> = db()):
     job_title: client.jobTitle,
     job_level: client.jobLevel,
     employee_type: client.employeeType,
+    contract_type: client.contractType,
   };
   return map[kind] as unknown as CatalogDelegate;
 }
@@ -31,6 +33,7 @@ const nameField: Record<CatalogKind, string> = {
   job_title: "nameEn",
   job_level: "name",
   employee_type: "name",
+  contract_type: "name",
 };
 
 function toApi(kind: CatalogKind, row: Row) {
@@ -44,6 +47,7 @@ function toApi(kind: CatalogKind, row: Row) {
   if (kind === "job_title") return { ...base, name_en: row.nameEn as string, name_vi: (row.nameVi as string | null) ?? null };
   if (kind === "job_level") return { ...base, name: row.name as string, sort_order: (row.sortOrder as number | null) ?? null };
   if (kind === "employee_type") return { ...base, name: row.name as string, requires_work_email: row.requiresWorkEmail as boolean };
+  if (kind === "contract_type") return { ...base, name: row.name as string, name_vi: (row.nameVi as string | null) ?? null };
   return { ...base, name: row.name as string };
 }
 
@@ -71,7 +75,7 @@ function writeData(kind: CatalogKind, input: Record<string, unknown>) {
   if (typeof input.code === "string") data.code = input.code.trim();
   if (typeof input.name === "string") data.name = normalizeText(input.name);
   if (typeof input.name_en === "string") data.nameEn = normalizeText(input.name_en);
-  if (kind === "job_title" && "name_vi" in input) {
+  if ((kind === "job_title" || kind === "contract_type") && "name_vi" in input) {
     data.nameVi = typeof input.name_vi === "string" ? normalizeText(input.name_vi) : null;
   }
   if (kind === "job_level" && "sort_order" in input) data.sortOrder = input.sort_order ?? null;

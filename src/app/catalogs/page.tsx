@@ -14,6 +14,7 @@ import {
   displayName,
   formErrors,
   formFromRow,
+  hasNameVi,
   kindFromQuery,
   organizationCapabilities,
   statusBody,
@@ -24,7 +25,7 @@ import {
 } from "./organizationModel";
 
 // UI-10 Organization: the reference data used in employee records (Departments, Job Titles, Levels, Employee Types)
-// over the unchanged catalog API (route stays /catalogs). Values are deactivated, never deleted; mutation controls
+// and, since Phase 2A (C-104), Contract Types for contract records, over the catalog API (route stays /catalogs). Values are deactivated, never deleted; mutation controls
 // appear only with catalogs.manage.
 
 type Dialog = { mode: "create" } | { mode: "edit"; row: CatalogRow } | { mode: "deactivate"; row: CatalogRow };
@@ -82,7 +83,7 @@ function CatalogDialog({
         <Field label={t(`organization.nameLabel.${kind}`)} required error={errors.name}>
           {(c) => <input {...c} value={form.name} onChange={set("name")} maxLength={150} autoComplete="off" />}
         </Field>
-        {kind === "job-titles" && (
+        {hasNameVi(kind) && (
           <Field label={t("organization.nameVi")} hint={t("organization.nameViHint")}>
             {(c) => <input {...c} value={form.name_vi} onChange={set("name_vi")} maxLength={150} autoComplete="off" />}
           </Field>
@@ -158,7 +159,7 @@ function DeactivateDialog({ kind, row, onClose, onDone }: { kind: Kind; row: Cat
         </>
       }
     >
-      <p>{t("organization.deactivateBody")}</p>
+      <p>{t(kind === "contract-types" ? "organization.deactivateBodyContractTypes" : "organization.deactivateBody")}</p>
       <ErrorBox error={error} />
     </Modal>
   );
@@ -258,7 +259,7 @@ export default function OrganizationPage() {
                   <tr>
                     <th>{t(`organization.nameLabel.${kind}`)}</th>
                     <th>{t("organization.code")}</th>
-                    {kind === "job-titles" && <th>{t("organization.nameVi")}</th>}
+                    {hasNameVi(kind) && <th>{t("organization.nameVi")}</th>}
                     {kind === "job-levels" && <th>{t("organization.sortOrder")}</th>}
                     {kind === "employee-types" && <th>{t("organization.workEmailColumn")}</th>}
                     <th>{t("organization.status")}</th>
@@ -270,7 +271,7 @@ export default function OrganizationPage() {
                     <tr key={r.id} className={r.is_active ? undefined : "inactive-row"}>
                       <td className="col-name">{displayName(r)}</td>
                       <td className="col-code">{r.code}</td>
-                      {kind === "job-titles" && <td>{r.name_vi ?? "—"}</td>}
+                      {hasNameVi(kind) && <td>{r.name_vi ?? "—"}</td>}
                       {kind === "job-levels" && <td>{r.sort_order ?? "—"}</td>}
                       {kind === "employee-types" && <td>{r.requires_work_email ? t("organization.expected") : t("organization.notExpected")}</td>}
                       <td>
@@ -299,8 +300,9 @@ export default function OrganizationPage() {
             </div>
           </>
         )}
-        <p className="muted small">{t("organization.inactiveNote")}</p>
+        <p className="muted small">{t(kind === "contract-types" ? "organization.inactiveNoteContractTypes" : "organization.inactiveNote")}</p>
         {kind === "employee-types" && <p className="muted small">{t("organization.employeeTypeNote")}</p>}
+        {kind === "contract-types" && <p className="muted small">{t("organization.contractTypeNote")}</p>}
       </div>
       {dialog && dialog.mode !== "deactivate" && <CatalogDialog kind={kind} dialog={dialog} onClose={() => setDialog(null)} onDone={done} />}
       {dialog && dialog.mode === "deactivate" && <DeactivateDialog kind={kind} row={dialog.row} onClose={() => setDialog(null)} onDone={done} />}

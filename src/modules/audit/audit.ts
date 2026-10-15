@@ -15,6 +15,14 @@ export const STRUCTURAL_AUDIT_FIELDS = [
   "employment.end_date",
   "assignment.effective_from",
   "assignment.effective_to",
+  // Phase 2A contracts (ADR-0005 §12): non-personal fields only; summary and reasons never get old/new values.
+  "contract.contract_type_id",
+  "contract.contract_number",
+  "contract.effective_from",
+  "contract.effective_to",
+  "contract.is_open_ended",
+  "contract.signed_at",
+  "contract.finalized_at",
 ] as const;
 export type StructuralAuditField = (typeof STRUCTURAL_AUDIT_FIELDS)[number];
 

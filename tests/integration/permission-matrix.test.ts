@@ -43,6 +43,10 @@ const DOCUMENTED: Record<string, Permission | null> = {
   listEmployeeTypes: "catalogs.read",
   createEmployeeType: "catalogs.manage",
   updateEmployeeType: "catalogs.manage",
+  // Phase 2A (C-104): Contract Type is catalog data; contract records themselves use contracts.* (later slices).
+  listContractTypes: "catalogs.read",
+  createContractType: "catalogs.manage",
+  updateContractType: "catalogs.manage",
   getInternalOpenApi: "docs.read",
 };
 

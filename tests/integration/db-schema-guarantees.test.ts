@@ -33,7 +33,8 @@ describe("Database guarantees (H7)", () => {
     expect(await q("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'employment' AND column_name = 'voided_at'")).toEqual([{ n: 1 }]);
     expect(await q("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'job_assignment' AND column_name = 'cancelled_at'")).toEqual([{ n: 1 }]);
     expect(await q("SELECT to_regclass('public.access_audit_event') IS NOT NULL AS ok")).toEqual([{ ok: true }]); // not readable by the app role
-    expect(folders.at(-1)).toBe("20261014000000_cancel_planned_assignment");
+    expect(await q("SELECT to_regclass('public.contract_history_event') IS NOT NULL AS ok")).toEqual([{ ok: true }]);
+    expect(folders.at(-1)).toBe("20261015000000_contract_foundation");
   });
 
   it("exclusion, CHECK and partial unique constraints exist (cancelled and voided periods excluded where approved)", async () => {
@@ -56,11 +57,29 @@ describe("Database guarantees (H7)", () => {
       "employment_event_other_needs_note_ck",
       "employment_event_reversal_link_ck",
       "audit_field_change_differs_ck",
+      // Phase 2A contract foundation (ADR-0005)
+      "contract_parent_same_period_fk",
+      "contract_relationship_pair_ck",
+      "contract_term_exclusive_ck",
+      "contract_dates_ck",
+      "contract_finalized_complete_ck",
+      "contract_signed_requires_finalized_ck",
+      "contract_single_disposition_ck",
+      "contract_void_requires_finalized_ck",
+      "contract_history_event_reason_required_ck",
     ]) {
       expect(defs[c], c).toBeDefined();
     }
+    expect(defs.contract_relationship_type_check).toContain("'renewal'::text");
+    expect(defs.contract_relationship_type_check).not.toContain("amendment"); // gated (C-109)
     const indexes = (await q("SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public'")).map((r) => r.indexname);
     for (const i of ["employment_event_one_start_uq", "employment_event_one_cancel_uq", "employment_event_one_reversal_uq", "employment_event_one_void_uq"]) expect(indexes).toContain(i);
+    const idx = Object.fromEntries((await q("SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public'")).map((r) => [r.indexname, r.indexdef]));
+    // M-18: no disposition is excluded from Contract Number uniqueness (no WHERE clause); ICU case folding.
+    expect(idx.contract_number_ci_uq).toContain("UNIQUE INDEX");
+    expect(idx.contract_number_ci_uq).toContain("und-x-icu");
+    expect(idx.contract_number_ci_uq).not.toContain("WHERE");
+    expect(idx.contract_one_live_renewal_uq).toContain("WHERE");
   });
 
   it("integrity and immutability triggers exist", async () => {
@@ -75,6 +94,8 @@ describe("Database guarantees (H7)", () => {
       "job_assignment_cancelled_is_terminal_trg",
       "access_audit_event_no_update_delete_trg",
       "access_audit_event_no_truncate_trg",
+      "contract_structural_rules_trg",
+      "contract_disposition_is_terminal_trg",
     ]) {
       expect(triggers, t).toContain(t);
     }
@@ -82,10 +103,10 @@ describe("Database guarantees (H7)", () => {
 
   it("the application role cannot delete HR history, rewrite audit or edit lifecycle events beyond effective_date", async () => {
     const priv = async (table: string, p: string) => (await q("SELECT has_table_privilege($1, $2) AS ok", [table, p]))[0].ok as boolean;
-    for (const t of ["person", "employment", "job_assignment", "employment_event", "audit_event", "audit_field_change", "employee_code_registry", "end_reason"]) {
+    for (const t of ["person", "employment", "job_assignment", "employment_event", "audit_event", "audit_field_change", "employee_code_registry", "end_reason", "contract_type", "contract", "contract_history_event"]) {
       expect(await priv(t, "DELETE"), `DELETE ${t}`).toBe(false);
     }
-    for (const t of ["audit_event", "audit_field_change", "employee_code_registry", "end_reason"]) expect(await priv(t, "UPDATE"), `UPDATE ${t}`).toBe(false);
+    for (const t of ["audit_event", "audit_field_change", "employee_code_registry", "end_reason", "contract_history_event"]) expect(await priv(t, "UPDATE"), `UPDATE ${t}`).toBe(false);
     expect(await priv("employment_event", "UPDATE")).toBe(false); // no table-level UPDATE …
     const cols = await q(
       "SELECT column_name FROM information_schema.column_privileges WHERE table_name = 'employment_event' AND privilege_type = 'UPDATE' AND grantee = current_user",

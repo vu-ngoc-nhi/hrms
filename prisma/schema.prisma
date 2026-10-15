@@ -146,6 +146,7 @@ model Employment {
   events             EmploymentEvent[]
   assignments        JobAssignment[]   @relation("AssignmentEmployment")
   managedAssignments JobAssignment[]   @relation("AssignmentManager")
+  contracts          Contract[]
 
   @@map("employment")
 }
@@ -252,4 +253,72 @@ model IdempotencyRecord {
 
   @@id([actorUserId, operation, idempotencyKey])
   @@map("idempotency_record")
+}
+
+// ---------------- Phase 2A Contract foundation (ADR-0005, migration 20261015000000_contract_foundation) ----------------
+
+/// Contract Type catalog: reference data only, no business rules (C-104, M-16; real catalog pending PV-31).
+model ContractType {
+  id        String     @id @default(uuid()) @db.Uuid
+  code      String
+  name      String
+  nameVi    String?    @map("name_vi")
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime   @default(now()) @map("updated_at") @db.Timestamptz
+  contracts Contract[]
+
+  @@map("contract_type")
+}
+
+/// A written agreement documenting terms of ONE Employment Period (ADR-0005). Document state is derived from the
+/// markers; dispositions are terminal. The same-period parent FK, the effective-date rule, the number uniqueness and
+/// the terminal disposition are enforced by the database (see the migration).
+model Contract {
+  id               String                   @id @default(uuid()) @db.Uuid
+  employmentId     String                   @map("employment_id") @db.Uuid
+  /// Renewal parent in the same Employment Period (composite FK in the database); null = original agreement.
+  parentContractId String?                  @map("parent_contract_id") @db.Uuid
+  /// 'renewal' only in Phase 2A (amendment gated, C-109).
+  relationshipType String?                  @map("relationship_type")
+  contractTypeId   String?                  @map("contract_type_id") @db.Uuid
+  contractNumber   String?                  @map("contract_number")
+  effectiveFrom    DateTime?                @map("effective_from") @db.Date
+  /// Inclusive last day of the term.
+  effectiveTo      DateTime?                @map("effective_to") @db.Date
+  isOpenEnded      Boolean                  @default(false) @map("is_open_ended")
+  summary          String?
+  finalizedAt      DateTime?                @map("finalized_at") @db.Timestamptz
+  finalizedBy      String?                  @map("finalized_by") @db.Uuid
+  /// Business date HR confirms full execution by all required parties (C-105).
+  signedAt         DateTime?                @map("signed_at") @db.Date
+  cancelledAt      DateTime?                @map("cancelled_at") @db.Timestamptz
+  voidedAt         DateTime?                @map("voided_at") @db.Timestamptz
+  revision         Int                      @default(1)
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  createdBy        String                   @map("created_by") @db.Uuid
+  updatedAt        DateTime                 @default(now()) @map("updated_at") @db.Timestamptz
+  employment       Employment               @relation(fields: [employmentId], references: [id])
+  contractType     ContractType?            @relation(fields: [contractTypeId], references: [id])
+  history          ContractHistoryEvent[]   @relation("ContractHistory")
+  relatedHistory   ContractHistoryEvent[]   @relation("ContractHistoryRelated")
+
+  @@unique([id, employmentId], map: "contract_id_employment_uq")
+  @@map("contract")
+}
+
+/// Business-readable contract history (not the technical audit, not event sourcing). Append-only.
+model ContractHistoryEvent {
+  id                String    @id @default(uuid()) @db.Uuid
+  contractId        String    @map("contract_id") @db.Uuid
+  eventType         String    @map("event_type")
+  effectiveDate     DateTime? @map("effective_date") @db.Date
+  recordedAt        DateTime  @default(now()) @map("recorded_at") @db.Timestamptz
+  recordedBy        String    @map("recorded_by") @db.Uuid
+  reason            String?
+  relatedContractId String?   @map("related_contract_id") @db.Uuid
+  contract          Contract  @relation("ContractHistory", fields: [contractId], references: [id])
+  relatedContract   Contract? @relation("ContractHistoryRelated", fields: [relatedContractId], references: [id])
+
+  @@map("contract_history_event")
 }

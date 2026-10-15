@@ -25,8 +25,9 @@ const level: CatalogRow = { id: "l1", code: "L2", name: "Middle", sort_order: 20
 const type: CatalogRow = { id: "t1", code: "EMPLOYEE", name: "Employee", requires_work_email: true, is_active: true };
 
 describe("Tabs", () => {
-  it("four reference lists; tab from the URL, Departments by default", () => {
-    expect(KINDS).toEqual(["departments", "job-titles", "job-levels", "employee-types"]);
+  it("five reference lists (Contract Types added in Phase 2A, C-104); tab from the URL, Departments by default", () => {
+    expect(KINDS).toEqual(["departments", "job-titles", "job-levels", "employee-types", "contract-types"]);
+    expect(kindFromQuery("?tab=contract-types")).toBe("contract-types");
     expect(kindFromQuery("?tab=employee-types")).toBe("employee-types");
     expect(kindFromQuery("?tab=catalogs")).toBe("departments");
     expect(kindFromQuery("")).toBe("departments");
@@ -62,6 +63,20 @@ describe("Create / edit request mapping", () => {
     expect(updateBody("departments", dept, { ...formFromRow(dept), code: "X", name: "Engineering & Platform" })).toEqual({ name: "Engineering & Platform" });
     expect(updateBody("job-titles", title, { ...formFromRow(title), name_vi: "Kỹ sư phần mềm" })).toEqual({ name_vi: "Kỹ sư phần mềm" });
     expect(updateBody("job-levels", level, { ...formFromRow(level), sort_order: "" })).toEqual({ sort_order: null });
+  });
+
+  it("Contract Types (C-104): name and optional Vietnamese name only — no contract rules are sent", () => {
+    const ct: CatalogRow = { id: "c1", code: "TEST_TYPE_A", name: "Test Type A (synthetic)", name_vi: null, is_active: true };
+    expect(createBody("contract-types", { ...EMPTY_FORM, code: " TEST_TYPE_B ", name: " Test Type B ", name_vi: " Loại B " })).toEqual({
+      code: "TEST_TYPE_B",
+      name: "Test Type B",
+      name_vi: "Loại B",
+    });
+    expect(createBody("contract-types", { ...EMPTY_FORM, code: "TEST_TYPE_C", name: "Test Type C" })).toEqual({ code: "TEST_TYPE_C", name: "Test Type C" });
+    expect(updateBody("contract-types", ct, formFromRow(ct))).toBeNull();
+    expect(updateBody("contract-types", ct, { ...formFromRow(ct), name_vi: "Loại A" })).toEqual({ name_vi: "Loại A" });
+    expect(updateBody("contract-types", { ...ct, name_vi: "Loại A" }, { ...formFromRow({ ...ct, name_vi: "Loại A" }), name_vi: " " })).toEqual({ name_vi: null });
+    expect(statusBody(ct)).toEqual({ is_active: false });
   });
 
   it("Employee Type Work Email policy (D-UI-17): set at creation, never sent by the normal edit", () => {

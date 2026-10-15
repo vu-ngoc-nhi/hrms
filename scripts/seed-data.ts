@@ -4,6 +4,8 @@
 //     their company-account defaults follow C-10, C-18 and C-20.
 //   - Departments, Job Titles and Job Levels are English demo/reference data still pending HR validation (PV-06),
 //     not the company's real catalogs.
+//   - Contract Types are OBVIOUSLY SYNTHETIC test values (TEST_TYPE_*): the real catalog is pending HR/Legal (PV-31,
+//     PL-12) and no Vietnamese legal classification is implied.
 import pg from "pg";
 import type { PrismaClient } from "../src/generated/prisma/client";
 import { applyChange, listUsers, stateOf } from "../src/modules/identity/access-admin";
@@ -51,6 +53,11 @@ export const CATALOGS = {
     { code: "SERVICE_CONTRACTOR", name: "Service Contractor", requiresWorkEmail: false },
     { code: "INTERN", name: "Intern", requiresWorkEmail: true },
   ],
+  // Synthetic placeholders only (PV-31): not the HR/Legal-approved Contract Types.
+  contractTypes: [
+    { code: "TEST_TYPE_A", name: "Test Type A (synthetic)", nameVi: null },
+    { code: "TEST_TYPE_B", name: "Test Type B (synthetic)", nameVi: "Loại thử nghiệm B" },
+  ],
 };
 
 // Insert-only: creates missing catalog rows, never updates or deletes existing ones (runs as hrms_app).
@@ -66,6 +73,9 @@ export async function seedCatalogs(prisma: PrismaClient) {
   }
   for (const t of CATALOGS.employeeTypes) {
     if (!(await prisma.employeeType.findFirst({ where: { code: t.code } }))) await prisma.employeeType.create({ data: t });
+  }
+  for (const c of CATALOGS.contractTypes) {
+    if (!(await prisma.contractType.findFirst({ where: { code: c.code } }))) await prisma.contractType.create({ data: c });
   }
 }
 

@@ -10,7 +10,12 @@ export const PERMISSIONS = [
   "employment.manage", // normal employment business events effective today or later (S4, C-25)
   "employment.correct", // historical corrections and past-dated business events: HR_ADMIN only (C-22, C-25)
   "catalogs.read",
-  "catalogs.manage",
+  "catalogs.manage", // includes the Contract Type catalog (reference data, C-104)
+  // Phase 2A contracts (C-106, ADR-0005 §9). Contract content never comes with employees.read or access administration.
+  "contracts.read", // view contract records, history, lists and reminders
+  "contracts.manage", // prepare working records: Draft create/edit/discard, renewal Drafts
+  "contracts.finalize", // make, reverse or certify the official record: Finalize, Return to Draft, Confirm signed, Cancel planned
+  "contracts.correct", // change protected history: correct Signed data, Void
   "docs.read",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
@@ -34,8 +39,12 @@ export const ROLE_PERMISSIONS: Record<RoleCode, readonly Permission[]> = {
     "employment.correct",
     "catalogs.read",
     "catalogs.manage",
+    "contracts.read",
+    "contracts.manage",
+    "contracts.finalize",
+    "contracts.correct",
   ],
-  // HR_EDITOR never receives employment.correct (C-22).
+  // HR_EDITOR never receives employment.correct (C-22) or contracts.correct (C-106); it may finalize contracts.
   HR_EDITOR: [
     "employees.read",
     "employees.read_personal",
@@ -44,6 +53,9 @@ export const ROLE_PERMISSIONS: Record<RoleCode, readonly Permission[]> = {
     "employees.update",
     "employment.manage",
     "catalogs.read",
+    "contracts.read",
+    "contracts.manage",
+    "contracts.finalize",
   ],
   // Technical role for developers: API documentation only, no HR data.
   API_DOCS_READER: ["docs.read"],

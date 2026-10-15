@@ -634,7 +634,9 @@ describe("Operations, roles, reason and audit", () => {
     const noConfirm = await cli(["user", "enable", "--env", ENV, "--oid", x, "--reason", "Back from leave"]);
     expect(noConfirm.code).toBe(EXIT.USAGE);
     expect(noConfirm.out).toContain("Retained    : roles reactivated on enable: HR_EDITOR");
-    expect(noConfirm.out).toContain("Permissions : + catalogs.read, employees.create");
+    // HR_EDITOR's bundle includes the Phase 2A contract permissions (C-106: read, manage, finalize — never correct).
+    expect(noConfirm.out).toContain("Permissions : + catalogs.read, contracts.finalize, contracts.manage, contracts.read, employees.create");
+    expect(noConfirm.out).not.toContain("contracts.correct");
     expect((await userByOid(opA, x)).enabled).toBe(false);
     const prompts: string[] = [];
     const wrong = await cli(["user", "enable", "--env", ENV, "--oid", x, "--reason", "Back from leave"], { prompt: async (q) => (prompts.push(q), "nope") });
