@@ -55,7 +55,7 @@ If it is uncertain whether a change is technical implementation or a business de
 Destructive reset of `hrms_dev`; destructive database operations outside `hrms_test`; staging or production migrations; staging or production data changes; deployment; real employee data use; irreversible Git operations; force push.
 
 ## Product design philosophy (C-84, mandatory)
-Context: Mini HRS serves EmeSoft, a technical company of ~70–100 employees with a small HR team. Full guidance: `docs/design/emesoft-design-philosophy.md`.
+Context: Eme People — AI-First People Management Platform (formerly Mini HRS; C-103) — serves EmeSoft, a technical company of ~70–100 employees with a small HR team. Full guidance: `docs/design/emesoft-design-philosophy.md`.
 - **Strict on history and integrity, flexible on operations** — "Lightweight HR operations, strong Core HR integrity". Scale down process complexity, not engineering quality.
 - Choose the lightest sufficient control: (1) **hard constraint** (DB/API, fail closed) only for objectively invalid or unsafe data; (2) **controlled correction** (HR_ADMIN, explicit action, reason, audit, optimistic concurrency, idempotency, no hard delete, no approval chain) when data may legitimately need correcting; (3) **soft guidance** (wording, confirmation, warning, preview) for usability.
 - Prefer the smallest workflow that preserves integrity, auditability and safe recovery; add no statuses, approval layers, intermediate states or hand-offs without a demonstrated business, legal, security or integrity risk.

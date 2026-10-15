@@ -1,8 +1,8 @@
-# Mini HRS — Core HR Phase 1 Final Product Review
+# Eme People — Core HR Phase 1 Final Product Review
 
 - Date: 2026-10-11 · Mode: **review / polish only**. Phase 1 feature scope is **frozen**; no new capability, API or P1 work.
 - Baseline: `main` at `f10b547` (phone-width overflow fixed). Polish commit `33e59fb`.
-- **Milestone: Core HR Phase 1 — Product/UI Frozen — Owner Accepted** (2026-10-12, C-101). This is the frozen Phase 1 product baseline; scope is reopened only for a P0 production blocker or a regression. Reconfirmed 2026-10-12 including the accepted Home visual refresh (C-102). Release status remains **UAT Passed With Pre-Production Actions**. **Not Production Ready**: Gate A 0/8 and Gate B 0/5 per `docs/production/pre-production-readiness-plan.md`.
+- **Milestone: Eme People — Core HR Phase 1 Product/UI Frozen — Owner Accepted** (2026-10-12, C-101; product renamed from Mini HRS on 2026-10-15, C-103). This is the frozen Phase 1 product baseline; scope is reopened only for a P0 production blocker or a regression. Reconfirmed 2026-10-12 including the accepted Home visual refresh (C-102), and on 2026-10-15 including the owner-approved branding-only rename (C-103: name **Eme People**, descriptor **AI-First People Management Platform**; no business logic, API, schema, permission or technical-identifier change). Release status remains **UAT Passed With Pre-Production Actions**. **Not Production Ready**: Gate A 0/8 and Gate B 0/5 per `docs/production/pre-production-readiness-plan.md`.
 - Evidence:
   - browser walk-through on synthetic `hrms_dev` (HR Admin, HR Editor, API Docs test identities);
   - DOM measurements in same-origin iframes at six widths;
@@ -217,7 +217,7 @@ The review was accepted with one final copy cleanup (commit after `cfe5269`):
 - The completeness rule's governance status is unchanged in the decision register (MVP Decision; PV-04 open).
 - Void blocker for a period created by a Relationship Change (2026-10-12 defect fix): the project reference "(PV-24)" is no longer shown. It now reads "This Employment Period was created by a Relationship Change. Reversing that Relationship Change is not available yet."
 
-**Core HR Phase 1 — Product/UI Frozen — Owner Accepted** (2026-10-12, C-101; was: Freeze Candidate pending the owner's local visual review). No further product development in Phase 1. The next phase is **Pre-production Readiness, starting from Gate A** (§G).
+**Eme People — Core HR Phase 1 Product/UI Frozen — Owner Accepted** (2026-10-12, C-101; was: Freeze Candidate pending the owner's local visual review; product name updated by C-103 on 2026-10-15). No further product development in Phase 1. The next phase is **Pre-production Readiness, starting from Gate A** (§G).
 
 Checks for the cleanup:
 - unit suite from `main` only: 220 / 220;

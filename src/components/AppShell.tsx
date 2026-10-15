@@ -49,6 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <main className="login-page">
         <span className="wordmark">{t("app.name")}</span>
+        <p className="login-descriptor">{t("app.descriptor")}</p>
         <div className="login-body">{children}</div>
       </main>
     );

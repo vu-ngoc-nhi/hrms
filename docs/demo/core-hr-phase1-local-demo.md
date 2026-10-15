@@ -1,4 +1,4 @@
-# Mini HRS — Core HR Phase 1 Local Product Demo (15–20 min)
+# Eme People — Core HR Phase 1 Local Product Demo (15–20 min)
 
 - Status of the product: **`Core HR Phase 1 — UAT Passed With Pre-Production Actions`**. This is **not** Production Ready.
 - This is a **local product/business demo** on a developer machine with **fictional synthetic data only**. It is not a staging rehearsal, not an Entra test and not an infrastructure check.

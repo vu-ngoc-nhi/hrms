@@ -1,4 +1,6 @@
-# Mini HRS — Core HR (phase 1, S0–S3)
+# Eme People — Core HR (phase 1, S0–S3)
+
+Eme People — AI-First People Management Platform (formerly Mini HRS; renamed by C-103, branding only). Technical identifiers such as `hrms_dev`, `hrms_test`, `hrms-core-hr` and `/api/v1/core-hr` keep their names.
 
 Core HR covers:
 - catalogs (departments, job titles, levels, employee types);

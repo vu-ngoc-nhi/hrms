@@ -1,4 +1,4 @@
-# Mini HRS — Access Administration Runbook
+# Eme People — Access Administration Runbook
 
 - Scope: provisioning and day-to-day use of the guarded access-administration command (C-89, C-93; design `docs/design/access-administration-command.md`). Synthetic data only until the Real-Data Go/No-Go (readiness plan Gate A8).
 - Audience: IT (infrastructure provisioning with owner credentials) and the named operators (Technical Owner and deputy, PV-26 / PV-28 F).

@@ -1,4 +1,4 @@
-# Mini HRS — Pre-Production Readiness Plan (revision 2: gated)
+# Eme People — Pre-Production Readiness Plan (revision 2: gated)
 
 - Phase: **Pre-Production Readiness Planning** — planning only; nothing in this document has been implemented.
 - Baseline: **`Core HR Phase 1 — UAT Passed With Pre-Production Actions`** (PV-25 Accepted / Closed). **UAT Passed ≠ Production Ready.**
@@ -8,7 +8,7 @@
 
 ---
 
-## Page 1 — What exactly prevents us from putting Mini HRS into real use?
+## Page 1 — What exactly prevents us from putting Eme People into real use?
 
 **The application is ready; its production surroundings are not.** Authorization, history integrity, audit, concurrency and correction workflows are proven by tests and two UAT rounds. What is missing is the environment and the operating conditions to hold real employee data safely.
 

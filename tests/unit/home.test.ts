@@ -145,8 +145,8 @@ describe("Visual refresh (owner-approved post-freeze refinement, 2026-10-12)", (
   it("greeting uses the signed-in display name and the viewer's local hour; neutral fallback before either is known", () => {
     expect([greetingPart(0), greetingPart(11), greetingPart(12), greetingPart(17), greetingPart(18), greetingPart(23)]).toEqual(["morning", "morning", "afternoon", "afternoon", "evening", "evening"]);
     expect(greeting("Lê Thị Nhung", 9)).toBe("Good morning, Lê Thị Nhung");
-    expect(greeting("Lê Thị Nhung", null)).toBe("Welcome to Mini HRS");
-    expect(greeting(undefined, 15)).toBe("Welcome to Mini HRS");
+    expect(greeting("Lê Thị Nhung", null)).toBe("Welcome to Eme People");
+    expect(greeting(undefined, 15)).toBe("Welcome to Eme People");
   });
 
   it("four summary cards from existing data only; Needs Attention links to the canonical filter only when it has records", () => {

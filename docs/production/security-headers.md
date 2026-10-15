@@ -1,4 +1,4 @@
-# Mini HRS — HTTP Security Headers and Startup Check
+# Eme People — HTTP Security Headers and Startup Check
 
 - Date: 2026-10-12. Gate A2 local hardening L1 (headers) and L2 (startup check). Proven locally only; staging verification is part of the coordinated staging rehearsal (`gate-a-readiness-status.md`).
 
@@ -13,7 +13,7 @@ Every page and API response (`/:path*`); `X-Powered-By` removed (`poweredByHeade
 | `X-Frame-Options` | `SAMEORIGIN` | Same protection for older browsers |
 | `X-Content-Type-Options` | `nosniff` | No MIME sniffing |
 | `Referrer-Policy` | `same-origin` | Search URLs can contain names; nothing is sent to other origins (including Entra) |
-| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=()` | Features Mini HRS never uses |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), usb=()` | Features Eme People never uses |
 
 Same-origin framing (`'self'` / `SAMEORIGIN`) rather than `DENY` is deliberate: MSAL's silent token renewal can load the app's own redirect page in a hidden iframe.
 

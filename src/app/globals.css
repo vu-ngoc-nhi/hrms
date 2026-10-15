@@ -1,4 +1,4 @@
-/* Mini HRS global styles (UI refresh, UI-0). Every visual value comes from tokens.css. Existing screen classes are
+/* Eme People global styles (UI refresh, UI-0). Every visual value comes from tokens.css. Existing screen classes are
    kept (restyled) so current pages keep working; screens move to the shared primitives slice by slice. */
 @import "./tokens.css";
 
@@ -68,7 +68,8 @@ h3 { font-size: var(--font-size-base); font-weight: var(--font-weight-semibold);
 
 /* Login (outside the shell) */
 .login-page { min-height: 100vh; display: grid; align-content: start; justify-items: center; padding: var(--space-7) var(--space-4); }
-.login-page .wordmark { font-size: var(--font-size-2xl); margin-bottom: var(--space-4); }
+.login-page .wordmark { font-size: var(--font-size-2xl); padding-bottom: 0; }
+.login-descriptor { margin: 0 0 var(--space-4); color: var(--color-text-2); font-size: var(--font-size-sm); }
 .login-page .login-body { width: 100%; max-width: 640px; }
 
 @media (max-width: 900px) {

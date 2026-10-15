@@ -1,4 +1,4 @@
-# Mini HRS — Guarded Access Administration Command (design, revision 2)
+# Eme People — Guarded Access Administration Command (design, revision 2)
 
 - Status: **IMPLEMENTED (2026-10-10, C-94)** — forward migration `20261013000000_access_administration`, CLI `npm run access`, runbook `docs/production/access-administration-runbook.md`. Development evidence for Gate A4 is complete; IT provisioning, named owners (PV-26) and a staging rehearsal are still required (readiness plan A4). See §18 for differences from the text above.
 - Scope: the smallest safe access-management mechanism for **Gate A4**. Applies C-84, C-85, C-89, C-90, C-92 and the PV-28 decisions (§2). Real employee data remains prohibited (C-88).
@@ -196,7 +196,7 @@ Append-only: inserted only inside the mutation routines in the same transaction 
 
 ## 13. Entra relationship, privacy boundary, recovery (unchanged)
 
-- Entra authenticates; Mini HRS authorizes. Accounts are pre-provisioned by `(tenant, oid)`; sign-in must match. Disabling in Mini HRS denies on the next request; disabling in Entra stops new tokens (existing ones expire); the leaver procedure does both.
+- Entra authenticates; Eme People authorizes. Accounts are pre-provisioned by `(tenant, oid)`; sign-in must match. Disabling in Eme People denies on the next request; disabling in Entra stops new tokens (existing ones expire); the leaver procedure does both.
 - The operator can administer access without any access to Core HR records (no grant).
 - Recovery without break-glass: inaccessible admin → operator creates/enables another; Entra/login outage → command unaffected; role removed by mistake → re-assign with reason; operator login lost → IT re-registers via owner routine.
 

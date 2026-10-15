@@ -1,4 +1,4 @@
-# Mini HRS — Access Control Direction (architecture review and target model)
+# Eme People — Access Control Direction (architecture review and target model)
 
 - Status: **Confirmed governance direction C-85** (2026-10-10). Architecture review and target model only — **no authorization change is implemented**; Phase 1 roles and permissions are unchanged.
 - Applies C-84 (*Strict on history and integrity, flexible on operations*; scale down process complexity, not engineering quality). Principles summary: `CLAUDE.md` § *Access control principle* and `docs/design/emesoft-design-philosophy.md` § 15.

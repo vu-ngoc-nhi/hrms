@@ -1,4 +1,4 @@
-# Mini HRS — Gate A Readiness Status (authoritative)
+# Eme People — Gate A Readiness Status (authoritative)
 
 - Date: 2026-10-12. Revision 2 (same day): the owner **accepted the refresh and approved the execution order**; local hardening L2 → L1 → L3 done; drafts prepared for the Legal pack, the HR mapping template and the IT input request. Nothing was provisioned, deployed, configured or sent. No real employee data was used.
 - Baseline: release status **`Core HR Phase 1 — UAT Passed With Pre-Production Actions`**; product baseline **`Core HR Phase 1 — Product/UI Frozen — Owner Accepted`** (C-101) — reopened only for a P0 production blocker or a regression. Production Ready is never self-declared (readiness plan Appendix K).
@@ -318,7 +318,7 @@ Claude has not performed, and will not report as done, any external action (send
 
 ## 8. Real Data Gate conditions
 
-Real employee data may enter **any** system (staging included) only after A8 records **REAL DATA ALLOWED**. Until then: synthetic data only; anonymised rehearsal data only if counsel explicitly allows it (Q-L1/Q-L5); real source files stay outside every Mini HRS environment and every AI tool.
+Real employee data may enter **any** system (staging included) only after A8 records **REAL DATA ALLOWED**. Until then: synthetic data only; anonymised rehearsal data only if counsel explicitly allows it (Q-L1/Q-L5); real source files stay outside every Eme People environment and every AI tool.
 
 ## 9. Execution order (approved by the owner 2026-10-12)
 

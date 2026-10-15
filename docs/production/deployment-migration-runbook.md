@@ -1,4 +1,4 @@
-# Mini HRS — Deployment and Migration Runbook (TEMPLATE / DRAFT)
+# Eme People — Deployment and Migration Runbook (TEMPLATE / DRAFT)
 
 - Date: 2026-10-12. Gate A6. **Template only — closes nothing.** Hosting-specific steps are marked `[IT-xx]` and are completed once IT answers `it-input-request-01.md`. A6 closes only after a successful staging rehearsal (`staging-rehearsal-checklist.md`).
 - Rules: forward-only migrations; a committed migration is never edited (CLAUDE.md); no down migrations; production migrations are **attended**, run outside working hours with notice (C-91); no ad-hoc SQL for HR data; restore only as a last resort with Management + System Owner approval. No recurring CAB: one approval line per release.

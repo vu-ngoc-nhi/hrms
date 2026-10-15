@@ -1,4 +1,4 @@
-# Mini HRS — Core HR Phase 1 Specification (profiles, create, update, Excel import/export)
+# Eme People — Core HR Phase 1 Specification (profiles, create, update, Excel import/export)
 
 - **Version 0.3.1, 2026-10-08.** 0.3.1 applies decisions C-09 to C-12: Employee Type on the employment period; separate work and contact email; v2-only Entra tokens.
   - v0.3 is an English rewrite of v0.2 (`docs/archive/core-hr-spec-v0.2-vi.md`). It applies the product and engineering decisions of 2026-10-08.

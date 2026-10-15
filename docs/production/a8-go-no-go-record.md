@@ -1,7 +1,7 @@
-# Mini HRS — Real-Data Go / No-Go Record (A8) — TEMPLATE
+# Eme People — Real-Data Go / No-Go Record (A8) — TEMPLATE
 
 - **Template — unsigned. Real employee data remains PROHIBITED.**
-- Real employee data may enter any Mini HRS environment only when this record is completed with the outcome **REAL DATA ALLOWED** and signed by all three signatories, and the decision is recorded in `docs/decision-register.md`.
+- Real employee data may enter any Eme People environment only when this record is completed with the outcome **REAL DATA ALLOWED** and signed by all three signatories, and the decision is recorded in `docs/decision-register.md`.
 - Each item references evidence that **proves** the outcome; an intention, a plan or a configured-but-untested setting does not count.
 
 ## 1. Conditions

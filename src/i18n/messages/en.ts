@@ -1,7 +1,10 @@
 // English is the default product language. Every user-facing UI string lives in a message catalog so another
 // locale (e.g. Vietnamese) can be added later as a sibling file with the same keys, without touching components.
+import { BRAND } from "@/lib/brand";
+
 export const en = {
-  app: { name: "Mini HRS", loading: "Loading…", notFound: "Not found" },
+  // The product name and descriptor are proper nouns from the brand constant (C-103); never translated.
+  app: { name: BRAND.name, descriptor: BRAND.descriptor, loading: "Loading…", notFound: "Not found" },
   nav: {
     main: "Main navigation",
     home: "Home",
@@ -22,7 +25,7 @@ export const en = {
       afternoon: "Good afternoon, {name}",
       evening: "Good evening, {name}",
     },
-    greetingNoName: "Welcome to Mini HRS",
+    greetingNoName: `Welcome to ${BRAND.name}`,
     statusAsOf: "Status as of {date}",
     summaryLabel: "Workforce summary",
     cardHint: { employees: "View in Employee List", review: "Review records" },
@@ -61,13 +64,13 @@ export const en = {
     noRecords: "No employee records yet.",
   },
   login: {
-    title: "Sign in to Mini HRS",
+    title: `Sign in to ${BRAND.name}`,
     testIdentityNotice:
-      "Development test identity, not Microsoft Entra ID. Available only in local/test environments with synthetic data. Roles are read from the HRMS database, never declared by the browser.",
+      `Development test identity, not Microsoft Entra ID. Available only in local/test environments with synthetic data. Roles are read from the ${BRAND.name} database, never declared by the browser.`,
     entraNotConfigured:
-      "Microsoft Entra ID sign-in is not configured for this environment yet (the HRMS app registration is pending). Test identities are available only in local/test environments.",
+      `Microsoft Entra ID sign-in is not configured for this environment yet (the ${BRAND.name} app registration is pending). Test identities are available only in local/test environments.`,
     account: "Test account",
-    roles: "HRMS roles",
+    roles: `${BRAND.name} roles`,
     noRoles: "No roles",
     useAccount: "Use this account",
   },

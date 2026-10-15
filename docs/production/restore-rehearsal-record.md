@@ -1,4 +1,4 @@
-# Mini HRS — Backup / Restore Rehearsal Record (TEMPLATE)
+# Eme People — Backup / Restore Rehearsal Record (TEMPLATE)
 
 - Gate A5. **Template — closes nothing until filled with a passing rehearsal and signed.** Synthetic data only, on staging. Basis: readiness plan Appendix C.3 and `gate-a-readiness-status.md` §A5.2.
 - Targets (provisional, M-14 / PV-27): **RPO ≤ 4 h, RTO ≤ 1 business day.** A rehearsal that needed improvisation **fails**.

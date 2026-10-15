@@ -1,11 +1,11 @@
-# Mini HRS — EmeSoft Design Philosophy
+# Eme People — EmeSoft Design Philosophy
 
 - Status: **Confirmed Decision C-84** (architecture / product governance principle, 2026-10-10). Permanent guidance for every design and implementation step. Summary in `CLAUDE.md` § *Product design philosophy*.
 - It does not change any existing confirmed decision. If an existing rule materially conflicts with it, the conflict is reported and decided — never silently changed.
 
 ## 1. Operating context
 
-Mini HRS is built for **EmeSoft**, a technical company of roughly **70–100 employees**. HR operations are run by a **small HR team**, not by many specialised HR functions. The company is comfortable with structured systems, automation and clear data models, but the product must not copy the process complexity of a large-enterprise HRIS.
+Eme People (formerly Eme People) is built for **EmeSoft**, a technical company of roughly **70–100 employees**. HR operations are run by a **small HR team**, not by many specialised HR functions. The company is comfortable with structured systems, automation and clear data models, but the product must not copy the process complexity of a large-enterprise HRIS.
 
 The target is **enterprise-quality data integrity with lightweight operational workflows** — not "enterprise process complexity for a 100-person company".
 
@@ -32,7 +32,7 @@ A technically correct system that regularly traps HR in unrecoverable states is 
 
 ## 3. Three levels of control
 
-| Level | Use when | Mechanism | Examples in Mini HRS |
+| Level | Use when | Mechanism | Examples in Eme People |
 |---|---|---|---|
 | **1 — Hard constraint** | Violating the rule creates objectively invalid or unsafe data | DB constraints/triggers + API checks; **fail closed** | No overlapping valid Employment Periods (exclusion constraint); assignment timeline without overlaps; unique operational Work Email; impossible chronology (end before start); authorization (permission matrix); invalid cross-period state; no hard delete of history (no DELETE grants) |
 | **2 — Controlled correction** | Data may legitimately need correction or recovery | HR_ADMIN, explicit action, mandatory reason where appropriate, audit, optimistic concurrency, idempotency, no hard delete — **no approval process** | Historical Correction; Reverse End Employment; Cancel Planned Period; Void Employment Period (PV-25) and similar future recovery workflows |
@@ -57,7 +57,7 @@ For every important write workflow ask: **"What happens when HR makes a genuine 
 
 > **Historical record ≠ operational effect.**
 
-A record may remain visible for audit/history while being excluded from current operational logic: cancelled planned periods, voided periods, reversed lifecycle events, corrected historical values. Never delete historical evidence because it should no longer affect operations — prefer **disposition, reversal or correction** semantics. In Mini HRS this is implemented by the shared operational query module (one place decides what is operational) and by keeping events and audit append-only.
+A record may remain visible for audit/history while being excluded from current operational logic: cancelled planned periods, voided periods, reversed lifecycle events, corrected historical values. Never delete historical evidence because it should no longer affect operations — prefer **disposition, reversal or correction** semantics. In Eme People this is implemented by the shared operational query module (one place decides what is operational) and by keeping events and audit append-only.
 
 ## 7. Internal vs external dependencies
 

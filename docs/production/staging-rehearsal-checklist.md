@@ -1,4 +1,4 @@
-# Mini HRS — Coordinated Staging Rehearsal Checklist (TEMPLATE)
+# Eme People — Coordinated Staging Rehearsal Checklist (TEMPLATE)
 
 - Gates A2, A3, A4, A5, A6. **A7 is not closed by this rehearsal unless step 12 is run with the approved import utility** (see §1a). **Template — closes nothing until executed, passed and signed.** One coordinated session, synthetic data only. Do not schedule it before §0 is complete.
 - Procedures: `deployment-migration-runbook.md`, `access-administration-runbook.md`, `restore-rehearsal-record.md`. Status map: `gate-a-readiness-status.md`.
