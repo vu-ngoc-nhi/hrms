@@ -40,6 +40,7 @@ export const WARNING = {
   GAP_AFTER_PREDECESSOR: "GAP_AFTER_PREDECESSOR",
   ANOTHER_OPEN_DRAFT_FOR_PERIOD: "ANOTHER_OPEN_DRAFT_FOR_PERIOD",
   CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD: "CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD",
+  RENEWAL_OVERLAPS_PREDECESSOR: "RENEWAL_OVERLAPS_PREDECESSOR",
 } as const;
 export const REVIEW_ONLY = {
   EFFECTIVE_FROM_OUTSIDE_PERIOD: "EFFECTIVE_FROM_OUTSIDE_PERIOD",
@@ -61,17 +62,27 @@ function periodDisposition(p: PeriodFacts): Finding | null {
 // ---------------- Time state ----------------
 const minDate = (...ds: (string | null)[]) => ds.filter((d): d is string => d !== null).sort()[0] ?? null;
 
-/** The live, finalized renewal of an agreement (its start ends the predecessor early). */
-function finalizedRenewalOf(c: ContractFacts, others: ContractInContext[]): ContractFacts | null {
-  return (
-    others.find((o) => o.contract.parentContractId === c.id && o.contract.relationshipType === "renewal" && isOperational(o) && isFinal(o.contract))
-      ?.contract ?? null
-  );
+/**
+ * The non-disposed direct renewal of an agreement — Draft, Finalized or Signed (C-115: one non-disposed direct renewal
+ * per parent agreement; disposed = Discarded, Cancelled or Voided).
+ */
+export function directRenewalOf(c: ContractFacts, others: ContractInContext[]): ContractFacts | null {
+  return others.find((o) => o.contract.parentContractId === c.id && o.contract.relationshipType === "renewal" && !o.contract.cancelled && !o.contract.voided)?.contract ?? null;
 }
 
 /**
- * Operational end (inclusive) = least(own Effective To, period end, finalized renewal start − 1). Null = no end yet
- * (open-ended on an open period). `ignoreRenewals` is used when judging a predecessor against its own successor.
+ * C-115: only a SIGNED non-disposed direct renewal is the confirmed successor. A Draft or a Finalized-but-unsigned
+ * renewal has no effect on the parent's projection or reminders (Finalized ≠ confirmed).
+ */
+function confirmedSuccessorOf(c: ContractFacts, others: ContractInContext[]): ContractFacts | null {
+  const r = directRenewalOf(c, others);
+  return r && r.documentState === "signed" ? r : null;
+}
+
+/**
+ * Operational end (inclusive) = least(own Effective To, period end, Signed renewal start − 1). Null = no end yet
+ * (open-ended on an open period). Derived only — the stored Effective To is never changed. `ignoreRenewals` is used
+ * when judging a predecessor against its own successor.
  */
 export function operationalRange(
   x: ContractInContext,
@@ -81,7 +92,7 @@ export function operationalRange(
   const c = x.contract;
   if (!c.effectiveFrom) return null;
   const own = c.isOpenEnded ? null : c.effectiveTo;
-  const renewal = opts.ignoreRenewals ? null : finalizedRenewalOf(c, others);
+  const renewal = opts.ignoreRenewals ? null : confirmedSuccessorOf(c, others);
   const renewalBound = renewal?.effectiveFrom ? addDays(renewal.effectiveFrom, -1) : null;
   const end = minDate(own, x.period.endDate, renewalBound);
   let detail: TimeStateDetail = null;
@@ -102,7 +113,7 @@ export function timeState(
 }
 
 // ---------------- Blockers (never overridable, M-19) ----------------
-export function finalizeBlockers(x: ContractInContext): Finding[] {
+export function finalizeBlockers(x: ContractInContext, others: ContractInContext[] = []): Finding[] {
   const c = x.contract;
   const out: Finding[] = [];
   const p = periodDisposition(x.period);
@@ -118,6 +129,11 @@ export function finalizeBlockers(x: ContractInContext): Finding[] {
   }
   if (c.effectiveFrom && (c.effectiveFrom < x.period.startDate || (x.period.endDate !== null && c.effectiveFrom > x.period.endDate))) {
     out.push({ field: "effective_from", code: "EFFECTIVE_FROM_OUTSIDE_PERIOD", message: "Effective From is outside the linked employment period." });
+  }
+  // C-115: a renewal starts after the contract it renews.
+  const parent = c.parentContractId ? others.find((o) => o.contract.id === c.parentContractId)?.contract : null;
+  if (parent?.effectiveFrom && c.effectiveFrom && c.effectiveFrom <= parent.effectiveFrom) {
+    out.push({ field: "effective_from", code: "RENEWAL_STARTS_BEFORE_PARENT", message: "A renewal must start after the contract it renews.", related_contract_id: parent.id });
   }
   return out;
 }
@@ -136,18 +152,22 @@ function dataWarnings(x: ContractInContext, others: ContractInContext[]): Findin
     for (const o of others) {
       if (o.contract.id === c.id || !isOperational(o) || !isFinal(o.contract)) continue;
       const linked = o.contract.id === c.parentContractId || o.contract.parentContractId === c.id;
-      if (linked) continue; // a renewal replacing its predecessor is intended (C-104)
+      if (linked) continue; // the renewal pair has its own warnings (GAP / RENEWAL_OVERLAPS_PREDECESSOR, C-115)
       const r = operationalRange(o, others);
       if (r && overlaps(range, r)) {
         out.push({ code: WARNING.OVERLAPPING_CONTRACT, message: "Overlaps another contract of this person.", related_contract_id: o.contract.id });
       }
     }
   }
+  // C-115: against the parent's OWN Effective To (a renewable parent always has one). Both stay in Needs Review while
+  // true — also after the renewal is Signed.
   if (c.relationshipType === "renewal" && c.parentContractId && c.effectiveFrom) {
-    const parent = others.find((o) => o.contract.id === c.parentContractId);
-    const pr = parent ? operationalRange(parent, others, { ignoreRenewals: true }) : null;
-    if (pr?.end && c.effectiveFrom > addDays(pr.end, 1)) {
+    const parentTo = others.find((o) => o.contract.id === c.parentContractId)?.contract.effectiveTo ?? null;
+    if (parentTo && c.effectiveFrom > addDays(parentTo, 1)) {
       out.push({ code: WARNING.GAP_AFTER_PREDECESSOR, message: "There is a gap after the previous contract.", related_contract_id: c.parentContractId });
+    }
+    if (parentTo && c.effectiveFrom <= parentTo) {
+      out.push({ code: WARNING.RENEWAL_OVERLAPS_PREDECESSOR, message: "The renewal starts before the previous contract ends.", related_contract_id: c.parentContractId });
     }
   }
   if (!c.isOpenEnded && c.effectiveTo && x.period.endDate !== null && c.effectiveTo > x.period.endDate) {
@@ -201,8 +221,9 @@ export function warningFingerprint(warnings: Finding[]): string | null {
 }
 
 // ---------------- Allowed actions (per caller) ----------------
-export type ActionKey = "edit" | "discard" | "finalize" | "return_to_draft" | "confirm_signed";
+export type ActionKey = "edit" | "discard" | "finalize" | "return_to_draft" | "confirm_signed" | "renew" | "cancel_planned" | "correct" | "void";
 export type ActionView = { allowed: boolean; reasons: string[] };
+export const ACTION_KEYS: ActionKey[] = ["edit", "discard", "finalize", "return_to_draft", "confirm_signed", "renew", "cancel_planned", "correct", "void"];
 
 export const ACTION_PERMISSION: Record<ActionKey, Permission> = {
   edit: "contracts.manage",
@@ -210,15 +231,20 @@ export const ACTION_PERMISSION: Record<ActionKey, Permission> = {
   finalize: "contracts.finalize",
   return_to_draft: "contracts.finalize",
   confirm_signed: "contracts.finalize",
+  renew: "contracts.manage", // creates a Draft; finalizing it needs contracts.finalize
+  cancel_planned: "contracts.finalize",
+  correct: "contracts.correct",
+  void: "contracts.correct",
 };
 
 /** Why an action is not possible in the current state (empty = allowed by state). Permission is added by `actions`. */
-export function stateReasons(action: ActionKey, x: ContractInContext, others: ContractInContext[]): string[] {
+export function stateReasons(action: ActionKey, x: ContractInContext, others: ContractInContext[], today: string): string[] {
   const c = x.contract;
   const r: string[] = [];
   if (c.voided) return ["CONTRACT_VOIDED"];
   if (c.cancelled) return ["CONTRACT_CANCELLED"];
   const periodCode = x.period.voided ? REVIEW_ONLY.PERIOD_VOIDED : x.period.cancelled ? REVIEW_ONLY.PERIOD_CANCELLED : null;
+  const hasRenewal = directRenewalOf(c, others) !== null;
   switch (action) {
     case "edit":
       if (c.documentState !== "draft") r.push("NOT_DRAFT");
@@ -230,28 +256,49 @@ export function stateReasons(action: ActionKey, x: ContractInContext, others: Co
     case "finalize":
       if (c.documentState !== "draft") r.push("NOT_DRAFT");
       else if (periodCode) r.push(periodCode);
-      else if (finalizeBlockers(x).length) r.push("NOT_READY");
+      else if (finalizeBlockers(x, others).length) r.push("NOT_READY");
       break;
     case "return_to_draft":
       if (c.documentState === "signed") r.push("ALREADY_SIGNED");
       else if (c.documentState !== "finalized") r.push("NOT_FINALIZED");
       if (periodCode) r.push(periodCode); // C-109: Cancelled/Voided blocks; Ended never does
-      if (others.some((o) => o.contract.parentContractId === c.id && !o.contract.cancelled && !o.contract.voided)) r.push("DEPENDENT_CONTRACTS_EXIST");
+      if (hasRenewal) r.push("DEPENDENT_CONTRACTS_EXIST");
       break;
     case "confirm_signed":
       if (c.documentState === "signed") r.push("ALREADY_SIGNED");
       else if (c.documentState !== "finalized") r.push("NOT_FINALIZED");
       if (x.period.voided) r.push(REVIEW_ONLY.PERIOD_VOIDED); // C-111: Cancelled allowed, Voided refused
       break;
+    // ---- slice 2A-5 (C-115, C-107 refined) ----
+    case "renew":
+      if (c.documentState === "draft") r.push("NOT_FINALIZED");
+      if (c.isOpenEnded || !c.effectiveTo) r.push("OPEN_ENDED"); // renewal requires a finite parent term
+      if (hasRenewal) r.push("RENEWAL_EXISTS");
+      if (periodCode) r.push(periodCode);
+      break;
+    case "cancel_planned": // contract-wide: Finalized + unsigned + Effective From after the Vietnam business date
+      if (c.documentState === "draft") r.push("NOT_FINALIZED"); // a Draft is discarded instead
+      else if (c.documentState === "signed") r.push("ALREADY_SIGNED"); // withdrawal of a signed contract = PL-10
+      if (!c.effectiveFrom || c.effectiveFrom <= today) r.push("NOT_UPCOMING"); // started (or no date): not "planned"
+      if (hasRenewal) r.push("DEPENDENT_CONTRACTS_EXIST");
+      break;
+    case "correct": // Signed data only; a Finalized-unsigned contract is returned to Draft instead
+      if (c.documentState === "draft") r.push("NOT_FINALIZED");
+      else if (c.documentState === "finalized") r.push("NOT_SIGNED");
+      if (x.period.voided) r.push(REVIEW_ONLY.PERIOD_VOIDED); // read-only under a voided period (C-111)
+      break;
+    case "void": // erroneous records only; never early termination of a valid contract
+      if (c.documentState === "draft") r.push("NOT_FINALIZED"); // a Draft is discarded instead
+      if (hasRenewal) r.push("DEPENDENT_CONTRACTS_EXIST");
+      break;
   }
   return r;
 }
 
-export function actions(x: ContractInContext, others: ContractInContext[], can: (p: Permission) => boolean): Record<ActionKey, ActionView> {
-  const keys: ActionKey[] = ["edit", "discard", "finalize", "return_to_draft", "confirm_signed"];
+export function actions(x: ContractInContext, others: ContractInContext[], can: (p: Permission) => boolean, today: string): Record<ActionKey, ActionView> {
   return Object.fromEntries(
-    keys.map((k) => {
-      const reasons = [...(can(ACTION_PERMISSION[k]) ? [] : ["PERMISSION_REQUIRED"]), ...stateReasons(k, x, others)];
+    ACTION_KEYS.map((k) => {
+      const reasons = [...(can(ACTION_PERMISSION[k]) ? [] : ["PERMISSION_REQUIRED"]), ...stateReasons(k, x, others, today)];
       return [k, { allowed: reasons.length === 0, reasons }];
     }),
   ) as Record<ActionKey, ActionView>;
@@ -269,7 +316,8 @@ export const EXPIRY_WINDOWS = [30, 60, 90] as const;
  * Expiring within N days: a Finalized/Signed contract that is operational (not discarded/cancelled/voided and its
  * period not Cancelled/Voided), not open-ended, whose own Effective To lies from today through today + N — both
  * ends INCLUSIVE (T and T+N count, T+N+1 does not), Asia/Ho_Chi_Minh business dates. Excluded as well: a contract
- * already over because its employment period ended earlier, and one replaced by a finalized renewal (C-104).
+ * already over because its employment period ended earlier, and one with a SIGNED renewal — the confirmed successor
+ * (C-115). A Draft or Finalized-unsigned renewal leaves the parent in Expiring soon.
  * Drafts are not reminders: they have no time state until Finalized (they surface through Needs Review / Drafts).
  */
 export function expiresWithin(x: ContractInContext, others: ContractInContext[], today: string, days: number): boolean {
@@ -278,7 +326,7 @@ export function expiresWithin(x: ContractInContext, others: ContractInContext[],
   if (c.effectiveTo < today || c.effectiveTo > addDays(today, days)) return false;
   const range = operationalRange(x, others);
   if (range?.end !== null && range?.end !== undefined && range.end < today) return false; // ended with its period
-  if (finalizedRenewalOf(c, others)) return false;
+  if (confirmedSuccessorOf(c, others)) return false;
   return true;
 }
 

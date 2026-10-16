@@ -1,11 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ErrorBox } from "@/components/ErrorBox";
 import { Button, Field, Modal } from "@/components/ui";
 import { t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
-import { contractTitle, findingText, finalizeBody, finalizeOutcome, signedDateIssue, type ContractDetail, type Finding } from "../contractModel";
+import {
+  contractTitle,
+  correctionBody,
+  correctionFromContract,
+  findingText,
+  finalizeBody,
+  finalizeOutcome,
+  signedDateIssue,
+  type ContractDetail,
+  type CorrectionForm,
+  type Finding,
+} from "../contractModel";
 
 // Slice 2A-3 lifecycle dialogs over the 2A-2 API. Each submit uses a fresh Idempotency-Key and the contract revision
 // the page last read; the server re-checks everything. No dialog decides whether an action is allowed — the page only
@@ -213,6 +224,159 @@ export function DiscardDialog({ contract, onDone, onClose }: { contract: Contrac
           <Button onClick={onClose} disabled={busy}>
             {t("contracts.form.cancel")}
           </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+// ---------------- Slice 2A-5: Cancel planned, Void, Correction ----------------
+/**
+ * Cancel planned (contract-wide, C-115) and Void (erroneous records only) share one shape: an explanation, a mandatory
+ * reason, the contract revision the page last read. Both are final. The page opens them only when the server allows.
+ */
+export function ReasonActionDialog({
+  contract,
+  kind,
+  onDone,
+  onClose,
+}: {
+  contract: ContractDetail;
+  kind: "cancelPlanned" | "void";
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<ApiCallError | null>(null);
+  const k = kind === "void" ? "voidDialog" : "cancelPlannedDialog";
+  async function confirm(e: React.FormEvent) {
+    e.preventDefault();
+    if (!reason.trim()) return setFieldError(t(`contracts.${k}.reasonRequired`));
+    setBusy(true);
+    setError(null);
+    try {
+      await post(contract, kind === "void" ? "void" : "cancel-planned", { expected_revision: contract.revision, reason: reason.trim() });
+      onDone();
+    } catch (err) {
+      setError(err as ApiCallError);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal title={t(`contracts.${k}.title`)} description={contractTitle(contract)} onClose={onClose} busy={busy}>
+      <form onSubmit={confirm} noValidate>
+        <p>{t(`contracts.${k}.body`)}</p>
+        {kind === "void" && <p className="alert warn small">{t("contracts.voidDialog.notTermination")}</p>}
+        <Field label={t(`contracts.${k}.reason`)} required hint={t(`contracts.${k}.reasonHint`)} error={fieldError}>
+          {(c) => <textarea {...c} rows={3} value={reason} maxLength={1000} onChange={(e) => (setReason(e.target.value), setFieldError(null))} />}
+        </Field>
+        <ErrorBox error={error} />
+        <div className="form-actions">
+          <Button variant={kind === "void" ? "danger" : "primary"} type="submit" disabled={busy}>
+            {busy ? t("contracts.form.saving") : t(`contracts.${k}.confirm`)}
+          </Button>
+          <Button onClick={onClose} disabled={busy}>
+            {t("contracts.form.cancel")}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+type TypeOption = { id: string; name: string; is_active: boolean };
+
+/**
+ * Correct a Signed contract's data-entry error (contracts.correct): only changed fields are sent, with a mandatory
+ * reason; the server validates everything again (dates, period, lineage, signed date not in the future). Correction
+ * keeps the contract's identity — it is not a new agreement and not an amendment.
+ */
+export function CorrectionDialog({ contract, onDone, onClose }: { contract: ContractDetail; onDone: () => void; onClose: () => void }) {
+  const today = contract.as_of;
+  const [form, setForm] = useState<CorrectionForm>(() => correctionFromContract(contract));
+  const [types, setTypes] = useState<TypeOption[]>([]);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<ApiCallError | null>(null);
+  useEffect(() => {
+    api<{ data: TypeOption[] }>("/api/v1/core-hr/contract-types?page_size=100&include_inactive=true")
+      .then((r) => setTypes(r.data.data))
+      .catch(() => setTypes([]));
+  }, []);
+  const typeOptions = types.filter((o) => o.is_active || o.id === contract.contract_type?.id);
+  const body = correctionBody(contract, form);
+  const set = (k: keyof CorrectionForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function confirm(e: React.FormEvent) {
+    e.preventDefault();
+    if (!body) return;
+    if (!form.reason.trim()) return setFieldError(t("contracts.correctDialog.reasonRequired"));
+    setBusy(true);
+    setError(null);
+    try {
+      await post(contract, "corrections", body);
+      onDone();
+    } catch (err) {
+      setError(err as ApiCallError);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal title={t("contracts.correctDialog.title")} description={contractTitle(contract)} onClose={onClose} busy={busy}>
+      <form onSubmit={confirm} className="contract-form" noValidate>
+        <p className="muted small">{t("contracts.correctDialog.body")}</p>
+        <Field label={t("contracts.fields.contractType")}>
+          {(c) => (
+            <select {...c} value={form.contract_type_id} onChange={set("contract_type_id")}>
+              {typeOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+        <Field label={t("contracts.fields.contractNumber")} required>
+          {(c) => <input {...c} value={form.contract_number} onChange={set("contract_number")} maxLength={100} autoComplete="off" />}
+        </Field>
+        <Field label={t("contracts.form.effectiveFrom")} required>
+          {(c) => <input {...c} type="date" value={form.effective_from} onChange={set("effective_from")} />}
+        </Field>
+        <fieldset className="field contract-term">
+          <legend className="field-label">{t("contracts.form.termLabel")}</legend>
+          <label className="checkbox-field">
+            <input type="radio" name="term" value="fixed" checked={form.term === "fixed"} onChange={() => setForm((f) => ({ ...f, term: "fixed" }))} />
+            <span>{t("contracts.form.termFixed")}</span>
+          </label>
+          <label className="checkbox-field">
+            <input type="radio" name="term" value="open" checked={form.term === "open"} onChange={() => setForm((f) => ({ ...f, term: "open" }))} />
+            <span>{t("contracts.form.termOpen")}</span>
+          </label>
+        </fieldset>
+        {form.term === "fixed" && (
+          <Field label={t("contracts.form.effectiveTo")} required>
+            {(c) => <input {...c} type="date" value={form.effective_to} min={form.effective_from || undefined} onChange={set("effective_to")} />}
+          </Field>
+        )}
+        <Field label={t("contracts.fields.signedAt")} required hint={t("contracts.signedDialog.dateHint")}>
+          {(c) => <input {...c} type="date" value={form.signed_at} max={today} onChange={set("signed_at")} />}
+        </Field>
+        <Field label={t("contracts.correctDialog.reason")} required hint={t("contracts.correctDialog.reasonHint")} error={fieldError}>
+          {(c) => <textarea {...c} rows={3} value={form.reason} maxLength={1000} onChange={(e) => (setForm((f) => ({ ...f, reason: e.target.value })), setFieldError(null))} />}
+        </Field>
+        <ErrorBox error={error} />
+        <div className="form-actions">
+          <Button variant="primary" type="submit" disabled={busy || !body}>
+            {busy ? t("contracts.form.saving") : t("contracts.correctDialog.confirm")}
+          </Button>
+          <Button onClick={onClose} disabled={busy}>
+            {t("contracts.form.cancel")}
+          </Button>
+          {!body && <span className="muted small">{t("contracts.form.noChanges")}</span>}
         </div>
       </form>
     </Modal>

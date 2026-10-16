@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
@@ -13,18 +13,20 @@ import { ContractStateBadges } from "../ContractStateBadges";
 import {
   blockerText,
   contractTitle,
+  dispositionCode,
   explainedReason,
   findingText,
   historyTitle,
   periodText,
   placeActions,
+  renewalStateText,
   termText,
   type ActionKey,
   type ContractDetail,
   type Finding,
   type HistoryItem,
 } from "../contractModel";
-import { ConfirmSignedDialog, DiscardDialog, FinalizeReviewDialog, requestFinalize, ReturnToDraftDialog } from "./LifecycleDialogs";
+import { ConfirmSignedDialog, CorrectionDialog, DiscardDialog, FinalizeReviewDialog, ReasonActionDialog, requestFinalize, ReturnToDraftDialog } from "./LifecycleDialogs";
 
 // Slice 2A-3 Contract Detail (/contracts/{id}): a first-class, directly navigable page reused by the Contracts list,
 // the Employee Contracts tab and later Home reminders. Everything it shows — states, Needs Review, readiness, allowed
@@ -34,7 +36,11 @@ type Dialog =
   | { kind: "finalize"; warnings: Finding[]; fingerprint: string; changed: boolean }
   | { kind: "return" }
   | { kind: "signed" }
-  | { kind: "discard" };
+  | { kind: "discard" }
+  | { kind: "renew" }
+  | { kind: "cancel_planned" }
+  | { kind: "correct" }
+  | { kind: "void" };
 
 const ACTION_LABEL: Record<ActionKey, Parameters<typeof t>[0]> = {
   edit: "contracts.actions.edit",
@@ -42,11 +48,16 @@ const ACTION_LABEL: Record<ActionKey, Parameters<typeof t>[0]> = {
   return_to_draft: "contracts.actions.returnToDraft",
   confirm_signed: "contracts.actions.confirmSigned",
   discard: "contracts.actions.discard",
+  renew: "contracts.actions.renew",
+  cancel_planned: "contracts.actions.cancelPlanned",
+  correct: "contracts.actions.correct",
+  void: "contracts.actions.void",
 };
 
 export default function ContractDetailPage() {
   const { id } = useParams<{ id: string }>();
   const session = useSession();
+  const router = useRouter();
   const [c, setC] = useState<ContractDetail | null>(null);
   const [history, setHistory] = useState<HistoryItem[] | null>(null);
   const [error, setError] = useState<ApiCallError | null>(null);
@@ -91,7 +102,7 @@ export default function ContractDetailPage() {
     setNotice(null);
     setActionError(null);
     if (kind === "finalize") return void startFinalize();
-    setDialog(kind === "edit" ? { kind: "edit" } : kind === "return_to_draft" ? { kind: "return" } : kind === "confirm_signed" ? { kind: "signed" } : { kind: "discard" });
+    setDialog(kind === "return_to_draft" ? { kind: "return" } : kind === "confirm_signed" ? { kind: "signed" } : { kind });
   };
   // M-19: the first Finalize carries no fingerprint; warnings come back as a review dialog, never a silent finalize.
   async function startFinalize() {
@@ -103,9 +114,9 @@ export default function ContractDetailPage() {
     setActionError(r.error);
   }
 
-  const disposition = c.state.disposition;
+  const disposition = dispositionCode(c.state);
   const periodDisposition = c.employment.disposition;
-  const menu = placement.menu.map((k) => ({ type: "item" as const, label: t(ACTION_LABEL[k]), onSelect: () => open(k), danger: k === "discard" }));
+  const menu = placement.menu.map((k) => ({ type: "item" as const, label: t(ACTION_LABEL[k]), onSelect: () => open(k), danger: k === "discard" || k === "void" }));
 
   return (
     <>
@@ -122,6 +133,21 @@ export default function ContractDetailPage() {
           <div className="detail-meta">
             <ContractStateBadges state={c.state} needsReview={c.review.needs_review} />
           </div>
+          {(c.relationship.parent_id || c.relationship.renewal_id) && (
+            <div className="contract-lineage small">
+              {c.relationship.parent_id && (
+                <span>
+                  {t("contracts.lineage.renews")} <Link href={`/contracts/${c.relationship.parent_id}`}>{c.relationship.parent_number ?? t("contracts.draftContract")}</Link>
+                </span>
+              )}
+              {c.relationship.renewal_id && (
+                <span>
+                  {t("contracts.lineage.renewedBy")} <Link href={`/contracts/${c.relationship.renewal_id}`}>{c.relationship.renewal_number ?? t("contracts.draftContract")}</Link> (
+                  {renewalStateText(c.relationship.renewal_state)})
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="page-actions detail-actions">
           {placement.secondary.map((k) => (
@@ -252,6 +278,11 @@ export default function ContractDetailPage() {
                     {t("contracts.history.columns.recordedBy")}: {h.recorded_by?.display_name ?? "—"} · {t("contracts.history.columns.recordedAt")}:{" "}
                     {new Date(h.recorded_at).toLocaleString("en-GB", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                   </div>
+                  {h.related_contract_id && (
+                    <div className="small">
+                      <Link href={`/contracts/${h.related_contract_id}`}>{t("contracts.history.openRenewal")}</Link>
+                    </div>
+                  )}
                   {h.reason && (
                     <div className="small">
                       {t("contracts.history.columns.reason")}: {h.reason}
@@ -279,6 +310,12 @@ export default function ContractDetailPage() {
       {dialog?.kind === "return" && <ReturnToDraftDialog contract={c} onClose={() => setDialog(null)} onDone={() => void finished(t("contracts.done.returned"))} />}
       {dialog?.kind === "signed" && <ConfirmSignedDialog contract={c} onClose={() => setDialog(null)} onDone={() => void finished(t("contracts.done.signed"))} />}
       {dialog?.kind === "discard" && <DiscardDialog contract={c} onClose={() => setDialog(null)} onDone={() => void finished(t("contracts.done.discarded"))} />}
+      {dialog?.kind === "renew" && <ContractDraftForm mode="renew" parent={c} onClose={() => setDialog(null)} onDone={(newId) => router.push(`/contracts/${newId}`)} />}
+      {dialog?.kind === "cancel_planned" && (
+        <ReasonActionDialog contract={c} kind="cancelPlanned" onClose={() => setDialog(null)} onDone={() => void finished(t("contracts.done.cancelledPlanned"))} />
+      )}
+      {dialog?.kind === "void" && <ReasonActionDialog contract={c} kind="void" onClose={() => setDialog(null)} onDone={() => void finished(t("contracts.done.voided"))} />}
+      {dialog?.kind === "correct" && <CorrectionDialog contract={c} onClose={() => setDialog(null)} onDone={() => void finished(t("contracts.done.corrected"))} />}
     </>
   );
 }

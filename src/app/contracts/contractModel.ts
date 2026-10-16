@@ -28,12 +28,22 @@ export type ContractSummary = {
   effective_to: string | null;
   is_open_ended: boolean;
   signed_at: string | null;
+  relationship?: { type: "renewal" | null; parent_id: string | null; parent_number: string | null; renewal_id: string | null; renewal_state: "draft" | "finalized" | "signed" | null };
   state: ContractState;
   review: { needs_review: boolean; codes: string[] };
 };
-export type ActionKey = "edit" | "discard" | "finalize" | "return_to_draft" | "confirm_signed";
-export type ContractDetail = Omit<ContractSummary, "review" | "contract_type"> & {
+export type ActionKey = "edit" | "discard" | "finalize" | "return_to_draft" | "confirm_signed" | "renew" | "cancel_planned" | "correct" | "void";
+export type ContractDetail = Omit<ContractSummary, "review" | "contract_type" | "relationship"> & {
   as_of: string;
+  relationship: {
+    type: "renewal" | null;
+    parent_id: string | null;
+    parent_number: string | null;
+    renewal_id: string | null;
+    renewal_number: string | null;
+    renewal_state: "draft" | "finalized" | "signed" | null;
+  };
+  renewal_defaults: { contract_type_id: string | null; effective_from: string | null } | null;
   contract_type: { id: string; code: string; name: string; name_vi: string | null; is_active: boolean } | null;
   summary: string | null;
   review: { needs_review: boolean; items: Finding[] };
@@ -164,6 +174,50 @@ export type Reminders = {
   needs_review: { total: number; items: ReminderItem[] };
 };
 
+// ---------------- Slice 2A-5: renewal form and correction bodies ----------------
+/** Renew form prefilled from the SERVER's renewal_defaults (the browser computes no renewal rule). */
+export function draftFromRenewalDefaults(c: ContractDetail): DraftForm {
+  return {
+    ...EMPTY_DRAFT,
+    employment_id: c.employment.id,
+    contract_type_id: c.renewal_defaults?.contract_type_id ?? "",
+    effective_from: c.renewal_defaults?.effective_from ?? "",
+  };
+}
+
+/** POST /contracts/{id}/renewals body (the period is the parent's; empty fields omitted). */
+export function renewalBody(f: DraftForm): Record<string, unknown> {
+  const { employment_id: _period, ...rest } = createDraftBody(f);
+  void _period;
+  return rest;
+}
+
+export type CorrectionForm = { contract_type_id: string; contract_number: string; effective_from: string; term: "fixed" | "open"; effective_to: string; signed_at: string; reason: string };
+export const correctionFromContract = (c: ContractDetail): CorrectionForm => ({
+  contract_type_id: c.contract_type?.id ?? "",
+  contract_number: c.contract_number ?? "",
+  effective_from: c.effective_from ?? "",
+  term: c.is_open_ended ? "open" : "fixed",
+  effective_to: c.effective_to ?? "",
+  signed_at: c.signed_at ?? "",
+  reason: "",
+});
+
+/** Correction body: only changed fields + expected_revision + reason; null when nothing changed. */
+export function correctionBody(c: ContractDetail, f: CorrectionForm): Record<string, unknown> | null {
+  const before = correctionFromContract(c);
+  const body: Record<string, unknown> = {};
+  if (f.contract_type_id !== before.contract_type_id) body.contract_type_id = f.contract_type_id;
+  if (f.contract_number.trim() !== before.contract_number) body.contract_number = f.contract_number.trim();
+  if (f.effective_from !== before.effective_from) body.effective_from = f.effective_from;
+  if (f.term !== before.term || (f.term === "fixed" && f.effective_to !== before.effective_to)) {
+    body.is_open_ended = f.term === "open";
+    body.effective_to = f.term === "open" ? null : f.effective_to || null;
+  }
+  if (f.signed_at !== before.signed_at) body.signed_at = f.signed_at;
+  return Object.keys(body).length ? { expected_revision: c.revision, reason: f.reason.trim(), ...body } : null;
+}
+
 /** "Ends today" / "Ends in 1 day" / "Ends in N days" for an expiring contract. */
 export function endsInText(days: number | null): string {
   if (days === null) return "";
@@ -202,15 +256,16 @@ export type ActionPlacement = { primary: ActionKey | null; secondary: ActionKey[
 
 /**
  * Lays out the actions the server marks allowed (nothing else is shown). Finalize is the main step of a Draft and
- * Confirm Signed of a Finalized contract; Edit stays visible; Return to Draft and Discard go to the More menu.
+ * Confirm Signed of a Finalized contract; Edit and Renew stay visible; Return to Draft, Discard, Cancel planned,
+ * Correct and Void go to the More menu.
  */
 export function placeActions(actions: Record<ActionKey, ActionView>): ActionPlacement {
   const ok = (k: ActionKey) => actions[k]?.allowed === true;
   const primary: ActionKey | null = ok("finalize") ? "finalize" : ok("confirm_signed") ? "confirm_signed" : null;
   return {
     primary,
-    secondary: (["edit"] as ActionKey[]).filter(ok),
-    menu: (["return_to_draft", "discard"] as ActionKey[]).filter(ok),
+    secondary: (["edit", "renew"] as ActionKey[]).filter(ok),
+    menu: (["return_to_draft", "discard", "cancel_planned", "correct", "void"] as ActionKey[]).filter(ok),
   };
 }
 
@@ -222,8 +277,25 @@ export function explainedReason(actions: Record<ActionKey, ActionView>): string 
   const all = Object.values(actions).flatMap((a) => a.reasons);
   if (all.includes("PERIOD_VOIDED")) return t("contracts.reason.PERIOD_VOIDED");
   if (all.includes("PERIOD_CANCELLED")) return t("contracts.reason.PERIOD_CANCELLED");
+  // C-115: a contract with a non-disposed renewal cannot be returned to Draft, cancelled or voided — HR deals with the
+  // renewal first. Explained only when the renewal is the sole reason (not when the action is out of reach anyway).
+  const onlyRenewal = (k: ActionKey) => actions[k]?.reasons.length === 1 && actions[k].reasons[0] === "DEPENDENT_CONTRACTS_EXIST";
+  if ((["return_to_draft", "cancel_planned", "void"] as ActionKey[]).some(onlyRenewal)) return t("contracts.reason.DEPENDENT_CONTRACTS_EXIST");
   return null;
 }
+
+/**
+ * Presentation code of a contract's disposition. The server has one Cancelled disposition (C-107 / C-115); a cancelled
+ * Draft reads "Discarded", a cancelled Finalized contract "Cancelled" (Cancel planned). Voided stays "Voided".
+ */
+export function dispositionCode(state: Pick<ContractState, "disposition" | "document_state">): "discarded" | "cancelled" | "voided" | null {
+  if (state.disposition === "voided") return "voided";
+  if (state.disposition === "cancelled") return state.document_state === "draft" ? "discarded" : "cancelled";
+  return null;
+}
+
+/** "Draft" / "Finalized" / "Signed" of the linked renewal, for the lineage line. */
+export const renewalStateText = (s: "draft" | "finalized" | "signed" | null) => (s ? t(`contracts.documentStateValue.${s}`) : "");
 
 /** Why "Create contract" is not offered on the Employee Contracts tab, when it helps HR (not for missing permission). */
 export function explainedReasonForCreate(reasons: string[]): string | null {

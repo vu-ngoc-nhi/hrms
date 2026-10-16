@@ -55,6 +55,11 @@ const DOCUMENTED: Record<string, Permission | null> = {
   createContractFinalize: "contracts.finalize",
   createContractReturnToDraft: "contracts.finalize",
   createContractSignatureConfirmation: "contracts.finalize",
+  // Slice 2A-5 (C-115): Renew = manage; Cancel planned = finalize; Correction and Void = correct.
+  createContractRenewal: "contracts.manage",
+  createContractCancelPlanned: "contracts.finalize",
+  createContractCorrection: "contracts.correct",
+  createContractVoid: "contracts.correct",
   listContractHistory: "contracts.read",
   // Phase 2A slice 2A-3: read models for the contract UI.
   listContracts: "contracts.read",

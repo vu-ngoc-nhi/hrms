@@ -36,6 +36,11 @@ function ContractRow({ c, muted = false }: { c: ContractSummary; muted?: boolean
             .filter(Boolean)
             .join(" · ")}
         </div>
+        {c.relationship?.parent_id && (
+          <div className="muted small">
+            {t("contracts.lineage.renews")} {c.relationship.parent_number ?? t("contracts.draftContract")}
+          </div>
+        )}
       </div>
       <div className="contract-row-badges">
         <ContractStateBadges state={c.state} needsReview={c.review.needs_review} compact />

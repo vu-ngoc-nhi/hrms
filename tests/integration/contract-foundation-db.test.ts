@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HISTORY_EVENT_TYPES, RELATIONSHIP_TYPES } from "@/modules/contracts/model";
@@ -241,25 +243,144 @@ describe("Renewal relationship (C-104, C-109)", () => {
     expect(await sqlState(insertContract(a.employmentId, { parent_contract_id: parent, relationship_type: "renewal" }))).toBeUndefined();
   });
 
-  it("the parent is an agreement, never another renewal; the link cannot be changed afterwards", async () => {
+  it("chains are allowed: a renewal is an agreement and may be renewed again (A → B → C, C-115); the link cannot be changed afterwards", async () => {
     const { employmentId } = await period("2026-01-01");
-    const root = await finalized(employmentId, "AGR-ROOT-1", "2026-01-01", "2026-06-30");
-    const renewal = await contract(employmentId, { parent_contract_id: root, relationship_type: "renewal" });
-    expect(await constraintOf(insertContract(employmentId, { parent_contract_id: renewal, relationship_type: "renewal" }))).toBe("contract_parent_is_agreement");
+    const a = await finalized(employmentId, "CHAIN-A-1", "2026-01-01", "2026-06-30");
+    const b = await contract(employmentId, { parent_contract_id: a, relationship_type: "renewal", contract_type_id: typeA, contract_number: "CHAIN-B-1", effective_from: "2026-07-01", effective_to: "2026-12-31" });
+    // B is still a Draft: not yet renewable.
+    expect(await constraintOf(insertContract(employmentId, { parent_contract_id: b, relationship_type: "renewal" }))).toBe("contract_parent_renewable");
+    await finalize(b);
+    expect(await sqlState(insertContract(employmentId, { parent_contract_id: b, relationship_type: "renewal", effective_from: "2027-01-01" }))).toBeUndefined();
     const other = await finalized(employmentId, "AGR-OTHER-1", "2026-01-01", "2026-06-30");
-    expect(await constraintOf(app.query("UPDATE contract SET parent_contract_id = $2 WHERE id = $1", [renewal, other]))).toBe("contract_link_immutable");
-    expect(await constraintOf(app.query("UPDATE contract SET parent_contract_id = NULL, relationship_type = NULL WHERE id = $1", [renewal]))).toBe(
-      "contract_link_immutable",
-    );
+    expect(await constraintOf(app.query("UPDATE contract SET parent_contract_id = $2 WHERE id = $1", [b, other]))).toBe("contract_link_immutable");
+    expect(await constraintOf(app.query("UPDATE contract SET parent_contract_id = NULL, relationship_type = NULL WHERE id = $1", [b]))).toBe("contract_link_immutable");
   });
 
-  it("at most one live renewal per agreement; a cancelled renewal frees the slot", async () => {
+  it("one non-disposed direct renewal per parent agreement (no branching); a disposed renewal frees the slot", async () => {
     const { employmentId } = await period("2026-01-01");
-    const root = await finalized(employmentId, "ONE-LIVE-1", "2026-01-01", "2026-06-30");
+    const root = await finalized(employmentId, "ONE-ND-1", "2026-01-01", "2026-06-30");
     const first = await contract(employmentId, { parent_contract_id: root, relationship_type: "renewal" });
-    expect(await constraintOf(insertContract(employmentId, { parent_contract_id: root, relationship_type: "renewal" }))).toBe("contract_one_live_renewal_uq");
+    expect(await constraintOf(insertContract(employmentId, { parent_contract_id: root, relationship_type: "renewal" }))).toBe("contract_one_nondisposed_renewal_uq");
     await app.query("UPDATE contract SET cancelled_at = now() WHERE id = $1", [first]);
+    const second = await contract(employmentId, { parent_contract_id: root, relationship_type: "renewal", contract_type_id: typeA, contract_number: "ONE-ND-2", effective_from: "2026-07-01", effective_to: "2026-12-31" });
+    await finalize(second);
+    await app.query("UPDATE contract SET voided_at = now(), revision = revision + 1 WHERE id = $1", [second]);
     expect(await sqlState(insertContract(employmentId, { parent_contract_id: root, relationship_type: "renewal" }))).toBeUndefined();
+  });
+
+  it("renewable parent: Finalized or Signed, not disposed, with an Effective To (C-115)", async () => {
+    const { employmentId } = await period("2026-01-01");
+    const draft = await contract(employmentId, { contract_type_id: typeA, contract_number: "RP-DRAFT", effective_from: "2026-01-01", effective_to: "2026-06-30" });
+    const open = await finalized(employmentId, "RP-OPEN", "2026-01-01");
+    const cancelled = await finalized(employmentId, "RP-CANC", "2026-01-01", "2026-06-30");
+    await app.query("UPDATE contract SET cancelled_at = now() WHERE id = $1", [cancelled]);
+    const voided = await finalized(employmentId, "RP-VOID", "2026-01-01", "2026-06-30");
+    await app.query("UPDATE contract SET voided_at = now() WHERE id = $1", [voided]);
+    for (const parent of [draft, open, cancelled, voided]) {
+      expect(await constraintOf(insertContract(employmentId, { parent_contract_id: parent, relationship_type: "renewal" })), parent).toBe("contract_parent_renewable");
+    }
+    const signed = await finalized(employmentId, "RP-SIGNED", "2026-01-01", "2026-06-30");
+    await app.query("UPDATE contract SET signed_at = '2026-01-01' WHERE id = $1", [signed]);
+    expect(await sqlState(insertContract(employmentId, { parent_contract_id: signed, relationship_type: "renewal" }))).toBeUndefined();
+  });
+
+  it("a renewal starts after its parent starts — on insert, on change and at Finalize", async () => {
+    const { employmentId } = await period("2026-01-01");
+    const parent = await finalized(employmentId, "START-P-1", "2026-03-01", "2026-06-30");
+    for (const from of ["2026-03-01", "2026-02-01"]) {
+      expect(await constraintOf(insertContract(employmentId, { parent_contract_id: parent, relationship_type: "renewal", effective_from: from }))).toBe("contract_renewal_starts_after_parent");
+    }
+    const child = await contract(employmentId, { parent_contract_id: parent, relationship_type: "renewal", effective_from: "2026-06-01" }); // overlap: a warning, not a block
+    expect(await constraintOf(app.query("UPDATE contract SET effective_from = '2026-03-01' WHERE id = $1", [child]))).toBe("contract_renewal_starts_after_parent");
+  });
+
+  it("parent guard: with a non-disposed renewal the parent cannot be cancelled, voided, returned to draft, made open-ended or moved past the renewal", async () => {
+    const { employmentId } = await period("2026-01-01");
+    const parent = await finalized(employmentId, "GUARD-P-1", "2026-01-01", "2026-06-30");
+    const child = await contract(employmentId, { parent_contract_id: parent, relationship_type: "renewal", effective_from: "2026-07-01" });
+    expect(await constraintOf(app.query("UPDATE contract SET cancelled_at = now() WHERE id = $1", [parent]))).toBe("contract_parent_has_renewal");
+    expect(await constraintOf(app.query("UPDATE contract SET voided_at = now() WHERE id = $1", [parent]))).toBe("contract_parent_has_renewal");
+    expect(await constraintOf(app.query("UPDATE contract SET finalized_at = NULL, finalized_by = NULL WHERE id = $1", [parent]))).toBe("contract_parent_has_renewal");
+    expect(await constraintOf(app.query("UPDATE contract SET is_open_ended = true, effective_to = NULL WHERE id = $1", [parent]))).toBe("contract_parent_renewable");
+    expect(await constraintOf(app.query("UPDATE contract SET effective_from = '2026-07-01' WHERE id = $1", [parent]))).toBe("contract_renewal_starts_after_parent");
+    // No cascade: once the renewal is disposed, the parent is free again.
+    await app.query("UPDATE contract SET cancelled_at = now() WHERE id = $1", [child]);
+    expect(await sqlState(app.query("UPDATE contract SET voided_at = now() WHERE id = $1", [parent]))).toBeUndefined();
+  });
+});
+
+describe("Renewal migration validation (20261017000000_contract_renewal_chains)", () => {
+  // The owner connection (hrms_test only) plants rows the triggers would refuse, inside a transaction that is always
+  // rolled back, to prove the migration's validation step accepts a compatible model and fails only on incompatible data.
+  const migration = readFileSync(path.join(process.cwd(), "prisma/migrations/20261017000000_contract_renewal_chains/migration.sql"), "utf8");
+  const validationBlock = migration.slice(migration.indexOf("DO $$"), migration.indexOf("END $$;") + "END $$;".length);
+  let owner: pg.Client;
+  beforeAll(async () => {
+    owner = new pg.Client({ connectionString: process.env.MIGRATION_DATABASE_URL });
+    await owner.connect();
+  });
+  afterAll(async () => {
+    await owner.end();
+  });
+  async function inRolledBack<T>(fn: () => Promise<T>): Promise<T> {
+    await owner.query("BEGIN");
+    try {
+      return await fn();
+    } finally {
+      await owner.query("ROLLBACK");
+    }
+  }
+  const violations = async () => (await owner.query("SELECT violation FROM contract_renewal_model_violations() ORDER BY 1")).rows.map((r) => r.violation);
+  const validates = async () => {
+    await owner.query("SAVEPOINT v");
+    try {
+      await owner.query(validationBlock);
+      return "ok";
+    } catch (e) {
+      await owner.query("ROLLBACK TO SAVEPOINT v");
+      return (e as Error).message;
+    }
+  };
+
+  it("accepts compatible pre-existing renewal rows (a chain A → B → C)", async () => {
+    const { employmentId } = await period("2026-01-01");
+    const a = await finalized(employmentId, "MIG-OK-A", "2026-01-01", "2026-06-30");
+    const b = await contract(employmentId, { parent_contract_id: a, relationship_type: "renewal", contract_type_id: typeA, contract_number: "MIG-OK-B", effective_from: "2026-07-01", effective_to: "2026-12-31" });
+    await finalize(b);
+    await contract(employmentId, { parent_contract_id: b, relationship_type: "renewal", effective_from: "2027-01-01" });
+    expect(await inRolledBack(async () => [await violations(), await validates()])).toEqual([[], "ok"]);
+  });
+
+  it("rejects only incompatible data: amendment parent, branching, non-renewable parent, renewal starting before its parent", async () => {
+    const { employmentId } = await period("2026-01-01");
+    const result = await inRolledBack(async () => {
+      await owner.query("ALTER TABLE contract DISABLE TRIGGER USER");
+      await owner.query("ALTER TABLE contract DROP CONSTRAINT contract_relationship_type_check");
+      await owner.query("DROP INDEX contract_one_nondisposed_renewal_uq");
+      const ins = async (v: Record<string, unknown>) =>
+        (
+          await owner.query(
+            `INSERT INTO contract (employment_id, contract_type_id, contract_number, effective_from, effective_to, is_open_ended, parent_contract_id, relationship_type, finalized_at, finalized_by, created_by)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+            [employmentId, typeA, v.number, v.from, v.to ?? null, v.to == null, v.parent ?? null, v.parent ? (v.rel ?? "renewal") : null, v.draft ? null : new Date(), v.draft ? null : userId, userId],
+          )
+        ).rows[0].id as string;
+      const root = await ins({ number: "MIG-BAD-ROOT", from: "2026-01-01", to: "2026-06-30" });
+      const amendment = await ins({ number: "MIG-BAD-AMD", from: "2026-02-01", to: "2026-06-30", parent: root, rel: "amendment" });
+      await ins({ number: "MIG-BAD-AMD-CHILD", from: "2026-07-01", parent: amendment });
+      await ins({ number: "MIG-BAD-BR1", from: "2026-07-01", parent: root });
+      await ins({ number: "MIG-BAD-BR2", from: "2026-07-02", parent: root });
+      const draftParent = await ins({ number: "MIG-BAD-DRAFT", from: "2026-01-01", to: "2026-06-30", draft: true });
+      await ins({ number: "MIG-BAD-OF-DRAFT", from: "2026-07-01", parent: draftParent });
+      const later = await ins({ number: "MIG-BAD-LATER", from: "2026-05-01", to: "2026-06-30" });
+      await ins({ number: "MIG-BAD-EARLY", from: "2026-04-01", parent: later });
+      return [await violations(), await validates()];
+    });
+    const [found, outcome] = result as [string[], string];
+    expect(new Set(found)).toEqual(new Set(["parent_is_amendment", "branching", "parent_not_renewable", "starts_before_parent"]));
+    expect(outcome).toContain("existing renewal rows violate the approved renewal model (C-115)");
+    // Rolled back: nothing planted remains and the database is consistent.
+    expect((await app.query("SELECT count(*)::int AS n FROM contract WHERE contract_number LIKE 'MIG-BAD-%'")).rows[0].n).toBe(0);
   });
 });
 

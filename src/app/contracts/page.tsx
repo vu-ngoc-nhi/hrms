@@ -18,6 +18,7 @@ import {
   contractFiltersFromQuery,
   contractQueryFromFilters,
   contractTitle,
+  dispositionCode,
   DOCUMENT_STATES,
   EMPTY_CONTRACT_FILTERS,
   hasContractFilters,
@@ -252,7 +253,7 @@ function ContractsList() {
                     <td className="col-date">{formatDate(c.effective_from)}</td>
                     <td className="col-date">{c.effective_from || c.is_open_ended || c.effective_to ? termText(c) : "—"}</td>
                     <td>
-                      {c.state.disposition ? <StatusBadge kind="contractDisposition" code={c.state.disposition} /> : <StatusBadge kind="contractDocument" code={c.state.document_state} />}
+                      {c.state.disposition ? <StatusBadge kind="contractDisposition" code={dispositionCode(c.state)!} /> : <StatusBadge kind="contractDocument" code={c.state.document_state} />}
                     </td>
                     <td>{c.state.time_state ? <StatusBadge kind="contractTime" code={c.state.time_state} /> : <span className="muted">—</span>}</td>
                     <td>

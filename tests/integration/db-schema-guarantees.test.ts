@@ -34,7 +34,7 @@ describe("Database guarantees (H7)", () => {
     expect(await q("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'job_assignment' AND column_name = 'cancelled_at'")).toEqual([{ n: 1 }]);
     expect(await q("SELECT to_regclass('public.access_audit_event') IS NOT NULL AS ok")).toEqual([{ ok: true }]); // not readable by the app role
     expect(await q("SELECT to_regclass('public.contract_history_event') IS NOT NULL AS ok")).toEqual([{ ok: true }]);
-    expect(folders.at(-1)).toBe("20261016000000_contract_voided_parent_guard");
+    expect(folders.at(-1)).toBe("20261017000000_contract_renewal_chains");
   });
 
   it("exclusion, CHECK and partial unique constraints exist (cancelled and voided periods excluded where approved)", async () => {
@@ -79,7 +79,8 @@ describe("Database guarantees (H7)", () => {
     expect(idx.contract_number_ci_uq).toContain("UNIQUE INDEX");
     expect(idx.contract_number_ci_uq).toContain("und-x-icu");
     expect(idx.contract_number_ci_uq).not.toContain("WHERE");
-    expect(idx.contract_one_live_renewal_uq).toContain("WHERE");
+    expect(idx.contract_one_nondisposed_renewal_uq).toContain("WHERE");
+    expect(idx.contract_one_live_renewal_uq).toBeUndefined();
   });
 
   it("integrity and immutability triggers exist", async () => {
@@ -97,6 +98,7 @@ describe("Database guarantees (H7)", () => {
       "contract_structural_rules_trg",
       "contract_disposition_is_terminal_trg",
       "contract_voided_parent_read_only_trg",
+      "contract_parent_with_renewal_guard_trg",
     ]) {
       expect(triggers, t).toContain(t);
     }

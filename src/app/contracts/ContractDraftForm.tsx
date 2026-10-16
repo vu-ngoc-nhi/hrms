@@ -5,11 +5,12 @@ import { ErrorBox } from "@/components/ErrorBox";
 import { Button, Field, Modal } from "@/components/ui";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
-import { createDraftBody, draftErrors, draftFromContract, EMPTY_DRAFT, updateDraftBody, type ContractDetail, type DraftForm } from "./contractModel";
+import { contractTitle, createDraftBody, draftErrors, draftFromContract, draftFromRenewalDefaults, EMPTY_DRAFT, renewalBody, updateDraftBody, type ContractDetail, type DraftForm } from "./contractModel";
 
 // Slice 2A-3: create or edit a Contract Draft (Phase 2A fields only — no salary, ID, address, templates or documents).
 // Create: POST /contracts with an Idempotency-Key (the same content reuses the same key, so a lost response never
-// creates a second draft). Edit: PATCH with expected_revision and only the changed fields.
+// creates a second draft). Edit: PATCH with expected_revision and only the changed fields. Renew (slice 2A-5): POST
+// /contracts/{parent}/renewals, prefilled only from the server's renewal_defaults; the server decides everything else.
 export type PeriodOption = { id: string; start_date: string; end_date: string | null; employee_type: string | null; is_default: boolean };
 type TypeOption = { id: string; name: string; name_vi: string | null; is_active: boolean };
 
@@ -19,11 +20,16 @@ const periodLabel = (p: PeriodOption) =>
 export function ContractDraftForm(
   props:
     | { mode: "create"; periods: PeriodOption[]; onClose: () => void; onDone: (contractId: string) => void }
-    | { mode: "edit"; contract: ContractDetail; onClose: () => void; onDone: (contractId: string) => void },
+    | { mode: "edit"; contract: ContractDetail; onClose: () => void; onDone: (contractId: string) => void }
+    | { mode: "renew"; parent: ContractDetail; onClose: () => void; onDone: (contractId: string) => void },
 ) {
-  const creating = props.mode === "create";
+  const creating = props.mode !== "edit";
   const [form, setForm] = useState<DraftForm>(() =>
-    props.mode === "edit" ? draftFromContract(props.contract) : { ...EMPTY_DRAFT, employment_id: (props.periods.find((p) => p.is_default) ?? props.periods[0])?.id ?? "" },
+    props.mode === "edit"
+      ? draftFromContract(props.contract)
+      : props.mode === "renew"
+        ? draftFromRenewalDefaults(props.parent)
+        : { ...EMPTY_DRAFT, employment_id: (props.periods.find((p) => p.is_default) ?? props.periods[0])?.id ?? "" },
   );
   const [types, setTypes] = useState<TypeOption[]>([]);
   const [errors, setErrors] = useState<Partial<Record<keyof DraftForm, string>>>({});
@@ -40,7 +46,7 @@ export function ContractDraftForm(
   // Active types are offered; an inactive type already on the draft stays visible (the server blocks Finalize on it).
   const currentType = props.mode === "edit" ? props.contract.contract_type?.id : undefined;
   const typeOptions = types.filter((o) => o.is_active || o.id === currentType);
-  const body = creating ? createDraftBody(form) : updateDraftBody((props as { contract: ContractDetail }).contract, form);
+  const body = props.mode === "create" ? createDraftBody(form) : props.mode === "renew" ? renewalBody(form) : updateDraftBody(props.contract, form);
   const set = (k: keyof DraftForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   async function save(e: React.FormEvent) {
@@ -51,10 +57,11 @@ export function ContractDraftForm(
     setBusy(true);
     setError(null);
     try {
-      if (props.mode === "create") {
+      if (props.mode !== "edit") {
         const payload = JSON.stringify(body);
         if (!attempt.current || attempt.current.payload !== payload) attempt.current = { key: crypto.randomUUID(), payload };
-        const r = await api<{ id: string }>("/api/v1/core-hr/contracts", { method: "POST", body: payload, headers: { "Idempotency-Key": attempt.current.key } });
+        const url = props.mode === "renew" ? `/api/v1/core-hr/contracts/${props.parent.id}/renewals` : "/api/v1/core-hr/contracts";
+        const r = await api<{ id: string }>(url, { method: "POST", body: payload, headers: { "Idempotency-Key": attempt.current.key } });
         props.onDone(r.data.id);
       } else {
         await api(`/api/v1/core-hr/contracts/${props.contract.id}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -70,8 +77,14 @@ export function ContractDraftForm(
   }
 
   return (
-    <Modal title={t(creating ? "contracts.form.createTitle" : "contracts.form.editTitle")} onClose={props.onClose} busy={busy}>
+    <Modal
+      title={t(props.mode === "renew" ? "contracts.renewDialog.title" : creating ? "contracts.form.createTitle" : "contracts.form.editTitle")}
+      description={props.mode === "renew" ? t("contracts.renewDialog.renews", { contract: contractTitle(props.parent) }) : undefined}
+      onClose={props.onClose}
+      busy={busy}
+    >
       <form onSubmit={save} className="contract-form" noValidate>
+        {props.mode === "renew" && <p className="muted small">{t("contracts.renewDialog.body")}</p>}
         {props.mode === "create" && props.periods.length > 1 && (
           <Field label={t("contracts.form.employmentPeriod")} required hint={t("contracts.form.employmentPeriodHint")}>
             {(c) => (
@@ -123,7 +136,7 @@ export function ContractDraftForm(
         <ErrorBox error={error} />
         <div className="form-actions">
           <Button variant="primary" type="submit" disabled={busy || !body}>
-            {busy ? t("contracts.form.saving") : t(creating ? "contracts.form.create" : "contracts.form.save")}
+            {busy ? t("contracts.form.saving") : t(props.mode === "renew" ? "contracts.renewDialog.confirm" : creating ? "contracts.form.create" : "contracts.form.save")}
           </Button>
           <Button onClick={props.onClose} disabled={busy}>
             {t("contracts.form.cancel")}

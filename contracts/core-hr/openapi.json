@@ -4362,7 +4362,7 @@
       "post": {
         "operationId": "createContractReturnToDraft",
         "summary": "Return a Finalized, unsigned contract to Draft (controlled reversal)",
-        "description": "contracts.finalize; mandatory reason; expected_revision; Idempotency-Key. C-109: not Signed (409 CONTRACT_STATE_CONFLICT), not Cancelled/Voided (409 CONTRACT_READ_ONLY), period not Cancelled/Voided (422 PERIOD_NOT_VALID — an Ended period never blocks), no live renewal (409 DEPENDENT_CONTRACTS_EXIST). Number and content are kept. History event `returned_to_draft` with the reason; audit contract.return_to_draft.\n\nRequired permission: `contracts.finalize`.",
+        "description": "contracts.finalize; mandatory reason; expected_revision; Idempotency-Key. C-109: not Signed (409 CONTRACT_STATE_CONFLICT), not Cancelled/Voided (409 CONTRACT_READ_ONLY), period not Cancelled/Voided (422 PERIOD_NOT_VALID — an Ended period never blocks), no non-disposed direct renewal (409 DEPENDENT_CONTRACTS_EXIST). Number and content are kept. History event `returned_to_draft` with the reason; audit contract.return_to_draft.\n\nRequired permission: `contracts.finalize`.",
         "tags": [
           "Contracts"
         ],
@@ -4527,6 +4527,486 @@
         "responses": {
           "201": {
             "description": "The Signed contract (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core-hr/contracts/{id}/renewals": {
+      "post": {
+        "operationId": "createContractRenewal",
+        "summary": "Renew a contract (new Draft agreement linked to its parent)",
+        "description": "contracts.manage; Idempotency-Key. Parent `{id}`: Finalized or Signed, not discarded/cancelled/voided, with an Effective To (open-ended contracts are not renewed), no non-disposed direct renewal (one non-disposed direct renewal per parent agreement; 409 RENEWAL_EXISTS), period not Cancelled/Voided. Otherwise 422 PARENT_NOT_RENEWABLE / PERIOD_NOT_VALID. Upcoming, Active and Expired parents qualify; chains A → B → C are allowed. The renewal stays in the same Employment Period; defaults: parent's Contract Type (if active) and Effective From = parent Effective To + 1 (Asia/Ho_Chi_Minh); the number is never prefilled. Effective From must be inside the period (422 EFFECTIVE_FROM_OUTSIDE_PERIOD) and after the parent's Effective From (422 RENEWAL_STARTS_BEFORE_PARENT). Gap / overlap are Finalize warnings (GAP_AFTER_PREDECESSOR, RENEWAL_OVERLAPS_PREDECESSOR). The parent is not modified; it gets one history event `renewal_created`.\n\nRequired permission: `contracts.manage`.",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractRenewalCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new renewal Draft (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core-hr/contracts/{id}/cancel-planned": {
+      "post": {
+        "operationId": "createContractCancelPlanned",
+        "summary": "Cancel a planned contract (Finalized, unsigned, not started)",
+        "description": "contracts.finalize; mandatory reason; expected_revision; Idempotency-Key. Contract-wide rule (C-107 refined by C-115): Finalized, not Signed, Effective From after the Vietnam business date. A Draft is discarded instead (409 CONTRACT_STATE_CONFLICT, NOT_FINALIZED); a Signed contract cannot be withdrawn here — PL-10 (409 CONTRACT_STATE_CONFLICT, ALREADY_SIGNED); started: 422 NOT_UPCOMING; a contract with a non-disposed renewal: 409 DEPENDENT_CONTRACTS_EXIST. Final; nothing else changes (a cancelled renewal frees its parent; its number stays reserved). History `cancelled`; audit contract.cancel_planned.\n\nRequired permission: `contracts.finalize`.",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractCancelPlanned"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The cancelled contract (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core-hr/contracts/{id}/corrections": {
+      "post": {
+        "operationId": "createContractCorrection",
+        "summary": "Correct the recorded data of a Signed contract",
+        "description": "contracts.correct (HR_ADMIN); mandatory reason; expected_revision; Idempotency-Key. Signed contracts only (a Finalized-unsigned contract is returned to Draft: 409 CONTRACT_STATE_CONFLICT, NOT_SIGNED); refused under a Voided period. Fields: Contract Type, Contract Number, Effective From, Effective To / Open-ended, signed date (not future, not cleared). The renewal invariant holds: a renewed contract keeps a finite term (422 PARENT_NOT_RENEWABLE) and a renewal starts after its parent (422 RENEWAL_STARTS_BEFORE_PARENT). History `corrected` with the reason; audit contract.correct with old/new values.\n\nRequired permission: `contracts.correct`.",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractCorrection"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The corrected contract (or replayed result)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict: duplicate code, work email already assigned, or Idempotency-Key reused with a different payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core-hr/contracts/{id}/void": {
+      "post": {
+        "operationId": "createContractVoid",
+        "summary": "Void a contract entered in error",
+        "description": "contracts.correct (HR_ADMIN); mandatory reason; expected_revision; Idempotency-Key. Only for an erroneous / invalid record — never to terminate a valid contract (early termination is a separate future decision). Finalized or Signed (a Draft is discarded instead); a contract with a non-disposed renewal: 409 DEPENDENT_CONTRACTS_EXIST (no cascade). Final; no Unvoid; nothing deleted. History `voided`; audit contract.void.\n\nRequired permission: `contracts.correct`.",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "8-128 characters, unique per caller and operation.",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractVoid"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The voided contract (or replayed result)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5898,6 +6378,13 @@
                   {
                     "type": "null"
                   }
+                ],
+                "description": "Renews: the parent agreement."
+              },
+              "parent_number": {
+                "type": [
+                  "string",
+                  "null"
                 ]
               },
               "renewal_id": {
@@ -5910,15 +6397,42 @@
                   {
                     "type": "null"
                   }
+                ],
+                "description": "Renewed by: the one non-disposed direct renewal (C-115)."
+              },
+              "renewal_number": {
+                "type": [
+                  "string",
+                  "null"
                 ]
+              },
+              "renewal_state": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "finalized",
+                      "signed"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only a Signed renewal is the confirmed successor."
               }
             },
             "required": [
               "type",
               "parent_id",
-              "renewal_id"
+              "parent_number",
+              "renewal_id",
+              "renewal_number",
+              "renewal_state"
             ],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "Lineage A → B → C (C-115)."
           },
           "state": {
             "type": "object",
@@ -6142,6 +6656,48 @@
             ],
             "description": "Drafts only."
           },
+          "renewal_defaults": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "contract_type_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "effective_from": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "contract_type_id",
+                  "effective_from"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Server prefill for Renew when the state allows it (parent type if active; parent Effective To + 1). Null otherwise."
+          },
           "actions": {
             "type": "object",
             "properties": {
@@ -6239,6 +6795,82 @@
                   "reasons"
                 ],
                 "additionalProperties": false
+              },
+              "renew": {
+                "type": "object",
+                "properties": {
+                  "allowed": {
+                    "type": "boolean"
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "allowed",
+                  "reasons"
+                ],
+                "additionalProperties": false
+              },
+              "cancel_planned": {
+                "type": "object",
+                "properties": {
+                  "allowed": {
+                    "type": "boolean"
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "allowed",
+                  "reasons"
+                ],
+                "additionalProperties": false
+              },
+              "correct": {
+                "type": "object",
+                "properties": {
+                  "allowed": {
+                    "type": "boolean"
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "allowed",
+                  "reasons"
+                ],
+                "additionalProperties": false
+              },
+              "void": {
+                "type": "object",
+                "properties": {
+                  "allowed": {
+                    "type": "boolean"
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "allowed",
+                  "reasons"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -6246,7 +6878,11 @@
               "discard",
               "finalize",
               "return_to_draft",
-              "confirm_signed"
+              "confirm_signed",
+              "renew",
+              "cancel_planned",
+              "correct",
+              "void"
             ],
             "additionalProperties": false
           },
@@ -6335,6 +6971,7 @@
           "state",
           "review",
           "finalize_check",
+          "renewal_defaults",
           "actions",
           "finalized_at",
           "finalized_by",
@@ -6580,6 +7217,177 @@
         ],
         "additionalProperties": false
       },
+      "ContractRenewalCreate": {
+        "type": "object",
+        "properties": {
+          "contract_type_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contract_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "description": "HR-entered; surrounding whitespace is trimmed and an empty value means no number. Unique case-insensitively across all contracts (M-18)."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_open_ended": {
+            "type": "boolean"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContractCancelPlanned": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Contract revision last read; stale → 409 REVISION_CONFLICT."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Mandatory; shown on the contract history."
+          }
+        },
+        "required": [
+          "expected_revision",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "ContractVoid": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Contract revision last read; stale → 409 REVISION_CONFLICT."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Mandatory; why the record was entered in error."
+          }
+        },
+        "required": [
+          "expected_revision",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "ContractCorrection": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Contract revision last read; stale → 409 REVISION_CONFLICT."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Mandatory; shown on the contract history."
+          },
+          "contract_type_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "contract_number": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "HR-entered; surrounding whitespace is trimmed and an empty value means no number. Unique case-insensitively across all contracts (M-18)."
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_open_ended": {
+            "type": "boolean"
+          },
+          "signed_at": {
+            "description": "Not a future business date; cannot be cleared (no un-sign).",
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          }
+        },
+        "required": [
+          "expected_revision",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
       "ContractSummary": {
         "type": "object",
         "properties": {
@@ -6795,6 +7603,12 @@
                   }
                 ]
               },
+              "parent_number": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "renewal_id": {
                 "anyOf": [
                   {
@@ -6806,12 +7620,29 @@
                     "type": "null"
                   }
                 ]
+              },
+              "renewal_state": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "finalized",
+                      "signed"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
               "type",
               "parent_id",
-              "renewal_id"
+              "parent_number",
+              "renewal_id",
+              "renewal_state"
             ],
             "additionalProperties": false
           },

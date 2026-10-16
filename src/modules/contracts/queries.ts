@@ -50,7 +50,15 @@ export function contractDispositionFlags(c: ContractDispositions): { cancelled: 
   return { cancelled: c.cancelledAt !== null, voided: c.voidedAt !== null };
 }
 
-/** Discard a Draft (C-107): the Cancelled marker; content, number and history stay (terminal, DB trigger). */
-export async function markContractDiscarded(tx: Tx, id: string, at: Date): Promise<void> {
+/**
+ * The Cancelled disposition — a discarded Draft or a cancelled planned contract (C-107 / C-115); content, number and
+ * history stay (terminal, DB trigger).
+ */
+export async function markContractCancelled(tx: Tx, id: string, at: Date): Promise<void> {
   await tx.contract.update({ where: { id }, data: { cancelledAt: at, revision: { increment: 1 }, updatedAt: at } });
+}
+
+/** The Voided disposition — an erroneous record (C-107 / C-115); final, no Unvoid, nothing deleted. */
+export async function markContractVoided(tx: Tx, id: string, at: Date): Promise<void> {
+  await tx.contract.update({ where: { id }, data: { voidedAt: at, revision: { increment: 1 }, updatedAt: at } });
 }

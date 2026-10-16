@@ -1,7 +1,7 @@
 import { StatusBadge } from "@/components/ui";
 import { IconAttention } from "@/components/ui/icons";
 import { t } from "@/i18n";
-import type { ContractState } from "./contractModel";
+import { dispositionCode, type ContractState } from "./contractModel";
 
 // Slice 2A-3: one presentation of contract state, used by the list, the detail and the Employee Contracts tab.
 // Document status (Draft / Finalized / Signed) and Time status (Upcoming / Active / Expired) are separate concepts and
@@ -14,7 +14,7 @@ export function ContractStateBadges({ state, needsReview, compact = false }: { s
       {state.disposition ? (
         <span className="state-pair">
           <span className="state-label">{t("contracts.stateLabel.record")}</span>
-          <StatusBadge kind="contractDisposition" code={state.disposition} />
+          <StatusBadge kind="contractDisposition" code={dispositionCode(state)!} />
         </span>
       ) : (
         <>

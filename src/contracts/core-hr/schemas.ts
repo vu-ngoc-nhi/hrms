@@ -212,11 +212,16 @@ export const ContractDetailSchema = reg(
     is_open_ended: z.boolean(),
     summary: z.string().nullable(),
     signed_at: isoDate().nullable().describe("Business date HR confirmed full execution by all required parties (C-105)."),
-    relationship: z.object({
-      type: z.enum(["renewal"]).nullable(),
-      parent_id: z.uuid().nullable(),
-      renewal_id: z.uuid().nullable(),
-    }),
+    relationship: z
+      .object({
+        type: z.enum(["renewal"]).nullable(),
+        parent_id: z.uuid().nullable().describe("Renews: the parent agreement."),
+        parent_number: z.string().nullable(),
+        renewal_id: z.uuid().nullable().describe("Renewed by: the one non-disposed direct renewal (C-115)."),
+        renewal_number: z.string().nullable(),
+        renewal_state: z.enum(["draft", "finalized", "signed"]).nullable().describe("Only a Signed renewal is the confirmed successor."),
+      })
+      .describe("Lineage A → B → C (C-115)."),
     state: z.object({
       document_state: z.enum(["draft", "finalized", "signed"]),
       disposition: z.enum(["cancelled", "voided"]).nullable(),
@@ -236,7 +241,21 @@ export const ContractDetailSchema = reg(
       })
       .nullable()
       .describe("Drafts only."),
-    actions: z.object({ edit: actionSchema, discard: actionSchema, finalize: actionSchema, return_to_draft: actionSchema, confirm_signed: actionSchema }),
+    renewal_defaults: z
+      .object({ contract_type_id: z.uuid().nullable(), effective_from: isoDate().nullable() })
+      .nullable()
+      .describe("Server prefill for Renew when the state allows it (parent type if active; parent Effective To + 1). Null otherwise."),
+    actions: z.object({
+      edit: actionSchema,
+      discard: actionSchema,
+      finalize: actionSchema,
+      return_to_draft: actionSchema,
+      confirm_signed: actionSchema,
+      renew: actionSchema,
+      cancel_planned: actionSchema,
+      correct: actionSchema,
+      void: actionSchema,
+    }),
     finalized_at: isoDateTime().nullable(),
     finalized_by: actorSchema,
     created_at: isoDateTime(),
@@ -291,6 +310,43 @@ export const ContractConfirmSignedSchema = reg(
 );
 export type ContractConfirmSignedInput = z.infer<typeof ContractConfirmSignedSchema>;
 
+// ---------------- Slice 2A-5: Renew, Cancel Planned, Correct, Void (C-115, C-107 refined) ----------------
+export const ContractRenewalCreateSchema = reg(
+  "ContractRenewalCreate",
+  z.strictObject({ ...draftFields }),
+  "Renew: a new Draft agreement linked to the parent (same Employment Period). Defaults: parent's Contract Type (if active) and Effective From = parent Effective To + 1 (Asia/Ho_Chi_Minh). The number is never prefilled.",
+);
+export type ContractRenewalCreateInput = z.infer<typeof ContractRenewalCreateSchema>;
+export const ContractCancelPlannedSchema = reg(
+  "ContractCancelPlanned",
+  z.strictObject({ expected_revision: contractRevision(), reason: z.string().min(1).max(1000).describe("Mandatory; shown on the contract history.") }),
+  "Cancel Planned (contract-wide): Finalized, not Signed, Effective From after the Vietnam business date. Final.",
+);
+export type ContractCancelPlannedInput = z.infer<typeof ContractCancelPlannedSchema>;
+export const ContractVoidSchema = reg(
+  "ContractVoid",
+  z.strictObject({ expected_revision: contractRevision(), reason: z.string().min(1).max(1000).describe("Mandatory; why the record was entered in error.") }),
+  "Void: only for an erroneous / invalid record — never to terminate a valid contract. Final; no Unvoid.",
+);
+export type ContractVoidInput = z.infer<typeof ContractVoidSchema>;
+export const ContractCorrectionSchema = reg(
+  "ContractCorrection",
+  z
+    .strictObject({
+      expected_revision: contractRevision(),
+      reason: z.string().min(1).max(1000).describe("Mandatory; shown on the contract history."),
+      contract_type_id: z.uuid().optional(),
+      contract_number: contractNumber().min(1).optional(),
+      effective_from: isoDate().optional(),
+      effective_to: isoDate().nullable().optional(),
+      is_open_ended: z.boolean().optional(),
+      signed_at: isoDate().optional().describe("Not a future business date; cannot be cleared (no un-sign)."),
+    })
+    .refine((v) => ["contract_type_id", "contract_number", "effective_from", "effective_to", "is_open_ended", "signed_at"].some((k) => k in v), "At least one field to correct is required."),
+  "Correct the recorded data of a SIGNED contract (transcription errors). Lineage and the renewal invariant cannot be broken.",
+);
+export type ContractCorrectionInput = z.infer<typeof ContractCorrectionSchema>;
+
 // ---------------- Slice 2A-3: list / employee grouping (read models) ----------------
 const contractStateSchema = () =>
   z.object({
@@ -321,7 +377,13 @@ export const ContractSummarySchema = reg(
     effective_to: isoDate().nullable(),
     is_open_ended: z.boolean(),
     signed_at: isoDate().nullable(),
-    relationship: z.object({ type: z.enum(["renewal"]).nullable(), parent_id: z.uuid().nullable(), renewal_id: z.uuid().nullable() }),
+    relationship: z.object({
+      type: z.enum(["renewal"]).nullable(),
+      parent_id: z.uuid().nullable(),
+      parent_number: z.string().nullable(),
+      renewal_id: z.uuid().nullable(),
+      renewal_state: z.enum(["draft", "finalized", "signed"]).nullable(),
+    }),
     state: contractStateSchema(),
     review: z.object({ needs_review: z.boolean(), codes: z.array(z.string()) }),
   }),

@@ -37,7 +37,12 @@ export type ErrorCode =
   | "EFFECTIVE_FROM_OUTSIDE_PERIOD"
   | "PERIOD_NOT_VALID"
   | "SIGNED_AT_IN_FUTURE"
-  | "REASON_REQUIRED";
+  | "REASON_REQUIRED"
+  // Slice 2A-5 (C-115)
+  | "RENEWAL_EXISTS"
+  | "PARENT_NOT_RENEWABLE"
+  | "RENEWAL_STARTS_BEFORE_PARENT"
+  | "NOT_UPCOMING";
 
 export type ErrorDetail = { field?: string; code: string; message: string; related_contract_id?: string };
 

@@ -17,7 +17,7 @@ const VARIANTS: Record<StatusKind, Record<string, BadgeVariant>> = {
   // Phase 2A contracts: document state, computed time state and contract dispositions (never the brand red).
   contractDocument: { draft: "neutral", finalized: "info", signed: "success" },
   contractTime: { upcoming: "info", active: "success", expired: "neutral" },
-  contractDisposition: { cancelled: "neutral", voided: "neutral" },
+  contractDisposition: { discarded: "neutral", cancelled: "neutral", voided: "neutral" },
 };
 
 const LABEL_KEY: Record<StatusKind, (code: string) => string> = {

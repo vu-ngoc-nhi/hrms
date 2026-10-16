@@ -6,6 +6,7 @@ import {
   contractQueryFromFilters,
   contractTitle,
   createDraftBody,
+  dispositionCode,
   draftErrors,
   EMPTY_CONTRACT_FILTERS,
   EMPTY_DRAFT,
@@ -15,7 +16,11 @@ import {
   finalizeBody,
   finalizeOutcome,
   historyTitle,
+  correctionBody,
+  correctionFromContract,
+  draftFromRenewalDefaults,
   placeActions,
+  renewalBody,
   signedDateIssue,
   termText,
   updateDraftBody,
@@ -28,7 +33,7 @@ import { t } from "@/i18n";
 
 // Slice 2A-3 contract UI model: presentation over the server representation — no lifecycle rule is re-derived here.
 const allowed = (...keys: ActionKey[]): Record<ActionKey, ActionView> =>
-  Object.fromEntries((["edit", "discard", "finalize", "return_to_draft", "confirm_signed"] as ActionKey[]).map((k) => [k, { allowed: keys.includes(k), reasons: keys.includes(k) ? [] : ["NOT_DRAFT"] }])) as Record<
+  Object.fromEntries((["edit", "discard", "finalize", "return_to_draft", "confirm_signed", "renew", "cancel_planned", "correct", "void"] as ActionKey[]).map((k) => [k, { allowed: keys.includes(k), reasons: keys.includes(k) ? [] : ["NOT_DRAFT"] }])) as Record<
     ActionKey,
     ActionView
   >;
@@ -45,6 +50,8 @@ const detail = (over: Partial<ContractDetail> = {}): ContractDetail => ({
   effective_to: "2026-12-31",
   is_open_ended: false,
   signed_at: null,
+  relationship: { type: null, parent_id: null, parent_number: null, renewal_id: null, renewal_number: null, renewal_state: null },
+  renewal_defaults: null,
   summary: null,
   state: { document_state: "draft", disposition: null, operational: true, time_state: null, time_state_detail: null, operational_end: null, days_to_operational_end: null },
   review: { needs_review: false, items: [] },
@@ -76,6 +83,21 @@ describe("Allowed actions come only from the server", () => {
     expect(placeActions(allowed("edit", "discard", "finalize"))).toEqual({ primary: "finalize", secondary: ["edit"], menu: ["discard"] });
     expect(placeActions(allowed("return_to_draft", "confirm_signed"))).toEqual({ primary: "confirm_signed", secondary: [], menu: ["return_to_draft"] });
     expect(placeActions(allowed())).toEqual({ primary: null, secondary: [], menu: [] });
+  });
+  it("2A-5: Renew sits next to Edit; Cancel planned, Correct and Void go to More — only when the server allows them", () => {
+    expect(placeActions(allowed("renew", "correct", "void"))).toEqual({ primary: null, secondary: ["renew"], menu: ["correct", "void"] });
+    expect(placeActions(allowed("return_to_draft", "confirm_signed", "renew", "cancel_planned"))).toEqual({
+      primary: "confirm_signed",
+      secondary: ["renew"],
+      menu: ["return_to_draft", "cancel_planned"],
+    });
+  });
+  it("explains in plain words why Return to draft / Cancel planned / Void are unavailable while a renewal exists (not for a missing permission)", () => {
+    const dep = { ...allowed(), void: { allowed: false, reasons: ["DEPENDENT_CONTRACTS_EXIST"] } };
+    expect(explainedReason(dep)).toBe(t("contracts.reason.DEPENDENT_CONTRACTS_EXIST"));
+    expect(explainedReason({ ...allowed(), void: { allowed: false, reasons: ["PERMISSION_REQUIRED", "DEPENDENT_CONTRACTS_EXIST"] } })).toBeNull();
+    expect(explainedReason({ ...allowed(), cancel_planned: { allowed: false, reasons: ["NOT_UPCOMING", "DEPENDENT_CONTRACTS_EXIST"] } })).toBeNull(); // out of reach anyway
+    expect(explainedReason({ ...allowed(), return_to_draft: { allowed: false, reasons: ["DEPENDENT_CONTRACTS_EXIST"] } })).toBe(t("contracts.reason.DEPENDENT_CONTRACTS_EXIST"));
   });
   it("explains parent-period denials in plain words (cancelled and voided are told apart)", () => {
     const withReason = (code: string) => ({ ...allowed(), confirm_signed: { allowed: false, reasons: [code] } });
@@ -160,8 +182,13 @@ describe("Document status vs Time status; discarded records (owner checks before
     expect(dispositionBranch).toContain('kind="contractDisposition"');
     expect(dispositionBranch).not.toContain("contractTime");
     const list = readFileSync("src/app/contracts/page.tsx", "utf8");
-    expect(list).toContain('c.state.disposition ? <StatusBadge kind="contractDisposition"');
-    expect(t("contracts.dispositionValue.cancelled")).toBe("Discarded");
+    expect(list).toContain('c.state.disposition ? <StatusBadge kind="contractDisposition" code={dispositionCode(c.state)!}');
+    // One server disposition (cancelled) reads "Discarded" for a Draft and "Cancelled" for a cancelled planned contract.
+    expect(dispositionCode({ disposition: "cancelled", document_state: "draft" })).toBe("discarded");
+    expect(dispositionCode({ disposition: "cancelled", document_state: "finalized" })).toBe("cancelled");
+    expect(dispositionCode({ disposition: "voided", document_state: "signed" })).toBe("voided");
+    expect(dispositionCode({ disposition: null, document_state: "signed" })).toBeNull();
+    expect([t("contracts.dispositionValue.discarded"), t("contracts.dispositionValue.cancelled"), t("contracts.dispositionValue.voided")]).toEqual(["Discarded", "Cancelled", "Voided"]);
   });
 });
 
@@ -206,5 +233,52 @@ describe("Permissions are capabilities, never role names", () => {
     for (const f of ["src/app/contracts/page.tsx", "src/app/contracts/[id]/page.tsx", "src/app/contracts/contractModel.ts", "src/app/contracts/ContractDraftForm.tsx", "src/app/contracts/[id]/LifecycleDialogs.tsx", "src/app/employees/[id]/ContractsTab.tsx"]) {
       expect(readFileSync(f, "utf8"), f).not.toMatch(/HR_ADMIN|HR_EDITOR|API_DOCS_READER|\.roles\b|hasRole/);
     }
+  });
+});
+
+describe("Slice 2A-5: renewal, correction and void in the UI (server-driven)", () => {
+  const signed = detail({
+    state: { document_state: "signed", disposition: null, operational: true, time_state: "active", time_state_detail: null, operational_end: "2026-12-31", days_to_operational_end: 76 },
+    signed_at: "2026-01-02",
+    renewal_defaults: { contract_type_id: "t1", effective_from: "2027-01-01" },
+  });
+  it("the Renew form is prefilled only from the server's renewal_defaults — never the number, never a browser date rule", () => {
+    expect(draftFromRenewalDefaults(signed)).toMatchObject({ employment_id: "e1", contract_type_id: "t1", contract_number: "", effective_from: "2027-01-01", effective_to: "" });
+    expect(draftFromRenewalDefaults(detail({ renewal_defaults: null }))).toMatchObject({ contract_type_id: "", effective_from: "" });
+    const body = renewalBody({ ...draftFromRenewalDefaults(signed), contract_number: "HD-2", effective_to: "2027-12-31" });
+    expect(body).toEqual({ contract_type_id: "t1", contract_number: "HD-2", effective_from: "2027-01-01", effective_to: "2027-12-31" });
+    expect(body).not.toHaveProperty("employment_id"); // the renewal stays in the parent's period
+    const code = ["src/app/contracts/contractModel.ts", "src/app/contracts/ContractDraftForm.tsx", "src/app/contracts/[id]/page.tsx"]
+      .map((f) => readFileSync(f, "utf8").split("\n").filter((l) => !l.trim().startsWith("//") && !l.trim().startsWith("*")).join("\n"))
+      .join("\n");
+    expect(code).not.toMatch(/addDays|effective_to\s*\+|setDate\(|renewal_state\s*===\s*"signed"/);
+  });
+  it("a correction sends only changed fields with the revision and the reason; nothing changed → nothing to send", () => {
+    const f = correctionFromContract(signed);
+    expect(correctionBody(signed, f)).toBeNull();
+    expect(correctionBody(signed, { ...f, effective_to: "2027-01-31", reason: " Typo " })).toEqual({ expected_revision: 3, reason: "Typo", is_open_ended: false, effective_to: "2027-01-31" });
+    expect(correctionBody(signed, { ...f, term: "open", reason: "x" })).toEqual({ expected_revision: 3, reason: "x", is_open_ended: true, effective_to: null });
+    expect(correctionBody(signed, { ...f, signed_at: "2026-01-03", reason: "x" })).toEqual({ expected_revision: 3, reason: "x", signed_at: "2026-01-03" });
+  });
+  it("Void says it is for erroneous records only — not early termination; Cancel planned and Void need a reason", () => {
+    expect(t("contracts.voidDialog.notTermination")).toMatch(/not void a valid contract to end it early/i);
+    expect(t("contracts.cancelPlannedDialog.body")).toMatch(/not started and is not signed/);
+    const dialogs = readFileSync("src/app/contracts/[id]/LifecycleDialogs.tsx", "utf8");
+    expect(dialogs).toContain('kind === "void" ? "void" : "cancel-planned"');
+    expect(dialogs).toContain('post(contract, "corrections", body)');
+  });
+  it("lineage and history links come from the server relationship and related_contract_id", () => {
+    const page = readFileSync("src/app/contracts/[id]/page.tsx", "utf8");
+    expect(page).toContain("c.relationship.parent_id");
+    expect(page).toContain("c.relationship.renewal_id");
+    expect(page).toContain("h.related_contract_id");
+    expect(page).toContain('mode="renew"');
+    expect(t("contracts.history.event.renewal_created")).toBe("Renewal created");
+    expect([t("contracts.actions.renew"), t("contracts.actions.cancelPlanned"), t("contracts.actions.correct"), t("contracts.actions.void")]).toEqual([
+      "Renew",
+      "Cancel planned contract",
+      "Correct contract",
+      "Void contract",
+    ]);
   });
 });

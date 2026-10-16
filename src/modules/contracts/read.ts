@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { notFound } from "@/lib/http/errors";
 import type { Principal } from "@/modules/identity/authenticate";
 import { representativeEmployment } from "@/modules/core-hr/employments/status";
-import { awaitingSignature, daysUntil, expiresWithin, HOME_EXPIRY_WINDOW_DAYS, reviewItems, timeState, type ContractInContext } from "./evaluation";
+import { awaitingSignature, daysUntil, directRenewalOf, expiresWithin, HOME_EXPIRY_WINDOW_DAYS, reviewItems, timeState, type ContractInContext } from "./evaluation";
 import { toContractInContext } from "./facts";
 import { contractDisposition, periodFacts } from "./queries";
 
@@ -34,7 +34,7 @@ function evaluate(rows: Row[], today: string): Evaluated[] {
     const others = byPerson.get(row.employment.personId)!.filter((o) => o.contract.id !== row.id);
     const ts = timeState(x, others, today);
     const review = reviewItems(x, others);
-    const renewal = others.find((o) => o.contract.parentContractId === row.id && o.contract.relationshipType === "renewal" && !o.contract.cancelled && !o.contract.voided);
+    const renewal = directRenewalOf(x.contract, others);
     const e = row.employment;
     const summary: ContractSummary = {
       id: row.id,
@@ -53,7 +53,13 @@ function evaluate(rows: Row[], today: string): Evaluated[] {
       effective_to: fromDbDate(row.effectiveTo),
       is_open_ended: row.isOpenEnded,
       signed_at: fromDbDate(row.signedAt),
-      relationship: { type: row.relationshipType === "renewal" ? "renewal" : null, parent_id: row.parentContractId, renewal_id: renewal?.contract.id ?? null },
+      relationship: {
+        type: row.relationshipType === "renewal" ? "renewal" : null,
+        parent_id: row.parentContractId,
+        parent_number: others.find((o) => o.contract.id === row.parentContractId)?.contract.contractNumber ?? null,
+        renewal_id: renewal?.id ?? null,
+        renewal_state: renewal?.documentState ?? null,
+      },
       state: {
         document_state: x.contract.documentState,
         disposition: contractDisposition(row),

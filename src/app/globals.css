@@ -242,6 +242,7 @@ tbody tr:hover td { background: var(--color-surface-2); }
 .back-link:hover { color: var(--color-primary); text-decoration: underline; }
 .detail-code { margin-top: 2px; font-size: var(--font-size-sm); color: var(--color-text-2); font-variant-numeric: tabular-nums; }
 .detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-2); color: var(--color-text-2); }
+.contract-lineage { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); margin-top: var(--space-2); color: var(--color-text-2); }
 .detail-actions { flex: none; }
 .tab-panel:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius); }
 .overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }

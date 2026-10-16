@@ -17,8 +17,12 @@ import type {
   ContractFinalizeInput,
   ContractReturnToDraftInput,
   ContractUpdateInput,
+  ContractRenewalCreateInput,
+  ContractCancelPlannedInput,
+  ContractVoidInput,
+  ContractCorrectionInput,
 } from "@/contracts/core-hr/schemas";
-import { fromDbDate, todayInVietnam, toDbDate } from "@/lib/dates";
+import { addDays, fromDbDate, todayInVietnam, toDbDate } from "@/lib/dates";
 import { db, pgErrorInfo, type Tx } from "@/lib/db";
 import { ApiError, notFound, type ErrorDetail } from "@/lib/http/errors";
 import { recordAudit, type StructuralChange } from "@/modules/audit/audit";
@@ -29,6 +33,7 @@ import {
   finalizeBlockers,
   finalizeWarnings,
   reviewItems,
+  directRenewalOf,
   stateReasons,
   timeState,
   warningFingerprint,
@@ -37,7 +42,7 @@ import {
 } from "./evaluation";
 import { FACTS_INCLUDE, toContractInContext } from "./facts";
 import { isSignedDateAllowed, normalizeContractNumber } from "./model";
-import { contractDisposition, markContractDiscarded, periodFacts } from "./queries";
+import { contractDisposition, markContractCancelled, markContractVoided, periodFacts } from "./queries";
 
 type Client = Tx | ReturnType<typeof db>;
 
@@ -81,9 +86,11 @@ async function project(principal: Principal, ctx: Context, today: string): Promi
   const ts = timeState(x, others, today);
   const review = reviewItems(x, others);
   const isDraftOpen = x.contract.documentState === "draft" && !x.contract.cancelled && !x.contract.voided;
-  const blockers = isDraftOpen ? finalizeBlockers(x) : [];
+  const blockers = isDraftOpen ? finalizeBlockers(x, others) : [];
   const warnings = isDraftOpen ? finalizeWarnings(x, others) : [];
-  const renewal = others.find((o) => o.contract.parentContractId === row.id && o.contract.relationshipType === "renewal" && !o.contract.cancelled && !o.contract.voided);
+  // Lineage (C-115): the parent this contract renews and its one non-disposed direct renewal.
+  const renewal = directRenewalOf(x.contract, others);
+  const parent = row.parentContractId ? (others.find((o) => o.contract.id === row.parentContractId)?.contract ?? null) : null;
   const e = row.employment;
   return {
     id: row.id,
@@ -109,7 +116,10 @@ async function project(principal: Principal, ctx: Context, today: string): Promi
     relationship: {
       type: row.relationshipType === "renewal" ? "renewal" : null,
       parent_id: row.parentContractId,
-      renewal_id: renewal?.contract.id ?? null,
+      parent_number: parent?.contractNumber ?? null,
+      renewal_id: renewal?.id ?? null,
+      renewal_number: renewal?.contractNumber ?? null,
+      renewal_state: renewal?.documentState ?? null,
     },
     state: {
       document_state: x.contract.documentState,
@@ -124,7 +134,11 @@ async function project(principal: Principal, ctx: Context, today: string): Promi
     finalize_check: isDraftOpen
       ? { ready: blockers.length === 0, blockers, warnings, warning_fingerprint: warningFingerprint(warnings) }
       : null,
-    actions: actions(x, others, (p) => principal.permissions.has(p)),
+    renewal_defaults:
+      stateReasons("renew", x, others, today).length === 0
+        ? { contract_type_id: x.contract.contractTypeActive ? x.contract.contractTypeId : null, effective_from: x.contract.effectiveTo ? addDays(x.contract.effectiveTo, 1) : null }
+        : null,
+    actions: actions(x, others, (p) => principal.permissions.has(p), today),
     finalized_at: row.finalizedAt?.toISOString() ?? null,
     finalized_by: actor(names, row.finalizedBy),
     created_at: row.createdAt.toISOString(),
@@ -157,9 +171,15 @@ const fail = (status: number, code: ConstructorParameters<typeof ApiError>[1], m
   new ApiError(status, code, message, details ?? [{ code, message }]);
 
 /** Maps the first state reason of an action (evaluation.ts) to the API error. */
-function assertAllowed(action: ActionKey, ctx: Context): void {
-  const [reason] = stateReasons(action, ctx.x, ctx.others);
+function assertAllowed(action: ActionKey, ctx: Context, today: string = todayInVietnam()): void {
+  const [reason] = stateReasons(action, ctx.x, ctx.others, today);
   if (!reason) return;
+  // Renew reports on the PARENT: why it cannot be renewed (C-115).
+  if (action === "renew" && (reason === "NOT_FINALIZED" || reason === "OPEN_ENDED" || reason === "CONTRACT_CANCELLED" || reason === "CONTRACT_VOIDED")) {
+    throw fail(422, "PARENT_NOT_RENEWABLE", "This contract cannot be renewed: only a Finalized or Signed contract with an end date that is not discarded or voided can be renewed.", [
+      { code: reason, message: reason === "OPEN_ENDED" ? "Open-ended contracts are not renewed." : reason === "NOT_FINALIZED" ? "A draft cannot be renewed." : "Discarded or voided." },
+    ]);
+  }
   switch (reason) {
     case "CONTRACT_CANCELLED":
     case "CONTRACT_VOIDED":
@@ -176,10 +196,24 @@ function assertAllowed(action: ActionKey, ctx: Context): void {
       throw fail(422, "PERIOD_NOT_VALID", `The linked employment period is ${reason === "PERIOD_VOIDED" ? "voided" : "cancelled"}; this action is not available.`, [
         { field: "employment_id", code: reason, message: reason === "PERIOD_VOIDED" ? "The employment period was voided." : "The employment period was cancelled." },
       ]);
-    case "DEPENDENT_CONTRACTS_EXIST":
-      throw fail(409, "DEPENDENT_CONTRACTS_EXIST", "A renewal depends on this contract. Discard or cancel it first.");
+    case "NOT_SIGNED":
+      throw fail(409, "CONTRACT_STATE_CONFLICT", "Only Signed contract data is corrected; return a Finalized contract to Draft instead.", [{ code: reason, message: "Not Signed." }]);
+    case "DEPENDENT_CONTRACTS_EXIST": {
+      const child = directRenewalOf(ctx.x.contract, ctx.others);
+      throw fail(409, "DEPENDENT_CONTRACTS_EXIST", "A renewal depends on this contract. Discard, cancel or void the renewal first.", [
+        { code: reason, message: "A non-disposed renewal exists.", ...(child ? { related_contract_id: child.id } : {}) },
+      ]);
+    }
+    case "RENEWAL_EXISTS": {
+      const child = directRenewalOf(ctx.x.contract, ctx.others);
+      throw fail(409, "RENEWAL_EXISTS", "This contract already has a renewal that is not discarded, cancelled or voided.", [
+        { code: reason, message: "One non-disposed direct renewal per parent agreement.", ...(child ? { related_contract_id: child.id } : {}) },
+      ]);
+    }
+    case "NOT_UPCOMING":
+      throw fail(422, "NOT_UPCOMING", "Only a contract that has not started yet can be cancelled as planned.", [{ field: "effective_from", code: reason, message: "Effective From is today or earlier." }]);
     case "NOT_READY":
-      throw fail(422, "CONTRACT_NOT_READY", "The contract is not ready to finalize.", finalizeBlockers(ctx.x));
+      throw fail(422, "CONTRACT_NOT_READY", "The contract is not ready to finalize.", finalizeBlockers(ctx.x, ctx.others));
     default:
       throw fail(422, "BUSINESS_RULE_VIOLATION", "This action is not available.", [{ code: reason, message: reason }]);
   }
@@ -206,6 +240,18 @@ function mapDbError(error: unknown): ApiError | undefined {
       return fail(422, "INVALID_TERM", "Effective To and Open-ended are inconsistent.", [{ field: "effective_to", code: "INVALID_TERM", message: "Invalid term." }]);
     case "contract_disposition_is_terminal":
       return fail(409, "CONTRACT_READ_ONLY", "This contract is cancelled or voided and is read-only history.");
+    // Slice 2A-5 (C-115)
+    case "contract_one_nondisposed_renewal_uq":
+      return fail(409, "RENEWAL_EXISTS", "This contract already has a renewal that is not discarded, cancelled or voided.");
+    case "contract_parent_renewable":
+    case "contract_parent_is_agreement":
+      return fail(422, "PARENT_NOT_RENEWABLE", "The parent contract cannot be renewed (it must be a Finalized or Signed agreement with an end date), or a renewed contract would lose its end date.");
+    case "contract_renewal_starts_after_parent":
+      return fail(422, "RENEWAL_STARTS_BEFORE_PARENT", "A renewal must start after the contract it renews.", [
+        { field: "effective_from", code: "RENEWAL_STARTS_BEFORE_PARENT", message: "Not after the parent's Effective From." },
+      ]);
+    case "contract_parent_has_renewal":
+      return fail(409, "DEPENDENT_CONTRACTS_EXIST", "A renewal depends on this contract. Discard, cancel or void the renewal first.");
   }
   return undefined;
 }
@@ -223,7 +269,13 @@ type DraftValues = {
 const normalizeSummary = (s: string | null | undefined) => (s == null ? null : s.trim() === "" ? null : s.trim());
 
 /** Objectively invalid Draft values (missing values are allowed in a Draft). */
-async function assertDraftValues(client: Client, v: DraftValues, period: { startDate: string; endDate: string | null }, typeChanged: boolean) {
+async function assertDraftValues(
+  client: Client,
+  v: DraftValues,
+  period: { startDate: string; endDate: string | null },
+  typeChanged: boolean,
+  parent: { effectiveFrom: string | null } | null = null,
+) {
   if (v.contractTypeId && typeChanged) {
     const type = await client.contractType.findUnique({ where: { id: v.contractTypeId } });
     if (!type) throw notFound("Contract Type not found.");
@@ -240,6 +292,12 @@ async function assertDraftValues(client: Client, v: DraftValues, period: { start
   if (v.effectiveFrom && (v.effectiveFrom < period.startDate || (period.endDate !== null && v.effectiveFrom > period.endDate))) {
     throw fail(422, "EFFECTIVE_FROM_OUTSIDE_PERIOD", "Effective From is outside the linked employment period.", [
       { field: "effective_from", code: "EFFECTIVE_FROM_OUTSIDE_PERIOD", message: "Outside the employment period." },
+    ]);
+  }
+  // C-115: a renewal starts after the contract it renews (the database enforces it too).
+  if (parent?.effectiveFrom && v.effectiveFrom && v.effectiveFrom <= parent.effectiveFrom) {
+    throw fail(422, "RENEWAL_STARTS_BEFORE_PARENT", "A renewal must start after the contract it renews.", [
+      { field: "effective_from", code: "RENEWAL_STARTS_BEFORE_PARENT", message: "Not after the parent's Effective From." },
     ]);
   }
 }
@@ -391,7 +449,8 @@ export async function updateContractDraft(principal: Principal, id: string, inpu
       };
       const changed = (Object.keys(API_NAME) as (keyof DraftValues)[]).filter((k) => next[k] !== current[k]);
       if (changed.length === 0) return; // no-op: no revision bump, no audit (Phase 1 PATCH convention)
-      await assertDraftValues(tx, next, ctx.x.period, changed.includes("contractTypeId"));
+      const parent = ctx.row.parentContractId ? (ctx.others.find((o) => o.contract.id === ctx.row.parentContractId)?.contract ?? null) : null;
+      await assertDraftValues(tx, next, ctx.x.period, changed.includes("contractTypeId"), parent);
       const at = new Date();
       await tx.contract.update({ where: { id }, data: { ...dbDraftData(next), revision: { increment: 1 }, updatedAt: at } });
       await audit(tx, principal, requestId, "contract.update_draft", id, {
@@ -418,7 +477,7 @@ export async function discardContract(principal: Principal, id: string, input: C
       const ctx = await loadContext(tx, id);
       assertAllowed("discard", ctx); // allowed under a cancelled/voided period (cleanup)
       const at = new Date();
-      await markContractDiscarded(tx, id, at);
+      await markContractCancelled(tx, id, at);
       await history(tx, principal, id, "discarded", at, { reason });
       await audit(tx, principal, requestId, "contract.discard", id, { changedFields: ["contract.cancelled"], reason });
     },
@@ -513,6 +572,200 @@ export async function confirmContractSigned(principal: Principal, id: string, in
       await audit(tx, principal, requestId, "contract.confirm_signed", id, {
         changedFields: ["contract.signed_at"],
         structuralChanges: [{ field: "contract.signed_at", oldValue: null, newValue: input.signed_at }],
+      });
+    },
+  });
+}
+
+// ---------------- Slice 2A-5: Renew, Cancel Planned, Correct, Void (C-115; C-107 refined) ----------------
+const lockParent = async (tx: Tx, id: string) => {
+  const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM contract WHERE id = ${id}::uuid FOR UPDATE`;
+  if (rows.length === 0) throw notFound("Contract not found.");
+};
+
+/**
+ * Renew: a new Draft agreement linked to the parent (`relationship_type = renewal`) in the same Employment Period.
+ * The parent is never modified; it receives one history event ("Renewal draft created"). Chains A → B → C are
+ * allowed; one non-disposed direct renewal per parent agreement (database index).
+ */
+export async function renewContract(principal: Principal, parentId: string, input: ContractRenewalCreateInput, idempotencyKey: string, requestId: string) {
+  const contractId = randomUUID();
+  return runCommand({
+    principal,
+    operation: "createContractRenewal",
+    idempotencyKey,
+    payload: { parentId, ...input },
+    contractId,
+    execute: async (tx) => {
+      await lockParent(tx, parentId); // serializes concurrent renewals of the same parent
+      const ctx = await loadContext(tx, parentId);
+      assertAllowed("renew", ctx);
+      const p = ctx.x.contract;
+      // Prefill: the parent's type when still active; Effective From = parent Effective To + 1; never the number.
+      const parentTypeActive = p.contractTypeId && p.contractTypeActive ? p.contractTypeId : null;
+      const values: DraftValues = {
+        contractTypeId: input.contract_type_id !== undefined ? input.contract_type_id : parentTypeActive,
+        contractNumber: normalizeContractNumber(input.contract_number),
+        effectiveFrom: input.effective_from !== undefined ? input.effective_from : p.effectiveTo ? addDays(p.effectiveTo, 1) : null,
+        effectiveTo: input.effective_to ?? null,
+        isOpenEnded: input.is_open_ended ?? false,
+        summary: normalizeSummary(input.summary),
+      };
+      await assertDraftValues(tx, values, ctx.x.period, values.contractTypeId !== null, { effectiveFrom: p.effectiveFrom });
+      const at = new Date();
+      await tx.contract.create({
+        data: {
+          id: contractId,
+          employmentId: ctx.row.employmentId,
+          parentContractId: parentId,
+          relationshipType: "renewal",
+          createdBy: principal.userId,
+          createdAt: at,
+          updatedAt: at,
+          ...dbDraftData(values),
+        },
+      });
+      await history(tx, principal, contractId, "created", at);
+      await tx.contractHistoryEvent.create({ data: { contractId: parentId, eventType: "renewal_created", recordedAt: at, recordedBy: principal.userId, relatedContractId: contractId } });
+      const provided = (Object.keys(API_NAME) as (keyof DraftValues)[]).filter((k) => values[k] !== null && values[k] !== false);
+      await audit(tx, principal, requestId, "contract.renew", contractId, {
+        changedFields: ["parent_contract_id", "relationship_type", ...provided.map((k) => API_NAME[k])],
+        structuralChanges: STRUCTURAL.filter((st) => provided.includes(st.key)).map((st) => ({ field: st.field, oldValue: null, newValue: str(values[st.key]) })),
+      });
+    },
+  });
+}
+
+/**
+ * Cancel Planned (contract-wide, C-107 refined by C-115): only a Finalized, unsigned contract whose Effective From is
+ * after the Vietnam business date. Final for that record; nothing else changes (a cancelled renewal frees its parent;
+ * its number stays reserved, M-18). A Draft is discarded; a Signed contract cannot be withdrawn here (PL-10).
+ */
+export async function cancelPlannedContract(principal: Principal, id: string, input: ContractCancelPlannedInput, idempotencyKey: string, requestId: string) {
+  const reason = input.reason.trim();
+  if (!reason) throw fail(422, "REASON_REQUIRED", "A reason is required to cancel a planned contract.", [{ field: "reason", code: "REASON_REQUIRED", message: "Required." }]);
+  return runCommand({
+    principal,
+    operation: "createContractCancelPlanned",
+    idempotencyKey,
+    payload: { id, ...input },
+    contractId: id,
+    execute: async (tx) => {
+      await lockForWrite(tx, id, input.expected_revision);
+      const ctx = await loadContext(tx, id);
+      assertAllowed("cancel_planned", ctx, todayInVietnam());
+      const at = new Date();
+      await markContractCancelled(tx, id, at);
+      await history(tx, principal, id, "cancelled", at, { reason, effectiveDate: ctx.x.contract.effectiveFrom });
+      await audit(tx, principal, requestId, "contract.cancel_planned", id, { changedFields: ["contract.cancelled"], reason });
+    },
+  });
+}
+
+/**
+ * Void: only for an erroneous / invalid record (a contract that should never have existed) — never to terminate a
+ * valid contract. Final; no Unvoid; nothing deleted. A contract with a non-disposed renewal is voided only after the
+ * renewal is dealt with (no cascade).
+ */
+export async function voidContract(principal: Principal, id: string, input: ContractVoidInput, idempotencyKey: string, requestId: string) {
+  const reason = input.reason.trim();
+  if (!reason) throw fail(422, "REASON_REQUIRED", "A reason is required to void a contract.", [{ field: "reason", code: "REASON_REQUIRED", message: "Required." }]);
+  return runCommand({
+    principal,
+    operation: "createContractVoid",
+    idempotencyKey,
+    payload: { id, ...input },
+    contractId: id,
+    execute: async (tx) => {
+      await lockForWrite(tx, id, input.expected_revision);
+      const ctx = await loadContext(tx, id);
+      assertAllowed("void", ctx);
+      const at = new Date();
+      await markContractVoided(tx, id, at);
+      await history(tx, principal, id, "voided", at, { reason });
+      await audit(tx, principal, requestId, "contract.void", id, { changedFields: ["contract.voided"], reason });
+    },
+  });
+}
+
+/**
+ * Correct the recorded data of a SIGNED contract (transcription errors, `contracts.correct`, reason, audit old/new).
+ * Not a general editing bypass: only the approved fields; a Finalized-unsigned contract is returned to Draft instead.
+ * Lineage and the renewal invariant cannot be broken (database: a renewed contract keeps a finite term; a renewal starts
+ * after its parent). An inactive Contract Type may be recorded when it is what was signed.
+ */
+export async function correctContract(principal: Principal, id: string, input: ContractCorrectionInput, idempotencyKey: string, requestId: string) {
+  const reason = input.reason.trim();
+  if (!reason) throw fail(422, "REASON_REQUIRED", "A reason is required to correct a contract.", [{ field: "reason", code: "REASON_REQUIRED", message: "Required." }]);
+  return runCommand({
+    principal,
+    operation: "createContractCorrection",
+    idempotencyKey,
+    payload: { id, ...input },
+    contractId: id,
+    execute: async (tx) => {
+      await lockForWrite(tx, id, input.expected_revision);
+      const ctx = await loadContext(tx, id);
+      assertAllowed("correct", ctx);
+      const c = ctx.x.contract;
+      const current = {
+        contractTypeId: c.contractTypeId,
+        contractNumber: c.contractNumber,
+        effectiveFrom: c.effectiveFrom,
+        effectiveTo: c.effectiveTo,
+        isOpenEnded: c.isOpenEnded,
+        signedAt: fromDbDate(ctx.row.signedAt),
+      };
+      const next = {
+        contractTypeId: input.contract_type_id ?? current.contractTypeId,
+        contractNumber: input.contract_number !== undefined ? normalizeContractNumber(input.contract_number) : current.contractNumber,
+        effectiveFrom: input.effective_from ?? current.effectiveFrom,
+        effectiveTo: input.effective_to !== undefined ? input.effective_to : current.effectiveTo,
+        isOpenEnded: input.is_open_ended ?? current.isOpenEnded,
+        signedAt: input.signed_at ?? current.signedAt,
+      };
+      if (!next.contractNumber) throw fail(422, "CONTRACT_NOT_READY", "A Signed contract keeps its Contract Number.", [{ field: "contract_number", code: "REQUIRED", message: "Required." }]);
+      if (next.contractTypeId !== current.contractTypeId && !(await tx.contractType.findUnique({ where: { id: next.contractTypeId! } }))) throw notFound("Contract Type not found.");
+      if (next.isOpenEnded === Boolean(next.effectiveTo)) {
+        throw fail(422, "INVALID_TERM", "Enter either an Effective To date or mark the contract open-ended.", [{ field: "effective_to", code: "INVALID_TERM", message: "Invalid term." }]);
+      }
+      if (next.effectiveTo && next.effectiveFrom && next.effectiveTo < next.effectiveFrom) {
+        throw fail(422, "INVALID_TERM", "Effective To cannot be before Effective From.", [{ field: "effective_to", code: "INVALID_TERM", message: "Before Effective From." }]);
+      }
+      const today = todayInVietnam();
+      if (next.signedAt && !isSignedDateAllowed(next.signedAt, today)) {
+        throw fail(422, "SIGNED_AT_IN_FUTURE", `The signature date cannot be after today (${today}, Asia/Ho_Chi_Minh).`, [{ field: "signed_at", code: "SIGNED_AT_IN_FUTURE", message: "Future date." }]);
+      }
+      const keys = ["contractTypeId", "contractNumber", "effectiveFrom", "effectiveTo", "isOpenEnded", "signedAt"] as const;
+      const changed = keys.filter((k) => next[k] !== current[k]);
+      if (changed.length === 0) throw fail(400, "VALIDATION_ERROR", "Nothing to correct: the values are unchanged.", [{ code: "NO_CHANGES", message: "No change." }]);
+      const field: Record<(typeof keys)[number], StructuralChange["field"]> = {
+        contractTypeId: "contract.contract_type_id",
+        contractNumber: "contract.contract_number",
+        effectiveFrom: "contract.effective_from",
+        effectiveTo: "contract.effective_to",
+        isOpenEnded: "contract.is_open_ended",
+        signedAt: "contract.signed_at",
+      };
+      const at = new Date();
+      await tx.contract.update({
+        where: { id },
+        data: {
+          contractTypeId: next.contractTypeId,
+          contractNumber: next.contractNumber,
+          effectiveFrom: next.effectiveFrom ? toDbDate(next.effectiveFrom) : null,
+          effectiveTo: next.effectiveTo ? toDbDate(next.effectiveTo) : null,
+          isOpenEnded: next.isOpenEnded,
+          signedAt: next.signedAt ? toDbDate(next.signedAt) : null,
+          revision: { increment: 1 },
+          updatedAt: at,
+        },
+      });
+      await history(tx, principal, id, "corrected", at, { reason });
+      await audit(tx, principal, requestId, "contract.correct", id, {
+        changedFields: changed.map((k) => field[k]),
+        reason,
+        structuralChanges: changed.map((k) => ({ field: field[k], oldValue: str(current[k]), newValue: str(next[k]) })),
       });
     },
   });
