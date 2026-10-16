@@ -174,6 +174,20 @@ export type Reminders = {
   needs_review: { total: number; items: ReminderItem[] };
 };
 
+// ---------------- Contract Type options (C-44) ----------------
+export type ContractTypeRow = { id: string; name: string; is_active: boolean };
+export type ContractTypeOption = { id: string; label: string; disabled: boolean };
+/**
+ * Contract Type choices per mode. "new" (Create, Edit Draft, Renew, Add Employee): active types only; a Draft's current
+ * inactive type is shown, labelled and NOT selectable, so the form never offers it as a choice. "correction" (historical
+ * Correction of a Signed contract, C-44): active and inactive types, inactive ones visibly labelled.
+ */
+export function contractTypeOptions(rows: ContractTypeRow[], mode: "new" | "correction", currentId?: string | null): ContractTypeOption[] {
+  const label = (r: ContractTypeRow) => (r.is_active ? r.name : t("contracts.typeInactive", { name: r.name }));
+  if (mode === "correction") return rows.map((r) => ({ id: r.id, label: label(r), disabled: false }));
+  return rows.filter((r) => r.is_active || r.id === currentId).map((r) => ({ id: r.id, label: label(r), disabled: !r.is_active }));
+}
+
 // ---------------- Slice 2A-5: renewal form and correction bodies ----------------
 /** Renew form prefilled from the SERVER's renewal_defaults (the browser computes no renewal rule). */
 export function draftFromRenewalDefaults(c: ContractDetail): DraftForm {

@@ -5,7 +5,7 @@ import { ErrorBox } from "@/components/ErrorBox";
 import { Button, Field, Modal } from "@/components/ui";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
-import { contractTitle, createDraftBody, draftErrors, draftFromContract, draftFromRenewalDefaults, EMPTY_DRAFT, renewalBody, updateDraftBody, type ContractDetail, type DraftForm } from "./contractModel";
+import { contractTitle, contractTypeOptions, createDraftBody, draftErrors, draftFromContract, draftFromRenewalDefaults, EMPTY_DRAFT, renewalBody, updateDraftBody, type ContractDetail, type DraftForm } from "./contractModel";
 
 // Slice 2A-3: create or edit a Contract Draft (Phase 2A fields only — no salary, ID, address, templates or documents).
 // Create: POST /contracts with an Idempotency-Key (the same content reuses the same key, so a lost response never
@@ -43,9 +43,10 @@ export function ContractDraftForm(
       .catch(() => setTypes([]));
   }, []);
 
-  // Active types are offered; an inactive type already on the draft stays visible (the server blocks Finalize on it).
+  // Only active types are offered; an inactive type already on the draft stays visible, labelled and not selectable
+  // (the server blocks Finalize on it). Inactive types are offered only in historical Correction (C-44).
   const currentType = props.mode === "edit" ? props.contract.contract_type?.id : undefined;
-  const typeOptions = types.filter((o) => o.is_active || o.id === currentType);
+  const typeOptions = contractTypeOptions(types, "new", currentType);
   const body = props.mode === "create" ? createDraftBody(form) : props.mode === "renew" ? renewalBody(form) : updateDraftBody(props.contract, form);
   const set = (k: keyof DraftForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -103,8 +104,8 @@ export function ContractDraftForm(
             <select {...c} value={form.contract_type_id} onChange={set("contract_type_id")}>
               <option value="">{t("contracts.form.selectType")}</option>
               {typeOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
+                <option key={o.id} value={o.id} disabled={o.disabled}>
+                  {o.label}
                 </option>
               ))}
             </select>

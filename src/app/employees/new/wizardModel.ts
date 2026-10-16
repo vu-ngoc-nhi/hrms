@@ -3,9 +3,14 @@
 // are created in ONE database transaction with an Idempotency-Key — nothing is saved before Review → Save, and a
 // failure saves nothing. Client checks here only mirror the request shape (required Full Name; Department and Job
 // Title together; employment fields need a Start Date). Business rules stay on the server.
+//
+// Slice 2A-6 adds an OPTIONAL Contract step (only with contracts.manage). It is not part of the employee save: the
+// Contract Draft is a second, independent request made only after the employee was created (see onboardingSubmit.ts).
 
-export const STEPS = ["personal", "employment", "assignment", "review"] as const;
+export const STEPS = ["personal", "employment", "assignment", "contract", "review"] as const;
 export type StepId = (typeof STEPS)[number];
+/** The steps this user sees: the optional Contract step only with contracts.manage. */
+export const stepsFor = (caps: { createContract: boolean }): readonly StepId[] => (caps.createContract ? STEPS : STEPS.filter((x) => x !== "contract"));
 
 export type WizardValues = {
   full_name: string;
@@ -48,6 +53,8 @@ export function wizardCapabilities(can: (permission: string) => boolean) {
     writePersonal: can("employees.write_personal"),
     /** Employee Code override instead of an auto-issued code (approved, permission-controlled). */
     setCode: can("employees.set_code"),
+    /** Optional Contract Draft during onboarding (slice 2A-6). Never needed to create the employee. */
+    createContract: can("contracts.manage"),
   };
 }
 
@@ -154,32 +161,93 @@ export function mapServerErrors(details: ServerDetail[] | undefined) {
 export const workEmailExpected = (types: { id: string; requires_work_email?: boolean }[], typeId: string) =>
   Boolean(types.find((t) => t.id === typeId)?.requires_work_email);
 
-export const isDirty = (v: WizardValues) => (Object.keys(EMPTY_VALUES) as FieldName[]).some((k) => v[k] !== EMPTY_VALUES[k]);
+export const isDirty = (v: WizardValues, c: ContractStepValues = EMPTY_CONTRACT) => (Object.keys(EMPTY_VALUES) as FieldName[]).some((k) => v[k] !== EMPTY_VALUES[k]) || c.enabled;
+
+// ---- Optional Contract Draft (slice 2A-6) --------------------------------------------------------------------------
+/**
+ * Phase 2A Draft fields only (no salary, ID, address, clauses, templates, documents or amendment data).
+ * `effective_from: null` = follows the Employment Start Date (the default); `term: ""` = HR has not chosen yet — the
+ * wizard never invents a duration from Employee Type or Contract Type. The Contract Number is never generated.
+ */
+export type ContractStepValues = {
+  enabled: boolean;
+  contract_type_id: string;
+  contract_number: string;
+  effective_from: string | null;
+  term: "" | "fixed" | "open";
+  effective_to: string;
+  summary: string;
+};
+export type ContractField = Exclude<keyof ContractStepValues, "enabled"> | "enabled";
+export const EMPTY_CONTRACT: ContractStepValues = { enabled: false, contract_type_id: "", contract_number: "", effective_from: null, term: "", effective_to: "", summary: "" };
+
+/** Effective From shown and sent: HR's own date, otherwise the Employment Start Date. */
+export const contractEffectiveFrom = (v: WizardValues, c: ContractStepValues) => c.effective_from ?? v.start_date;
+export const contractRequested = (c: ContractStepValues) => c.enabled;
+
+/** Convenience checks only (the Contract API re-validates against the period actually created). */
+export function contractErrors(v: WizardValues, c: ContractStepValues): Partial<Record<ContractField, string>> {
+  const e: Partial<Record<ContractField, string>> = {};
+  if (!c.enabled) return e;
+  if (!hasEmployment(v)) {
+    e.enabled = "wizard.contract.error.needsEmployment";
+    return e;
+  }
+  const from = contractEffectiveFrom(v, c);
+  if (!from) e.effective_from = "wizard.contract.error.effectiveFromRequired";
+  else if (from < v.start_date) e.effective_from = "wizard.contract.error.beforeStart";
+  if (!c.term) e.term = "wizard.contract.error.termRequired";
+  else if (c.term === "fixed") {
+    if (!c.effective_to) e.effective_to = "wizard.contract.error.effectiveToRequired";
+    else if (from && c.effective_to < from) e.effective_to = "contracts.form.error.effectiveTo";
+  }
+  return e;
+}
+
+/**
+ * POST /contracts body. `employmentId` is ALWAYS the id returned by the employee create response — never a value from
+ * the form, so the browser cannot point the draft at another employee or period.
+ */
+export function contractDraftBody(employmentId: string, v: WizardValues, c: ContractStepValues): Record<string, unknown> {
+  const body: Record<string, unknown> = { employment_id: employmentId };
+  if (c.contract_type_id) body.contract_type_id = c.contract_type_id;
+  if (c.contract_number.trim()) body.contract_number = c.contract_number.trim();
+  const from = contractEffectiveFrom(v, c);
+  if (from) body.effective_from = from;
+  if (c.term === "open") body.is_open_ended = true;
+  else if (c.term === "fixed" && c.effective_to) body.effective_to = c.effective_to;
+  if (c.summary.trim()) body.summary = c.summary.trim();
+  return body;
+}
 
 // ---- Navigation and submission state ----------------------------------------------------------------------------
-export type WizardState = { step: StepId; visited: StepId[]; values: WizardValues; saving: boolean };
+export type WizardState = { step: StepId; visited: StepId[]; values: WizardValues; contract: ContractStepValues; saving: boolean };
 export type WizardAction =
   | { type: "set"; field: FieldName; value: string }
-  | { type: "next" }
-  | { type: "back" }
+  | { type: "setContract"; patch: Partial<ContractStepValues> }
+  | { type: "next"; steps?: readonly StepId[] }
+  | { type: "back"; steps?: readonly StepId[] }
   | { type: "goto"; step: StepId }
   | { type: "saveStart" }
   | { type: "saveEnd" };
 
-export const initialState = (): WizardState => ({ step: "personal", visited: ["personal"], values: EMPTY_VALUES, saving: false });
+export const initialState = (): WizardState => ({ step: "personal", visited: ["personal"], values: EMPTY_VALUES, contract: EMPTY_CONTRACT, saving: false });
 
 /** Values are kept across every navigation; nothing changes while saving (no double submit, no edits mid-save). */
 export function wizardReducer(s: WizardState, a: WizardAction): WizardState {
   if (s.saving && a.type !== "saveEnd") return s;
-  const i = STEPS.indexOf(s.step);
+  const steps = ("steps" in a && a.steps) || STEPS;
+  const i = steps.indexOf(s.step);
   const visit = (step: StepId): WizardState => ({ ...s, step, visited: s.visited.includes(step) ? s.visited : [...s.visited, step] });
   switch (a.type) {
     case "set":
       return { ...s, values: { ...s.values, [a.field]: a.value } };
+    case "setContract":
+      return { ...s, contract: { ...s.contract, ...a.patch } };
     case "next":
-      return i < STEPS.length - 1 ? visit(STEPS[i + 1]) : s;
+      return i < steps.length - 1 ? visit(steps[i + 1]) : s;
     case "back":
-      return i > 0 ? { ...s, step: STEPS[i - 1] } : s;
+      return i > 0 ? { ...s, step: steps[i - 1] } : s;
     case "goto":
       return s.visited.includes(a.step) ? { ...s, step: a.step } : s;
     case "saveStart":

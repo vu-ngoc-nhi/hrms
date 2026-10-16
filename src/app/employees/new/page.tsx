@@ -9,10 +9,16 @@ import { Button, Field, InfoBox, PageHeader, Stepper, type FieldControlProps } f
 import { formatDate, t, tMaybe } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import { todayInVietnam } from "@/lib/dates";
+import { contractTypeOptions, type ContractTypeRow } from "@/app/contracts/contractModel";
 import { rememberedListHref } from "../listQuery";
+import { ContractStepFields } from "./ContractStepFields";
+import { OnboardingResult } from "./OnboardingResult";
+import { createContractDraft, submitOnboarding, type ContractAttempt, type PostFn } from "./onboardingSubmit";
 import {
-  STEPS,
   buildPayload,
+  contractDraftBody,
+  contractEffectiveFrom,
+  contractErrors,
   createdHref,
   hasAssignmentInput,
   hasEmployment,
@@ -20,16 +26,20 @@ import {
   isDirty,
   mapServerErrors,
   stepErrors,
+  stepsFor,
   wizardCapabilities,
   wizardReducer,
   workEmailExpected,
+  type ContractField,
+  type ContractStepValues,
   type FieldName,
   type StepId,
 } from "./wizardModel";
 
-// UI-8 Add Employee: Personal → Employment → Assignment → Review. Nothing is saved before "Save Employee"; the save is
-// the existing single create operation (one transaction, Idempotency-Key), so the record is either created complete
-// or not at all. Labels match the Employee Detail tabs.
+// UI-8 Add Employee: Personal → Employment → Assignment → (Contract, optional, slice 2A-6) → Review. Nothing is saved
+// before "Save"; the employee save is the existing single create operation (one transaction, Idempotency-Key), so the
+// record is either created complete or not at all. An optional Contract Draft is a SECOND, independent request made
+// only after the employee exists (onboardingSubmit.ts). Labels match the Employee Detail tabs.
 
 type Option = { id: string; label: string; requires_work_email?: boolean };
 type Catalogs = { departments: Option[]; jobTitles: Option[]; levels: Option[]; employeeTypes: Option[]; managers: Option[] };
@@ -75,22 +85,47 @@ function useCatalogs(enabled: boolean) {
   return { state, retry };
 }
 
+/** Active Contract Types for the optional Contract Draft (only with contracts.manage). */
+function useContractTypes(enabled: boolean) {
+  const [rows, setRows] = useState<ContractTypeRow[] | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    api<{ data: ContractTypeRow[] }>("/api/v1/core-hr/contract-types?page_size=100")
+      .then((r) => setRows(r.data.data))
+      .catch(() => setRows([]));
+  }, [enabled]);
+  return rows;
+}
+
+const post: PostFn = (path, body, idempotencyKey) => api(path, { method: "POST", body, headers: { "Idempotency-Key": idempotencyKey } }).then((r) => r.data);
+type Result = { personId: string; employmentId: string | null; attempt: ContractAttempt };
+
 export default function NewEmployeePage() {
   const session = useSession();
   const router = useRouter();
   const caps = wizardCapabilities((p) => Boolean(session?.can(p)));
+  const steps = stepsFor(caps);
   const [s, dispatch] = useReducer(wizardReducer, undefined, initialState);
+  const [cErrors, setCErrors] = useState<Partial<Record<ContractField, string>>>({});
+  const [result, setResult] = useState<Result | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const typeRows = useContractTypes(caps.createContract);
+  const typeOptions = contractTypeOptions(typeRows ?? [], "new");
   const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
   const [saveError, setSaveError] = useState<{ error: ApiCallError | null; network: boolean } | null>(null);
   const [focusInvalid, setFocusInvalid] = useState(0);
   const catalogs = useCatalogs(caps.create);
   const [backHref] = useState(() => (typeof window === "undefined" ? "/employees" : rememberedListHref()));
   const attempt = useRef<{ key: string; payload: string } | null>(null);
+  // Separate idempotency scope for the Contract Draft: one key for this onboarding, reused by every retry, so an
+  // uncertain earlier attempt is answered by the server (replay or IDEMPOTENCY_KEY_REUSED) instead of a duplicate.
+  const contractKey = useRef<string | null>(null);
   const savingRef = useRef(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const v = s.values;
-  const dirty = isDirty(v);
+  const c = s.contract;
+  const dirty = isDirty(v, c) && !result;
 
   // Lightweight leave protection (no drafts): the browser asks before closing or reloading with unsaved input.
   useEffect(() => {
@@ -105,7 +140,7 @@ export default function NewEmployeePage() {
     headingRef.current?.focus();
   }, [s.step]);
   useEffect(() => {
-    if (focusInvalid) bodyRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+    if (focusInvalid) bodyRef.current?.querySelector<HTMLElement>('[aria-invalid="true"], [data-invalid="true"]')?.focus();
   }, [focusInvalid]);
 
   if (session && !caps.create) return <p className="alert error">{t("form.noPermission")}</p>;
@@ -119,14 +154,25 @@ export default function NewEmployeePage() {
         return rest;
       });
   };
-  const check = (step: StepId) => {
-    const found = Object.fromEntries(Object.entries(stepErrors(step, v)).map(([k, key]) => [k, t(key as Parameters<typeof t>[0])]));
-    setErrors(found);
-    if (Object.keys(found).length) setFocusInvalid((n) => n + 1);
+  const translate = <K extends string>(e: Partial<Record<K, string>>) => Object.fromEntries(Object.entries(e).map(([k, key]) => [k, t(key as Parameters<typeof t>[0])])) as Partial<Record<K, string>>;
+  const checkContract = () => {
+    const found = translate(caps.createContract ? contractErrors(v, c) : {});
+    setCErrors(found);
     return Object.keys(found).length === 0;
   };
+  const check = (step: StepId) => {
+    const found = translate(stepErrors(step, v));
+    setErrors(found);
+    const contractOk = step === "contract" ? checkContract() : true;
+    if (Object.keys(found).length || !contractOk) setFocusInvalid((n) => n + 1);
+    return Object.keys(found).length === 0 && contractOk;
+  };
   const next = () => {
-    if (check(s.step)) dispatch({ type: "next" });
+    if (check(s.step)) dispatch({ type: "next", steps });
+  };
+  const setContract = (patch: Partial<ContractStepValues>) => {
+    dispatch({ type: "setContract", patch });
+    if (Object.keys(cErrors).length) setCErrors({});
   };
   const leave = (e: React.MouseEvent) => {
     if (dirty && !window.confirm(t("wizard.leaveConfirm"))) e.preventDefault();
@@ -137,22 +183,37 @@ export default function NewEmployeePage() {
     if (savingRef.current) return;
     // Re-check every step; return HR to the first step with a problem.
     const all = stepErrors("review", v);
-    if (Object.keys(all).length) {
-      setErrors(Object.fromEntries(Object.entries(all).map(([k, key]) => [k, t(key as Parameters<typeof t>[0])])));
-      dispatch({ type: "goto", step: STEPS.find((st) => Object.keys(stepErrors(st, v)).length) ?? "personal" });
+    const contractOk = checkContract();
+    if (Object.keys(all).length || !contractOk) {
+      setErrors(translate(all));
+      dispatch({ type: "goto", step: steps.find((st) => (st === "contract" ? !contractOk : Object.keys(stepErrors(st, v)).length > 0)) ?? "personal" });
       setFocusInvalid((n) => n + 1);
       return;
     }
     const payloadText = JSON.stringify(buildPayload(v, caps));
     // The same content reuses the same Idempotency-Key, so saving again after a lost response never creates a duplicate.
     if (!attempt.current || attempt.current.payload !== payloadText) attempt.current = { key: crypto.randomUUID(), payload: payloadText };
+    const wantsContract = caps.createContract && c.enabled;
+    if (wantsContract && !contractKey.current) contractKey.current = crypto.randomUUID();
     savingRef.current = true;
     dispatch({ type: "saveStart" });
     setSaveError(null);
-    try {
-      const r = await api<{ id: string }>("/api/v1/core-hr/employees", { method: "POST", body: payloadText, headers: { "Idempotency-Key": attempt.current.key } });
-      router.push(createdHref(r.data.id));
-    } catch (err) {
+    const outcome = await submitOnboarding(post, {
+      employeePayload: payloadText,
+      employeeKey: attempt.current.key,
+      startDate: v.start_date,
+      contract: wantsContract ? { key: contractKey.current!, body: (employmentId) => contractDraftBody(employmentId, v, c) } : null,
+    });
+    if (outcome.kind === "employee_created") {
+      // A: no Contract Draft requested → the Phase 1 result (the new record's Overview with its success notice).
+      if (!outcome.contract) return void router.push(createdHref(outcome.personId));
+      // B / C: an explicit result screen states both outcomes before HR leaves.
+      dispatch({ type: "saveEnd" });
+      setResult({ personId: outcome.personId, employmentId: outcome.employmentId, attempt: outcome.contract });
+      return;
+    }
+    {
+      const err = outcome.error;
       savingRef.current = false;
       dispatch({ type: "saveEnd" });
       if (!(err instanceof ApiCallError)) {
@@ -167,6 +228,15 @@ export default function NewEmployeePage() {
         setFocusInvalid((n) => n + 1);
       }
     }
+  }
+
+  /** "Retry Contract Draft": repeats ONLY the Contract request, with the created period's id and the same contract key. */
+  async function retryContract() {
+    if (!result?.employmentId || retrying || !checkContract()) return;
+    setRetrying(true);
+    const attemptResult = await createContractDraft(post, contractDraftBody(result.employmentId, v, c), contractKey.current!);
+    setRetrying(false);
+    setResult({ ...result, attempt: attemptResult });
   }
 
   const ready = catalogs.state.status === "ready" ? catalogs.state.data : null;
@@ -279,13 +349,39 @@ export default function NewEmployeePage() {
     </>
   );
 
+  const contractStep = (
+    <>
+      {!hasEmployment(v) && <InfoBox>{t("wizard.contract.needsEmployment")}</InfoBox>}
+      <label className="checkbox-field contract-toggle">
+        <input
+          type="checkbox"
+          checked={c.enabled}
+          onChange={(e) => setContract({ enabled: e.target.checked })}
+          disabled={!hasEmployment(v) && !c.enabled}
+          aria-invalid={cErrors.enabled ? true : undefined}
+          aria-describedby="contract-toggle-note"
+        />
+        <span>{t("wizard.contract.toggle")}</span>
+      </label>
+      <p id="contract-toggle-note" className={cErrors.enabled ? "field-error" : "muted small"}>
+        {cErrors.enabled ?? t("wizard.contract.toggleHint")}
+      </p>
+      {c.enabled && hasEmployment(v) && (
+        <ContractStepFields startDate={v.start_date} c={c} onChange={setContract} errors={cErrors} types={typeOptions} typesLoading={typeRows === null} />
+      )}
+      {!c.enabled && <p className="muted small">{t("wizard.contract.skipNote")}</p>}
+    </>
+  );
+
   const reviewSection = (step: StepId, title: string, rows: [string, ReactNode][], note?: string) => (
     <section className="card review-card" aria-labelledby={`review-${step}`}>
       <div className="card-header">
         <h3 id={`review-${step}`}>{title}</h3>
-        <Button size="small" variant="ghost" onClick={() => dispatch({ type: "goto", step })} aria-label={t("wizard.editSection", { section: title })} disabled={s.saving}>
-          {t("wizard.edit")}
-        </Button>
+        {steps.includes(step) && (
+          <Button size="small" variant="ghost" onClick={() => dispatch({ type: "goto", step })} aria-label={t("wizard.editSection", { section: title })} disabled={s.saving}>
+            {t("wizard.edit")}
+          </Button>
+        )}
       </div>
       {note ? (
         <p className="muted">{note}</p>
@@ -338,13 +434,47 @@ export default function NewEmployeePage() {
         ],
         hasEmployment(v) && v.department_id && v.job_title_id ? undefined : t("wizard.noAssignmentReview"),
       )}
+      {reviewSection(
+        "contract",
+        t("wizard.review.contractTitle"),
+        [
+          [t("wizard.review.contractWillCreate"), t("wizard.review.contractYes")],
+          [t("contracts.fields.contractType"), c.contract_type_id ? (typeOptions.find((o) => o.id === c.contract_type_id)?.label ?? "—") : ""],
+          [t("contracts.fields.contractNumber"), c.contract_number.trim() || t("wizard.review.notAssigned")],
+          [t("contracts.fields.effectiveFrom"), contractEffectiveFrom(v, c) ? formatDate(contractEffectiveFrom(v, c)) : ""],
+          [t("contracts.form.termLabel"), c.term === "open" ? t("contracts.openEnded") : c.effective_to ? formatDate(c.effective_to) : ""],
+        ],
+        !caps.createContract ? t("wizard.review.contractUnavailable") : !c.enabled ? t("wizard.review.contractNone") : undefined,
+      )}
       <p className="muted small">{t("wizard.healthNote")}</p>
       <p className="muted small">{t("wizard.saveNote")}</p>
+      {caps.createContract && c.enabled && <p className="muted small">{t("wizard.review.contractSeparate")}</p>}
     </>
   );
 
-  const body: Record<StepId, ReactNode> = { personal, employment, assignment, review };
+  const body: Record<StepId, ReactNode> = { personal, employment, assignment, contract: contractStep, review };
   const isReview = s.step === "review";
+
+  if (result) {
+    return (
+      <>
+        <PageHeader title={t("wizard.title")} subtitle={t("wizard.result.subtitle")} />
+        <OnboardingResult
+          fullName={v.full_name.trim()}
+          personId={result.personId}
+          attempt={result.attempt}
+          retrying={retrying}
+          onRetry={() => void retryContract()}
+          startDate={v.start_date}
+          contract={c}
+          onContractChange={setContract}
+          contractErrors={cErrors}
+          types={typeOptions}
+          typesLoading={typeRows === null}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -354,7 +484,7 @@ export default function NewEmployeePage() {
       <PageHeader title={t("wizard.title")} subtitle={t("wizard.subtitle")} />
       <Stepper
         label={t("wizard.stepsLabel")}
-        items={STEPS.map((id) => ({ id, label: t(`wizard.step.${id}`) }))}
+        items={steps.map((id) => ({ id, label: t(`wizard.step.${id}`) }))}
         current={s.step}
         visited={s.visited}
         onSelect={(step) => !s.saving && dispatch({ type: "goto", step })}
@@ -387,7 +517,7 @@ export default function NewEmployeePage() {
           </Link>
           <div className="page-actions">
             {s.step !== "personal" && (
-              <Button onClick={() => dispatch({ type: "back" })} disabled={s.saving}>
+              <Button onClick={() => dispatch({ type: "back", steps })} disabled={s.saving}>
                 {t("wizard.back")}
               </Button>
             )}

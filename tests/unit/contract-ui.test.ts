@@ -16,6 +16,7 @@ import {
   finalizeBody,
   finalizeOutcome,
   historyTitle,
+  contractTypeOptions,
   correctionBody,
   correctionFromContract,
   draftFromRenewalDefaults,
@@ -280,5 +281,32 @@ describe("Slice 2A-5: renewal, correction and void in the UI (server-driven)", (
       "Correct contract",
       "Void contract",
     ]);
+  });
+});
+
+describe("Contract Type choices (C-44 alignment, slice 2A-6)", () => {
+  const rows = [
+    { id: "a", name: "Fixed-term Contract", is_active: true },
+    { id: "b", name: "Old Probation Contract", is_active: false },
+    { id: "c", name: "Service Agreement", is_active: true },
+  ];
+  it("historical Correction offers active AND inactive types; inactive ones are visibly labelled", () => {
+    expect(contractTypeOptions(rows, "correction")).toEqual([
+      { id: "a", label: "Fixed-term Contract", disabled: false },
+      { id: "b", label: "Old Probation Contract (Inactive)", disabled: false },
+      { id: "c", label: "Service Agreement", disabled: false },
+    ]);
+  });
+  it("Create, Edit Draft, Renew and Add Employee offer active types only; a Draft's current inactive type is shown but not selectable", () => {
+    expect(contractTypeOptions(rows, "new").map((o) => o.id)).toEqual(["a", "c"]);
+    expect(contractTypeOptions(rows, "new", "b")).toContainEqual({ id: "b", label: "Old Probation Contract (Inactive)", disabled: true });
+    expect(contractTypeOptions(rows, "new", "b").filter((o) => !o.disabled).map((o) => o.id)).toEqual(["a", "c"]);
+  });
+  it("each screen uses the right mode", () => {
+    expect(readFileSync("src/app/contracts/[id]/LifecycleDialogs.tsx", "utf8")).toContain('contractTypeOptions(types, "correction")');
+    const form = readFileSync("src/app/contracts/ContractDraftForm.tsx", "utf8");
+    expect(form).toContain('contractTypeOptions(types, "new", currentType)');
+    expect(form).toContain('const currentType = props.mode === "edit" ? props.contract.contract_type?.id : undefined;'); // Create and Renew: no current type
+    expect(form).toContain("disabled={o.disabled}");
   });
 });

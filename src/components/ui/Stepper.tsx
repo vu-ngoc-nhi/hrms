@@ -22,7 +22,7 @@ export function Stepper<T extends string>({
   const currentIndex = items.findIndex((i) => i.id === current);
   return (
     <nav aria-label={label}>
-      <ol className="stepper">
+      <ol className="stepper" style={{ "--stepper-count": items.length } as React.CSSProperties}>
         {items.map((item, i) => {
           const state = i === currentIndex ? "current" : visited.includes(item.id) && i < currentIndex ? "done" : visited.includes(item.id) ? "visited" : "todo";
           const content = (

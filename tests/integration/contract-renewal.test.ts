@@ -444,9 +444,10 @@ describe("Owner close-out checks for 2A-5", () => {
     expect((await renew(id, { contract_type_id: otherRetired })).body.error).toBe("CONTRACT_TYPE_INACTIVE");
     const fresh = await call(createRoute, { path: PATH, method: "POST", user: "editor", body: { employment_id: e, contract_type_id: retired }, headers: { "idempotency-key": key("rn-retired-new") } });
     expect(fresh.body.error).toBe("CONTRACT_TYPE_INACTIVE");
-    // The correction dialog does not offer inactive types as ordinary choices: only active types plus the record's current one.
+    // UI (2A-6 alignment with C-44): the Correction dialog lists active and inactive types, inactive ones labelled;
+    // Create / Edit Draft / Renew offer active types only (pinned in tests/unit/contract-ui.test.ts).
     const dialog = readFileSync("src/app/contracts/[id]/LifecycleDialogs.tsx", "utf8");
-    expect(dialog).toContain("types.filter((o) => o.is_active || o.id === contract.contract_type?.id)");
+    expect(dialog).toContain('contractTypeOptions(types, "correction")');
   });
 });
 

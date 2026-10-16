@@ -8,6 +8,7 @@ import {
   isDirty,
   mapServerErrors,
   stepErrors,
+  stepsFor,
   wizardCapabilities,
   wizardReducer,
   workEmailExpected,
@@ -109,21 +110,31 @@ describe("Step checks (request shape only)", () => {
 describe("Navigation and submission", () => {
   const run = (s: WizardState, ...actions: Parameters<typeof wizardReducer>[1][]) => actions.reduce(wizardReducer, s);
 
-  it("Back / Next / Edit keep every entered value", () => {
+  it("Back / Next / Edit keep every entered value (Phase 1 steps for a user without contracts.manage)", () => {
+    const steps = stepsFor({ createContract: false });
+    expect(steps).toEqual(["personal", "employment", "assignment", "review"]);
     const s = run(
       initialState(),
       { type: "set", field: "full_name", value: "A B" },
-      { type: "next" },
+      { type: "next", steps },
       { type: "set", field: "start_date", value: "2026-11-02" },
-      { type: "next" },
-      { type: "next" },
+      { type: "next", steps },
+      { type: "next", steps },
       { type: "goto", step: "personal" },
-      { type: "back" },
+      { type: "back", steps },
       { type: "goto", step: "employment" },
     );
     expect(s.step).toBe("employment");
     expect(s.values).toMatchObject({ full_name: "A B", start_date: "2026-11-02" });
     expect(s.visited).toEqual(["personal", "employment", "assignment", "review"]);
+  });
+
+  it("with contracts.manage the optional Contract step sits between Assignment and Review", () => {
+    const steps = stepsFor({ createContract: true });
+    expect(steps).toEqual(["personal", "employment", "assignment", "contract", "review"]);
+    const s = run(initialState(), { type: "next", steps }, { type: "next", steps }, { type: "next", steps }, { type: "next", steps });
+    expect(s.visited).toEqual(["personal", "employment", "assignment", "contract", "review"]);
+    expect(run(s, { type: "back", steps }).step).toBe("contract");
   });
 
   it("cannot jump to a step that was never reached", () => {
@@ -161,11 +172,19 @@ describe("Navigation and submission", () => {
 describe("Permissions (capabilities, never role names)", () => {
   it("maps capabilities", () => {
     const can = (set: string[]) => (p: string) => set.includes(p);
-    expect(wizardCapabilities(can(["employees.create", "employees.write_personal"]))).toEqual({ create: true, writePersonal: true, setCode: false });
-    expect(wizardCapabilities(can(["employees.read"]))).toEqual({ create: false, writePersonal: false, setCode: false });
+    expect(wizardCapabilities(can(["employees.create", "employees.write_personal"]))).toEqual({ create: true, writePersonal: true, setCode: false, createContract: false });
+    expect(wizardCapabilities(can(["employees.read"]))).toEqual({ create: false, writePersonal: false, setCode: false, createContract: false });
+    expect(wizardCapabilities(can(["employees.create", "contracts.manage"])).createContract).toBe(true);
   });
   it("wizard code has no role-name checks", () => {
-    for (const f of ["src/app/employees/new/page.tsx", "src/app/employees/new/wizardModel.ts", "src/components/ui/Stepper.tsx"]) {
+    for (const f of [
+      "src/app/employees/new/page.tsx",
+      "src/app/employees/new/wizardModel.ts",
+      "src/app/employees/new/onboardingSubmit.ts",
+      "src/app/employees/new/OnboardingResult.tsx",
+      "src/app/employees/new/ContractStepFields.tsx",
+      "src/components/ui/Stepper.tsx",
+    ]) {
       expect(readFileSync(f, "utf8")).not.toMatch(/HR_ADMIN|HR_EDITOR|API_DOCS_READER|\.roles\b|hasRole/);
     }
   });

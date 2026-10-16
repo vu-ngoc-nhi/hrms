@@ -7,6 +7,7 @@ import { t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import {
   contractTitle,
+  contractTypeOptions,
   correctionBody,
   correctionFromContract,
   findingText,
@@ -14,6 +15,7 @@ import {
   finalizeOutcome,
   signedDateIssue,
   type ContractDetail,
+  type ContractTypeRow,
   type CorrectionForm,
   type Finding,
 } from "../contractModel";
@@ -287,7 +289,7 @@ export function ReasonActionDialog({
   );
 }
 
-type TypeOption = { id: string; name: string; is_active: boolean };
+type TypeOption = ContractTypeRow;
 
 /**
  * Correct a Signed contract's data-entry error (contracts.correct): only changed fields are sent, with a mandatory
@@ -306,7 +308,8 @@ export function CorrectionDialog({ contract, onDone, onClose }: { contract: Cont
       .then((r) => setTypes(r.data.data))
       .catch(() => setTypes([]));
   }, []);
-  const typeOptions = types.filter((o) => o.is_active || o.id === contract.contract_type?.id);
+  // Historical Correction (C-44): active AND inactive types are selectable; inactive ones are labelled.
+  const typeOptions = contractTypeOptions(types, "correction");
   const body = correctionBody(contract, form);
   const set = (k: keyof CorrectionForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -334,7 +337,7 @@ export function CorrectionDialog({ contract, onDone, onClose }: { contract: Cont
             <select {...c} value={form.contract_type_id} onChange={set("contract_type_id")}>
               {typeOptions.map((o) => (
                 <option key={o.id} value={o.id}>
-                  {o.name}
+                  {o.label}
                 </option>
               ))}
             </select>
