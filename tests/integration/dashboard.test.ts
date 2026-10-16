@@ -28,7 +28,7 @@ const nextName = () => {
 };
 type P = { personId: string; employmentId: string };
 
-async function hire(start: string, o: { type?: string; workEmail?: string | null; personalEmail?: string; assignment?: boolean; code?: string } = {}): Promise<P> {
+async function hire(start: string, o: { type?: string | null; workEmail?: string | null; personalEmail?: string; assignment?: boolean; code?: string } = {}): Promise<P> {
   const r = await call(createRoute, {
     path: "/x",
     method: "POST",
@@ -40,7 +40,7 @@ async function hire(start: string, o: { type?: string; workEmail?: string | null
       ...(o.personalEmail ? { personal: { personal_email: o.personalEmail } } : {}),
       employment: {
         start_date: start,
-        employee_type_id: o.type ?? ids.et.EMPLOYEE,
+        ...(o.type === null ? {} : { employee_type_id: o.type ?? ids.et.EMPLOYEE }),
         ...(o.workEmail === null ? {} : { work_email: o.workEmail ?? `dash.${n}.${Date.now()}@example.test` }),
         ...(o.assignment === false ? {} : { assignment: { department_id: ids.d.ENG, job_title_id: ids.j.SE } }),
       },
@@ -257,6 +257,74 @@ describe("Business date (Asia/Ho_Chi_Minh)", () => {
     const principal = await principalWith("admin", ["employees.read"]);
     expect((await getDashboard(principal, new Date("2027-02-28T16:59:59Z"))).status_as_of).toBe("2027-02-28");
     expect((await getDashboard(principal, new Date("2027-02-28T17:00:00Z"))).status_as_of).toBe("2027-03-01");
+  });
+});
+
+describe("Workforce breakdowns (owner-approved Home refresh)", () => {
+  const byDept = (d: Awaited<ReturnType<typeof dash>>) => Object.fromEntries(d.workforce.by_department.map((g) => [g.department?.code ?? "NOT_ASSIGNED", g.count]));
+  const byType = (d: Awaited<ReturnType<typeof dash>>) => Object.fromEntries(d.workforce.by_employee_type.map((g) => [g.employee_type?.code ?? "NOT_ASSIGNED", g.count]));
+  const sum = (xs: { count: number }[]) => xs.reduce((a, x) => a + x.count, 0);
+
+  it("Total Employees = Active: Pre-start, Ended, cancelled and voided periods and people without a period are excluded; each chart sums to Active", async () => {
+    const active = await hire("2025-01-06");
+    const contractor = await hire("2025-01-06", { type: ids.et.SERVICE_CONTRACTOR, workEmail: null });
+    const pre = await hire(addDays(T, 10));
+    const ended = await hire("2024-01-08");
+    await end(ended, "2025-06-30");
+    const cancelled = await hire(addDays(T, 12));
+    await post(cancelPeriodRoute, cancelled.employmentId, cancelled.personId, { reason: "Offer declined" });
+    const voided = await hire("2025-02-03");
+    await post(voidRoute, voided.employmentId, voided.personId, { reason: "Entered in error" });
+
+    const d = await dash([active, contractor, pre, ended, cancelled, voided]);
+    expect(d.workforce.total).toBe(2);
+    expect(d.workforce.total).toBe(d.snapshot.active);
+    expect(byDept(d)).toEqual({ ENG: 2 });
+    expect(byType(d)).toEqual({ EMPLOYEE: 1, SERVICE_CONTRACTOR: 1 });
+    expect(sum(d.workforce.by_department)).toBe(d.workforce.total);
+    expect(sum(d.workforce.by_employee_type)).toBe(d.workforce.total);
+    expect(d.workforce.on_leave).toBeNull(); // unavailable, never 0
+  });
+
+  it("inclusive last working day: counted on the end date, excluded from the next day", async () => {
+    const leaving = await hire("2025-01-06");
+    await end(leaving, addDays(T, 5));
+    expect((await dash([leaving], addDays(T, 5))).workforce).toMatchObject({ total: 1, by_department: [{ count: 1 }] });
+    expect((await dash([leaving], addDays(T, 6))).workforce).toMatchObject({ total: 0, by_department: [], by_employee_type: [] });
+  });
+
+  it("Department comes from the assignment in effect on the business date — a future assignment is not counted until it starts", async () => {
+    const moving = await hire("2025-01-06");
+    await change(moving, addDays(T, 2)); // ENG → QA from T+2
+    expect(byDept(await dash([moving]))).toEqual({ ENG: 1 });
+    expect(byDept(await dash([moving], addDays(T, 2)))).toEqual({ QA: 1 });
+  });
+
+  it("missing values stay counted under Not assigned (last), so every Active person is in both charts", async () => {
+    const noAssignment = await hire("2025-01-06", { assignment: false });
+    const noType = await hire("2025-01-06", { type: null, workEmail: null });
+    const normal = await hire("2025-01-06");
+    const d = await dash([noAssignment, noType, normal]);
+    expect(d.workforce.total).toBe(3);
+    expect(d.workforce.by_department).toEqual([
+      { department: { id: ids.d.ENG, code: "ENG", name: expect.any(String) }, count: 2 },
+      { department: null, count: 1 },
+    ]);
+    expect(d.workforce.by_employee_type.at(-1)).toEqual({ employee_type: null, count: 1 });
+    expect(sum(d.workforce.by_employee_type)).toBe(3);
+  });
+
+  it("covers ALL people (not the 5 / 10 previews): totals and every group equal the Active Employee List filters", async () => {
+    const r = await call(dashboardRoute, { path: "/api/v1/core-hr/dashboard", user: "editor" });
+    const d = CoreHrDashboardSchema.parse(r.body);
+    const total = async (q: string) => (await call(listRoute, { path: `/api/v1/core-hr/employees?page_size=1&${q}`, user: "editor" })).body.total as number;
+    expect(d.workforce.total).toBe(await total("employment_status=active"));
+    expect(d.workforce.total).toBeGreaterThan(10); // more people than any preview holds
+    expect(sum(d.workforce.by_department)).toBe(d.workforce.total);
+    expect(sum(d.workforce.by_employee_type)).toBe(d.workforce.total);
+    for (const g of d.workforce.by_department) if (g.department) expect(g.count, g.department.code).toBe(await total(`employment_status=active&department_id=${g.department.id}`));
+    for (const g of d.workforce.by_employee_type) if (g.employee_type) expect(g.count, g.employee_type.code).toBe(await total(`employment_status=active&employee_type_id=${g.employee_type.id}`));
+    expect(d.workforce.on_leave).toBeNull();
   });
 });
 

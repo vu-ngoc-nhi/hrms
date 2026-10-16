@@ -2225,7 +2225,7 @@
       "get": {
         "operationId": "getCoreHrDashboard",
         "summary": "Home / Action Center summary",
-        "description": "PV-30, read-only (no audit, no revision change), evaluated as of today (Asia/Ho_Chi_Minh). snapshot: people per employment_status (active, not_started, ended) with the Employee List's computation. needs_attention: people whose operational completeness is incomplete (each counted once; equals the list filter operational_completeness=incomplete), per-item counts and at most 5 records. upcoming: changes in the next 30 days (starts and assignment changes after today up to today + 30; planned ends whose last day is today up to today + 30), the Employee Detail Upcoming Changes semantics; a Relationship Change is one item; cancelled / voided periods and cancelled planned assignments never appear; at most 10 items plus total. Machine codes only; no personal data, Work Email, reasons or audit data. No query parameters (400 otherwise).\n\nRequired permission: `employees.read`.",
+        "description": "PV-30, read-only (no audit, no revision change), evaluated as of today (Asia/Ho_Chi_Minh). snapshot: people per employment_status (active, not_started, ended) with the Employee List's computation. needs_attention: people whose operational completeness is incomplete (each counted once; equals the list filter operational_completeness=incomplete), per-item counts and at most 5 records. upcoming: changes in the next 30 days (starts and assignment changes after today up to today + 30; planned ends whose last day is today up to today + 30), the Employee Detail Upcoming Changes semantics; a Relationship Change is one item; cancelled / voided periods and cancelled planned assignments never appear; at most 10 items plus total. workforce (owner-approved Home refresh): Active people only (total = snapshot.active), by the Department of the assignment in effect today and by the active period's Employee Type, with a Not assigned group so each breakdown sums to total; on_leave is null (no leave data — unavailable, never zero). Machine codes only; no personal data, Work Email, reasons or audit data. No query parameters (400 otherwise).\n\nRequired permission: `employees.read`.",
         "tags": [
           "Dashboard"
         ],
@@ -11435,13 +11435,135 @@
               "items"
             ],
             "additionalProperties": false
+          },
+          "workforce": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Active people on status_as_of, each counted once — equals snapshot.active (Total Employees = Active, owner-approved Home refresh)."
+              },
+              "by_department": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "department": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "code": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "code",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "null = Not assigned (no assignment in effect on status_as_of)."
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "department",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Active people by the Department of the assignment in effect on status_as_of (the Employee List's Department rule); future assignments are not counted. Counts sum to total. Only groups with count > 0; largest first, Not assigned last."
+              },
+              "by_employee_type": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "employee_type": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "code": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "code",
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "null = Not assigned (the active period has no Employee Type)."
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "employee_type",
+                    "count"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Active people by the Employee Type of their active Employment Period. Counts sum to total. Only groups with count > 0; largest first, Not assigned last."
+              },
+              "on_leave": {
+                "type": "null",
+                "description": "Not available: there is no leave data yet. null means unavailable — never zero."
+              }
+            },
+            "required": [
+              "total",
+              "by_department",
+              "by_employee_type",
+              "on_leave"
+            ],
+            "additionalProperties": false,
+            "description": "Owner-approved Home refresh: Active-only workforce breakdowns over ALL people (never a preview), same business date and projection as the Employee List."
           }
         },
         "required": [
           "status_as_of",
           "snapshot",
           "needs_attention",
-          "upcoming"
+          "upcoming",
+          "workforce"
         ],
         "additionalProperties": false
       }

@@ -1092,8 +1092,30 @@ export const CoreHrDashboardSchema = reg(
         )
         .describe("Nearest first; same date: employment_end, relationship_change, starts, assignment_change; then employee_code."),
     }),
+    workforce: z
+      .object({
+        total: z.int().describe("Active people on status_as_of, each counted once — equals snapshot.active (Total Employees = Active, owner-approved Home refresh)."),
+        by_department: z
+          .array(
+            z.object({
+              department: z.object({ id: z.uuid(), code: z.string(), name: z.string() }).nullable().describe("null = Not assigned (no assignment in effect on status_as_of)."),
+              count: z.int(),
+            }),
+          )
+          .describe("Active people by the Department of the assignment in effect on status_as_of (the Employee List's Department rule); future assignments are not counted. Counts sum to total. Only groups with count > 0; largest first, Not assigned last."),
+        by_employee_type: z
+          .array(
+            z.object({
+              employee_type: z.object({ id: z.uuid(), code: z.string(), name: z.string() }).nullable().describe("null = Not assigned (the active period has no Employee Type)."),
+              count: z.int(),
+            }),
+          )
+          .describe("Active people by the Employee Type of their active Employment Period. Counts sum to total. Only groups with count > 0; largest first, Not assigned last."),
+        on_leave: z.null().describe("Not available: there is no leave data yet. null means unavailable — never zero."),
+      })
+      .describe("Owner-approved Home refresh: Active-only workforce breakdowns over ALL people (never a preview), same business date and projection as the Employee List."),
   }),
-  "Home / Action Center (PV-30): Workforce Snapshot, Needs Attention and Upcoming — next 30 days. Machine codes only; no labels, personal data, reasons or audit data.",
+  "Home / Action Center (PV-30): Workforce Snapshot, workforce breakdowns, Needs Attention and Upcoming — next 30 days. Machine codes and catalog names only; no personal data, reasons or audit data.",
 );
 
 export type EmployeeCreateInput = z.infer<typeof EmployeeCreateSchema>;

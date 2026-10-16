@@ -1,6 +1,23 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { greeting, greetingPart, homeCapabilities, NEEDS_ATTENTION_HREF, needsAttentionView, snapshotView, summaryCards, upcomingRow, upcomingView, type Dashboard } from "@/app/homeModel";
+import {
+  ACTIVE_HREF,
+  columnHeight,
+  departmentChart,
+  donutSegments,
+  employeeTypeChart,
+  greeting,
+  greetingPart,
+  homeCapabilities,
+  NEEDS_ATTENTION_HREF,
+  needsAttentionView,
+  snapshotView,
+  statusLinks,
+  summaryCards,
+  upcomingRow,
+  upcomingView,
+  type Dashboard,
+} from "@/app/homeModel";
 import { OPERATIONAL_ITEM_CODES } from "@/contracts/core-hr/completeness-codes";
 import { UPCOMING_EVENT_TYPES } from "@/contracts/core-hr/schemas";
 import { formatDayMonth } from "@/i18n";
@@ -19,6 +36,19 @@ const dashboard = (o: Partial<Dashboard> = {}): Dashboard => ({
   snapshot: { active: 61, not_started: 3, ended: 14 },
   needs_attention: { total: 0, rule_version: "operational-mvp-2026-10-08.2", by_requirement: [], records: [] },
   upcoming: { window_days: 30, from: "2026-10-11", to: "2026-11-10", total: 0, items: [] },
+  workforce: {
+    total: 61,
+    by_department: [
+      { department: { id: "d-eng", code: "ENG", name: "Engineering" }, count: 50 },
+      { department: { id: "d-qa", code: "QA", name: "Quality Assurance" }, count: 9 },
+      { department: null, count: 2 },
+    ],
+    by_employee_type: [
+      { employee_type: { id: "t-emp", code: "EMPLOYEE", name: "Employee" }, count: 55 },
+      { employee_type: { id: "t-sc", code: "SERVICE_CONTRACTOR", name: "Service Contractor" }, count: 6 },
+    ],
+    on_leave: null,
+  },
   ...o,
 });
 
@@ -130,14 +160,16 @@ describe("Shell, permissions and scope", () => {
     }
   });
 
-  it("no chart library, score, scanner or department section on Home", () => {
+  it("no chart library, score or scanner; charts are drawn from server counts only", () => {
     const pkg = readFileSync("package.json", "utf8");
     expect(pkg).not.toMatch(/chart|recharts|d3|visx/i);
-    const code = readFileSync("src/app/page.tsx", "utf8")
-      .split("\n")
-      .filter((l) => !l.trim().startsWith("//"))
-      .join("\n");
-    expect(code).not.toMatch(/integrity|score|percent|department_id|byDepartment/i);
+    for (const f of ["src/app/page.tsx", "src/app/WorkforceCharts.tsx"]) {
+      const code = readFileSync(f, "utf8")
+        .split("\n")
+        .filter((l) => !/^\s*(\/\/|\{\/\*)/.test(l))
+        .join("\n");
+      expect(code, f).not.toMatch(/integrity|score|percent|employmentStatus\(|representative/i);
+    }
   });
 });
 
@@ -149,15 +181,24 @@ describe("Visual refresh (owner-approved post-freeze refinement, 2026-10-12)", (
     expect(greeting(undefined, 15)).toBe("Welcome to Eme People");
   });
 
-  it("four summary cards from existing data only; Needs Attention links to the canonical filter only when it has records", () => {
+  it("summary cards (owner-approved refresh): Total Employees = Active, Active, On Leave unavailable, Needs Attention", () => {
     const d = dashboard({ needs_attention: { total: 4, rule_version: "r", by_requirement: [], records: [] } });
-    expect(summaryCards(d).map((c) => [c.label, c.count, c.href])).toEqual([
-      ["Active", 61, "/employees?employment_status=active"],
+    expect(summaryCards(d).map((c) => [c.label, c.count, c.href, c.hint])).toEqual([
+      ["Total Employees", 61, "/employees?employment_status=active", "Active employees only"],
+      ["Active", 61, "/employees?employment_status=active", "View in Employee List"],
+      ["On Leave", null, null, "Not available yet"], // "—", not a link, never 0
+      ["Needs Attention", 4, "/employees?operational_completeness=incomplete", "Review records"],
+    ]);
+    expect(ACTIVE_HREF).toBe("/employees?employment_status=active");
+    expect(summaryCards(d).every((c) => c.trend === null)).toBe(true); // no trend data: no fake growth
+    expect(summaryCards(dashboard()).at(-1)).toMatchObject({ count: 0, href: null });
+  });
+
+  it("Pre-start and Ended stay reachable as subdued links (no summary cards)", () => {
+    expect(statusLinks(dashboard()).map((l) => [l.label, l.count, l.href])).toEqual([
       ["Pre-start", 3, "/employees?employment_status=not_started"],
       ["Ended", 14, "/employees?employment_status=ended"],
-      ["Needs Attention", 4, "/employees?operational_completeness=incomplete"],
     ]);
-    expect(summaryCards(dashboard()).at(-1)).toMatchObject({ count: 0, href: null });
   });
 
   it("timeline rows carry the server event type and a time-zone-free day / month block", () => {
@@ -175,8 +216,50 @@ describe("Visual refresh (owner-approved post-freeze refinement, 2026-10-12)", (
       .join("\n")
       .replace('import { ContractAttention } from "./ContractAttention";', "")
       .replace('{session?.can("contracts.read") && <ContractAttention />}', "");
-    expect(code).not.toMatch(/leave|payroll|contract|recruit|performance|turnover|trend|headcount|total employees|wfh/i);
-    expect(JSON.stringify(en.home)).not.toMatch(/total employees|on leave|trend|turnover|this month/i);
+    // Owner-approved refresh: Total Employees (= Active) and an On Leave placeholder; still no payroll, recruitment,
+    // performance or turnover content and no trend values (trend slots render "—" only).
+    expect(code).not.toMatch(/payroll|contract|recruit|performance|turnover|headcount|wfh/i);
+    expect(JSON.stringify(en.home)).not.toMatch(/turnover|this month|vs last month|growth/i);
+    expect(en.home.card.total).toBe("Total Employees");
+    expect(en.home.unavailableNote).toBe("— means the data is not available yet.");
     expect(en.home.needsNote).toContain("Record Health");
+  });
+});
+
+describe("Workforce charts (owner-approved Home refresh)", () => {
+  it("Employees by Department: server groups as-is, Not assigned kept (not a link), real values link to the Active list filter", () => {
+    const c = departmentChart(dashboard());
+    expect(c.total).toBe(61);
+    expect(c.items.map((i) => [i.label, i.count, i.href, i.color])).toEqual([
+      ["Engineering", 50, "/employees?employment_status=active&department_id=d-eng", "chart-1"],
+      ["Quality Assurance", 9, "/employees?employment_status=active&department_id=d-qa", "chart-2"],
+      ["Not assigned", 2, null, "chart-none"],
+    ]);
+    expect(c.items.reduce((a, i) => a + i.count, 0)).toBe(c.total);
+  });
+  it("Employee Type (not Employment Status): actual catalog values only", () => {
+    const c = employeeTypeChart(dashboard());
+    expect(c.items.map((i) => [i.label, i.count, i.href])).toEqual([
+      ["Employee", 55, "/employees?employment_status=active&employee_type_id=t-emp"],
+      ["Service Contractor", 6, "/employees?employment_status=active&employee_type_id=t-sc"],
+    ]);
+    expect(en.home.chart.typeTitle).toBe("Employee Type");
+    expect(JSON.stringify(en.home.chart)).not.toMatch(/Official|Probation|Employment Status/);
+  });
+  it("geometry only: donut arcs cover the circle in server order; columns scale to the largest group; zero data draws nothing", () => {
+    const c = departmentChart(dashboard());
+    const segs = donutSegments(c.items, c.total);
+    expect(segs.map((s) => Math.round(s.offset * 100) / 100)).toEqual([0, 81.97, 96.72]);
+    expect(Math.round(segs.reduce((a, s) => a + s.length, 0))).toBe(100);
+    expect(columnHeight(55, employeeTypeChart(dashboard()).items)).toBe(100);
+    expect(donutSegments([], 0)).toEqual([]);
+    expect(columnHeight(0, [])).toBe(0);
+    expect(en.home.chart.empty).toBe("No active employees on this date.");
+    expect(en.home.chart.asOf).toBe("Active employees as of {date}");
+  });
+  it("percentages are not shown: the legend shows the count and '(—)'", () => {
+    const src = readFileSync("src/app/WorkforceCharts.tsx", "utf8");
+    expect(src).toContain("(—)");
+    expect(src).not.toMatch(/toFixed|%\)/);
   });
 });

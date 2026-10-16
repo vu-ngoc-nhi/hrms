@@ -39,14 +39,72 @@ export function greeting(name: string | null | undefined, hour: number | null): 
   return t(`home.greeting.${greetingPart(hour)}`, { name: display });
 }
 
-/** Summary cards: the three snapshot statuses plus Needs Attention, each linking only to an existing list filter. */
-export function summaryCards(d: Dashboard) {
+export const ACTIVE_HREF = listHref({ employment_status: "active" });
+
+/**
+ * Summary cards (owner-approved Home refresh): Total Employees, Active, On Leave, Needs Attention.
+ * Total Employees IS Active (people whose current Employment Status is Active, each once) — the server's
+ * workforce.total — so both cards open the Active Employee List. On Leave has no data yet: `count: null` renders "—",
+ * the card is not a link and never shows 0. `trend` is a reserved slot; null = not available (rendered "—", no arrows).
+ */
+export type SummaryCard = { key: string; tone: string; label: string; count: number | null; href: string | null; hint: string; trend: null };
+export function summaryCards(d: Dashboard): SummaryCard[] {
   const needs = d.needs_attention.total;
   return [
-    ...snapshotView(d).map((m) => ({ key: m.status, tone: m.status, label: m.label, count: m.count, href: m.href, hint: t("home.cardHint.employees") })),
-    { key: "needs_attention", tone: "attention", label: t("home.needsTitle"), count: needs, href: needs > 0 ? NEEDS_ATTENTION_HREF : null, hint: t("home.cardHint.review") },
+    { key: "total", tone: "total", label: t("home.card.total"), count: d.workforce.total, href: ACTIVE_HREF, hint: t("home.card.totalHint"), trend: null },
+    { key: "active", tone: "active", label: t("employmentStatus.active"), count: d.snapshot.active, href: ACTIVE_HREF, hint: t("home.cardHint.employees"), trend: null },
+    { key: "on_leave", tone: "unavailable", label: t("home.card.onLeave"), count: d.workforce.on_leave, href: null, hint: t("home.notAvailable"), trend: null },
+    { key: "needs_attention", tone: "attention", label: t("home.needsTitle"), count: needs, href: needs > 0 ? NEEDS_ATTENTION_HREF : null, hint: t("home.cardHint.review"), trend: null },
   ];
 }
+
+/** Pre-start and Ended stay reachable (subdued links to the canonical list filters), without summary cards. */
+export const statusLinks = (d: Dashboard) =>
+  snapshotView(d)
+    .filter((m) => m.status !== "active")
+    .map((m) => ({ key: m.status, label: m.label, count: m.count, href: m.href }));
+
+// ---- Workforce charts (Active people only; numbers from the server's workforce block) ----------------------------
+export const CHART_COLORS = 8;
+export type ChartItem = { key: string; label: string; count: number; href: string | null; color: string; unassigned: boolean };
+
+function chartItems(groups: { ref: { id: string; name: string } | null; count: number }[], filter: "department_id" | "employee_type_id"): ChartItem[] {
+  let palette = 0;
+  return groups.map((g) => ({
+    key: g.ref?.id ?? "not-assigned",
+    label: g.ref?.name ?? t("home.chart.notAssigned"),
+    count: g.count,
+    // A real catalog value opens the matching Active Employee List filter (same rules, so the list shows this count);
+    // "Not assigned" has no list filter, so it is not a link.
+    href: g.ref ? listHref({ employment_status: "active", [filter]: g.ref.id }) : null,
+    color: g.ref ? `chart-${(palette++ % CHART_COLORS) + 1}` : "chart-none",
+    unassigned: g.ref === null,
+  }));
+}
+
+export function departmentChart(d: Dashboard) {
+  return { total: d.workforce.total, asOf: d.status_as_of, items: chartItems(d.workforce.by_department.map((g) => ({ ref: g.department, count: g.count })), "department_id") };
+}
+export function employeeTypeChart(d: Dashboard) {
+  return { total: d.workforce.total, asOf: d.status_as_of, items: chartItems(d.workforce.by_employee_type.map((g) => ({ ref: g.employee_type, count: g.count })), "employee_type_id") };
+}
+
+/** Donut geometry only (arc lengths on a 100-unit circle); the counts are the server's. */
+export function donutSegments(items: ChartItem[], total: number) {
+  let offset = 0;
+  return items.map((i) => {
+    const length = total > 0 ? (i.count / total) * 100 : 0;
+    const seg = { key: i.key, color: i.color, length, offset };
+    offset += length;
+    return seg;
+  });
+}
+
+/** Column heights relative to the largest group (geometry only). */
+export const columnHeight = (count: number, items: ChartItem[]) => {
+  const max = Math.max(0, ...items.map((i) => i.count));
+  return max > 0 ? Math.max(4, Math.round((count / max) * 100)) : 0;
+};
 
 export const requirementLabel = (code: OperationalItemCode) => t(`completeness.items.${code}`);
 

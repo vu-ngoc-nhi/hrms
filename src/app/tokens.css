@@ -42,6 +42,19 @@
   --color-danger-border: rgba(180, 35, 24, 0.16);
   --color-info-border: rgba(31, 95, 168, 0.14);
 
+  /* ---- Chart palette (Home workforce charts): brand red first, then distinct hues; "none" = Not assigned ---- */
+  --chart-1: #c8102e;
+  --chart-2: #1f5fa8;
+  --chart-3: #2a8c8c;
+  --chart-4: #e0663c;
+  --chart-5: #7b4fb8;
+  --chart-6: #d9709e;
+  --chart-7: #8a6d1f;
+  --chart-8: #4a7a2e;
+  --chart-none: #cdd1d9;
+  --chart-column: #e9636d;
+  --chart-grid: #eceef2;
+
   /* ---- Focus ---- */
   --focus-ring: 0 0 0 3px rgba(200, 16, 46, 0.28);
 

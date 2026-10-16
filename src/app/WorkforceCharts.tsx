@@ -1,0 +1,112 @@
+import Link from "next/link";
+import { formatDate, t } from "@/i18n";
+import { columnHeight, donutSegments, type ChartItem } from "./homeModel";
+
+// Owner-approved Home refresh: two Active-only workforce charts. Every count comes from the server's `workforce`
+// block (all people, same business date and projection as the Employee List); this file only draws them. Plain SVG /
+// CSS — no chart library. Percentages are not available yet: the legend shows the count and a "—" in their place.
+type Chart = { total: number; asOf: string; items: ChartItem[] };
+
+function ChartHeader({ id, title, asOf }: { id: string; title: string; asOf: string }) {
+  return (
+    <div className="home-panel-header home-chart-header">
+      <div className="home-panel-heading">
+        <h2 id={id}>{title}</h2>
+        <p className="home-panel-note">{t("home.chart.asOf", { date: formatDate(asOf) })}</p>
+      </div>
+    </div>
+  );
+}
+
+function ItemLabel({ item }: { item: ChartItem }) {
+  const text = (
+    <span className="home-chart-name" title={item.label}>
+      {item.label}
+    </span>
+  );
+  return item.href ? (
+    <Link href={item.href} aria-label={t("home.chart.itemLink", { label: item.label, count: item.count })}>
+      {text}
+    </Link>
+  ) : (
+    text
+  );
+}
+
+export function DepartmentDonut({ chart }: { chart: Chart }) {
+  const segments = donutSegments(chart.items, chart.total);
+  const summary = chart.items.map((i) => `${i.label} ${i.count}`).join(", ");
+  return (
+    <section className="card home-panel home-chart" aria-labelledby="home-chart-department">
+      <ChartHeader id="home-chart-department" title={t("home.chart.departmentTitle")} asOf={chart.asOf} />
+      {chart.total === 0 ? (
+        <p className="muted home-empty">{t("home.chart.empty")}</p>
+      ) : (
+        <div className="home-donut-layout">
+          <div className="home-donut" role="img" aria-label={t("home.chart.departmentSummary", { items: summary })}>
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle className="home-donut-track" cx="60" cy="60" r="46" pathLength={100} />
+              {segments.map((s) => (
+                <circle
+                  key={s.key}
+                  className={`home-donut-segment ${s.color}`}
+                  cx="60"
+                  cy="60"
+                  r="46"
+                  pathLength={100}
+                  strokeDasharray={`${s.length} ${100 - s.length}`}
+                  strokeDashoffset={-s.offset}
+                />
+              ))}
+            </svg>
+            <span className="home-donut-center">
+              <strong>{chart.total}</strong>
+              <span>{t("home.chart.centerLabel")}</span>
+            </span>
+          </div>
+          <ul className="home-chart-legend">
+            {chart.items.map((i) => (
+              <li key={i.key} className={i.unassigned ? "unassigned" : undefined}>
+                <span className={`home-chart-dot ${i.color}`} aria-hidden="true" />
+                <ItemLabel item={i} />
+                <span className="home-chart-value">
+                  <strong>{i.count}</strong>
+                  <span className="home-chart-share" title={t("home.chart.shareUnavailable")}>
+                    (—)<span className="sr-only">{t("home.chart.shareUnavailable")}</span>
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function EmployeeTypeColumns({ chart }: { chart: Chart }) {
+  const summary = chart.items.map((i) => `${i.label} ${i.count}`).join(", ");
+  return (
+    <section className="card home-panel home-chart" aria-labelledby="home-chart-type">
+      <ChartHeader id="home-chart-type" title={t("home.chart.typeTitle")} asOf={chart.asOf} />
+      {chart.total === 0 ? (
+        <p className="muted home-empty">{t("home.chart.empty")}</p>
+      ) : (
+        <div className="home-columns-scroll">
+          <ol className="home-columns" aria-label={t("home.chart.typeSummary", { items: summary })} style={{ ["--columns" as string]: chart.items.length }}>
+            {chart.items.map((i) => (
+              <li key={i.key} className={i.unassigned ? "unassigned" : undefined}>
+                <span className="home-column-plot">
+                  <span className="home-column-bar" style={{ height: `${columnHeight(i.count, chart.items)}%` }}>
+                    <span className="home-column-count">{i.count}</span>
+                  </span>
+                </span>
+                <ItemLabel item={i} />
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </section>
+  );
+}

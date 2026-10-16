@@ -4,23 +4,33 @@ import Link from "next/link";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { initials, useSession } from "@/components/AppShell";
 import { Button, EmptyState, StatusBadge } from "@/components/ui";
-import { IconAttention, IconBars, IconCalendar, IconUserCheck, IconUserClock, IconUserMinus } from "@/components/ui/icons";
+import { IconAttention, IconCalendar, IconUserCheck, IconUsers } from "@/components/ui/icons";
 import { formatDate, formatDayMonth, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import { ContractAttention } from "./ContractAttention";
-import { greeting, homeCapabilities, needsAttentionView, snapshotView, summaryCards, upcomingView, type Dashboard } from "./homeModel";
+import { departmentChart, employeeTypeChart, greeting, homeCapabilities, needsAttentionView, statusLinks, summaryCards, upcomingView, type Dashboard, type SummaryCard } from "./homeModel";
+import { DepartmentDonut, EmployeeTypeColumns } from "./WorkforceCharts";
 
 // UI-1 Home / Action Center (PV-30), visual refresh (owner-approved post-freeze refinement, 2026-10-12): greeting,
-// four summary cards, Needs Attention, Upcoming — next 30 days and a proportional Workforce Snapshot bar. Same single
-// request and the same server-decided numbers; no new data, no department breakdown, no trends (BD-H2 … BD-H4).
+// summary cards, Needs Attention and Upcoming — next 30 days. One request; every number is decided by the server.
 // Phase 2A slice 2A-4 (C-113): one Contract Attention section below the existing panels, only with contracts.read.
+// Owner-approved Home dashboard refresh (C-119): Total Employees / Active / On Leave / Needs Attention cards, two
+// Active-only workforce charts, then Needs Attention and Upcoming; Pre-start / Ended as subdued list links. "—" marks
+// data that is not available yet (On Leave, trends, percentages) — never 0, arrows or filled rings.
 
 const CARD_ICONS: Record<string, ReactNode> = {
+  total: <IconUsers />,
   active: <IconUserCheck />,
-  not_started: <IconUserClock />,
-  ended: <IconUserMinus />,
+  unavailable: <IconCalendar />,
   attention: <IconAttention />,
 };
+
+function cardLabel(c: SummaryCard): string | undefined {
+  if (c.count === null) return undefined;
+  if (c.key === "total") return t("home.card.totalLabel", { count: c.count });
+  if (c.key === "active") return t("home.card.activeLabel", { count: c.count });
+  return t("home.needsCardLabel", { count: c.count });
+}
 
 export default function HomePage() {
   const session = useSession();
@@ -88,11 +98,10 @@ export default function HomePage() {
   }
 
   const cards = summaryCards(data);
-  const snapshot = snapshotView(data);
-  const snapshotTotal = snapshot.reduce((sum, m) => sum + m.count, 0);
+  const others = statusLinks(data);
   const needs = needsAttentionView(data);
   const upcoming = upcomingView(data);
-  const noRecords = snapshotTotal === 0 && needs.total === 0;
+  const noRecords = data.snapshot.active + data.snapshot.not_started + data.snapshot.ended === 0 && needs.total === 0;
 
   return (
     <div className="home">
@@ -103,17 +112,31 @@ export default function HomePage() {
         {cards.map((c) => {
           const body = (
             <>
-              <span className="home-stat-top">
-                <span className="home-stat-icon">{CARD_ICONS[c.tone]}</span>
-                <span className="home-stat-label">{c.label}</span>
+              <span className="home-stat-main">
+                <span className="home-stat-top">
+                  <span className="home-stat-label">{c.label}</span>
+                  {/* Reserved trend slot: no trend data yet, so a neutral "—" (never an arrow or a percentage). */}
+                  {c.count !== null && (
+                    <span className="home-stat-trend" title={t("home.trendUnavailable")}>
+                      —<span className="sr-only">{t("home.trendUnavailable")}</span>
+                    </span>
+                  )}
+                </span>
+                <span className={c.count === null ? "home-stat-count unavailable" : "home-stat-count"}>
+                  {c.count ?? "—"}
+                </span>
+                <span className="home-stat-hint">
+                  {c.hint}
+                  {c.href && " →"}
+                </span>
               </span>
-              <span className="home-stat-count">{c.count}</span>
-              {c.href && <span className="home-stat-hint">{c.hint} →</span>}
+              <span className="home-stat-icon" aria-hidden="true">
+                {CARD_ICONS[c.tone]}
+              </span>
             </>
           );
-          const label = c.key === "needs_attention" ? t("home.needsCardLabel", { count: c.count }) : t("home.snapshotLink", { label: c.label, count: c.count });
           return c.href ? (
-            <Link key={c.key} href={c.href} className={`home-stat ${c.tone}`} aria-label={label}>
+            <Link key={c.key} href={c.href} className={`home-stat ${c.tone}`} aria-label={cardLabel(c)}>
               {body}
             </Link>
           ) : (
@@ -123,6 +146,17 @@ export default function HomePage() {
           );
         })}
       </section>
+      <p className="home-status-links" aria-label={t("home.statusLinksLabel")}>
+        {others.map((o, i) => (
+          <span key={o.key}>
+            {i > 0 && <span aria-hidden="true"> · </span>}
+            <Link href={o.href} aria-label={t("home.snapshotLink", { label: o.label, count: o.count })}>
+              {t("home.statusLink", { label: o.label, count: o.count })}
+            </Link>
+          </span>
+        ))}
+        <span className="home-unavailable-note">{t("home.unavailableNote")}</span>
+      </p>
 
       {noRecords ? (
         <EmptyState
@@ -136,8 +170,12 @@ export default function HomePage() {
           }
         />
       ) : (
-        <div className="home-main">
-          <div className="home-col">
+        <>
+          <div className="home-charts">
+            <DepartmentDonut chart={departmentChart(data)} />
+            <EmployeeTypeColumns chart={employeeTypeChart(data)} />
+          </div>
+          <div className="home-main">
             <section className="card home-panel" aria-labelledby="home-needs">
               <div className="home-panel-header">
                 <span className="home-panel-icon attention">
@@ -191,77 +229,47 @@ export default function HomePage() {
               )}
             </section>
 
-            <section className="card home-panel" aria-labelledby="home-snapshot">
+            <section className="card home-panel" aria-labelledby="home-upcoming">
               <div className="home-panel-header">
-                <span className="home-panel-icon">
-                  <IconBars />
+                <span className="home-panel-icon info">
+                  <IconCalendar />
                 </span>
                 <div className="home-panel-heading">
-                  <h2 id="home-snapshot">{t("home.snapshotTitle")}</h2>
-                  <p className="home-panel-note">{t("home.snapshotNote")}</p>
+                  <h2 id="home-upcoming">{t("home.upcomingTitle")}</h2>
+                  <p className="home-panel-note">{t("home.upcomingWindow")}</p>
                 </div>
               </div>
-              {snapshotTotal > 0 && (
-                <div className="home-bar" role="img" aria-label={t("home.snapshotBarLabel", { items: snapshot.map((m) => `${m.label} ${m.count}`).join(", ") })}>
-                  {snapshot
-                    .filter((m) => m.count > 0)
-                    .map((m) => (
-                      <span key={m.status} className={`home-bar-segment ${m.status}`} style={{ flexGrow: m.count }} />
-                    ))}
-                </div>
+              {upcoming.empty ? (
+                <p className="muted home-empty">{t("home.upcoming.empty")}</p>
+              ) : (
+                <>
+                  <ol className="home-timeline">
+                    {upcoming.rows.map((u) => {
+                      const dm = formatDayMonth(u.date);
+                      return (
+                        <li key={u.key}>
+                          <Link href={u.href} className="home-timeline-row">
+                            <time className="home-date" dateTime={u.date} aria-label={formatDate(u.date)}>
+                              <span className="home-date-day">{dm.day}</span>
+                              <span className="home-date-month">{dm.month}</span>
+                            </time>
+                            <span className="home-row-main">
+                              <span className={`home-event ${u.type}`}>{u.title}</span>
+                              <span className="home-row-name">{u.name}</span>
+                              <span className="home-row-code"> · {u.code}</span>
+                              {u.detail && <span className="home-row-detail">{u.detail}</span>}
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  {upcoming.overflow && <p className="muted small home-overflow">{upcoming.overflow}</p>}
+                </>
               )}
-              <ul className="home-legend">
-                {snapshot.map((m) => (
-                  <li key={m.status}>
-                    <span className={`home-legend-dot ${m.status}`} aria-hidden="true" />
-                    <span>{m.label}</span>
-                    <strong>{m.count}</strong>
-                  </li>
-                ))}
-              </ul>
             </section>
           </div>
-
-          <section className="card home-panel" aria-labelledby="home-upcoming">
-            <div className="home-panel-header">
-              <span className="home-panel-icon info">
-                <IconCalendar />
-              </span>
-              <div className="home-panel-heading">
-                <h2 id="home-upcoming">{t("home.upcomingTitle")}</h2>
-                <p className="home-panel-note">{t("home.upcomingWindow")}</p>
-              </div>
-            </div>
-            {upcoming.empty ? (
-              <p className="muted home-empty">{t("home.upcoming.empty")}</p>
-            ) : (
-              <>
-                <ol className="home-timeline">
-                  {upcoming.rows.map((u) => {
-                    const dm = formatDayMonth(u.date);
-                    return (
-                      <li key={u.key}>
-                        <Link href={u.href} className="home-timeline-row">
-                          <time className="home-date" dateTime={u.date} aria-label={formatDate(u.date)}>
-                            <span className="home-date-day">{dm.day}</span>
-                            <span className="home-date-month">{dm.month}</span>
-                          </time>
-                          <span className="home-row-main">
-                            <span className={`home-event ${u.type}`}>{u.title}</span>
-                            <span className="home-row-name">{u.name}</span>
-                            <span className="home-row-code"> · {u.code}</span>
-                            {u.detail && <span className="home-row-detail">{u.detail}</span>}
-                          </span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ol>
-                {upcoming.overflow && <p className="muted small home-overflow">{upcoming.overflow}</p>}
-              </>
-            )}
-          </section>
-        </div>
+        </>
       )}
 
       {session?.can("contracts.read") && <ContractAttention />}

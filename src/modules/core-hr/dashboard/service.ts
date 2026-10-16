@@ -3,6 +3,8 @@
 //   snapshot         → personProjection (the Employee List's status: representativeEmployment + employmentStatus)
 //   needs attention  → personProjection's completenessView (the Employee List's operational_completeness)
 //   upcoming         → employments/upcoming.ts (the Employee Detail Overview's Upcoming Changes)
+//   workforce        → personProjection again (owner-approved Home refresh): Active people only, by the Department of the
+//                      assignment in effect today (the list's Department rule) and the active period's Employee Type
 // Operational periods (`operationalEmploymentWhere`) and operational assignments (`operationalAssignmentWhere`, PV-29)
 // are filtered at load time, so cancelled / voided periods and cancelled planned assignments never reach any section.
 // One business date (Asia/Ho_Chi_Minh) per request; one read snapshot; the whole response succeeds or fails.
@@ -63,10 +65,26 @@ export function assembleDashboard(people: readonly DashboardPerson[], today: str
   const byRequirement = new Map<OperationalItemCode, number>();
   const attention: { rank: number; start: string; record: CoreHrDashboard["needs_attention"]["records"][number] }[] = [];
   const upcoming: UpcomingItem[] = [];
+  const byDepartment = new Map<string, { ref: { id: string; code: string; name: string } | null; count: number }>();
+  const byType = new Map<string, { ref: { id: string; code: string; name: string } | null; count: number }>();
+  const tally = (m: typeof byDepartment, ref: { id: string; code: string; name: string } | null) => {
+    const k = ref?.id ?? "";
+    const row = m.get(k) ?? { ref, count: 0 };
+    row.count += 1;
+    m.set(k, row);
+  };
 
   for (const p of people) {
     const projection = personProjection(p, today);
     if (projection.status !== "no_employment") snapshot[projection.status] += 1;
+    // Workforce breakdowns: Active only (inclusive last working day, as employmentStatus). For an Active person the
+    // projection's period is the active one and its assignment is the one in effect today — never a future one.
+    if (projection.status === "active") {
+      const a = projection.assignment;
+      tally(byDepartment, a ? { id: a.department.id, code: a.department.code, name: a.department.name } : null);
+      const et = projection.period?.employeeType ?? null;
+      tally(byType, et ? { id: et.id, code: et.code, name: et.name } : null);
+    }
 
     const missing = projection.completeness.items.filter((i) => !i.satisfied).map((i) => i.code);
     if (projection.completeness.status === "incomplete") {
@@ -111,7 +129,20 @@ export function assembleDashboard(people: readonly DashboardPerson[], today: str
       records: attention.slice(0, NEEDS_ATTENTION_PREVIEW).map((a) => a.record),
     },
     upcoming: { window_days: UPCOMING_WINDOW_DAYS, from: today, to, total: upcoming.length, items: upcoming.slice(0, UPCOMING_PREVIEW) },
+    workforce: {
+      total: snapshot.active,
+      by_department: groups(byDepartment).map((g) => ({ department: g.ref, count: g.count })),
+      by_employee_type: groups(byType).map((g) => ({ employee_type: g.ref, count: g.count })),
+      on_leave: null, // no leave data in this version: unavailable, never 0
+    },
   };
+}
+
+/** Largest group first, then name, then code; Not assigned (null) last. */
+function groups<R extends { name: string; code: string }>(m: Map<string, { ref: R | null; count: number }>) {
+  return [...m.values()].sort(
+    (a, b) => Number(a.ref === null) - Number(b.ref === null) || b.count - a.count || cmp(a.ref?.name ?? "", b.ref?.name ?? "") || cmp(a.ref?.code ?? "", b.ref?.code ?? ""),
+  );
 }
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
