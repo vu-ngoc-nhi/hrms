@@ -184,6 +184,14 @@ export const EMPTY_CONTRACT: ContractStepValues = { enabled: false, contract_typ
 /** Effective From shown and sent: HR's own date, otherwise the Employment Start Date. */
 export const contractEffectiveFrom = (v: WizardValues, c: ContractStepValues) => c.effective_from ?? v.start_date;
 export const contractRequested = (c: ContractStepValues) => c.enabled;
+/** A Contract Draft request is made only with contracts.manage AND the checkbox on — never otherwise. */
+export const wantsContractDraft = (caps: { createContract: boolean }, c: ContractStepValues) => caps.createContract && c.enabled;
+/**
+ * The Review's Contract Draft section: "hidden" without contracts.manage (the Phase 1 four-step Review, no contract
+ * section at all); "none" when the optional Draft is off; "draft" when one will be created.
+ */
+export const contractReviewMode = (caps: { createContract: boolean }, c: ContractStepValues): "hidden" | "none" | "draft" =>
+  !caps.createContract ? "hidden" : c.enabled ? "draft" : "none";
 
 /** Convenience checks only (the Contract API re-validates against the period actually created). */
 export function contractErrors(v: WizardValues, c: ContractStepValues): Partial<Record<ContractField, string>> {

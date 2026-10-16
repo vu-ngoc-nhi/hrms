@@ -9,7 +9,10 @@ import { buildPayload, contractDraftBody, EMPTY_CONTRACT, EMPTY_VALUES, type Con
 import { addDays, todayInVietnam } from "@/lib/dates";
 import { ApiCallError } from "@/lib/client/api";
 import { db } from "@/lib/db";
-import { call, catalogIds, key, type TestUser } from "../helpers";
+import { EmployeeCreateSchema } from "@/contracts/core-hr/schemas";
+import { createEmployee } from "@/modules/core-hr/people/service";
+import { wantsContractDraft, wizardCapabilities } from "@/app/employees/new/wizardModel";
+import { call, catalogIds, key, principalWith, type TestUser } from "../helpers";
 
 // Slice 2A-6: Add Employee + optional Contract Draft, end to end. The browser's own submission module
 // (onboardingSubmit.ts) runs against the real route handlers on hrms_test, so the two-operation model, the separate
@@ -193,5 +196,82 @@ describe("Separate idempotency scopes", () => {
       submitOnboarding(srv.post, { employeePayload: JSON.stringify(buildPayload(v, ALL)), employeeKey: shared, startDate: v.start_date, contract: { key: shared, body: () => ({}) } }),
     ).rejects.toThrow(/separate Idempotency-Keys/);
     expect(srv.calls).toHaveLength(0); // refused before any request
+  });
+});
+
+describe("Owner close-out checks for 2A-6", () => {
+  it("1. without contracts.manage: Add Employee works unchanged and no Contract request is sent", async () => {
+    const perms = ["employees.read", "employees.read_personal", "employees.create", "employees.write_personal", "employment.manage", "catalogs.read"] as const;
+    const principal = await principalWith("editor", [...perms]);
+    const caps = wizardCapabilities((p) => (perms as readonly string[]).includes(p));
+    expect(caps).toMatchObject({ create: true, createContract: false });
+    const calls: string[] = [];
+    // Transport: the Add Employee service as this principal; a Contract call would be recorded and fail the test.
+    const post: PostFn = async (path, body, idempotencyKey) => {
+      calls.push(path);
+      if (path !== EMPLOYEES_PATH) throw new Error("no Contract request may be sent");
+      return (await createEmployee(principal, EmployeeCreateSchema.parse(JSON.parse(body)), idempotencyKey, "req-2a6-noperm")).body;
+    };
+    const v = person({ department_id: ids.d.ENG, job_title_id: ids.j.SE });
+    const stale = contract(); // even an "on" value left in state is ignored without the permission
+    const outcome = await submitOnboarding(post, {
+      employeePayload: JSON.stringify(buildPayload(v, ALL)),
+      employeeKey: key("noperm"),
+      startDate: v.start_date,
+      contract: wantsContractDraft(caps, stale) ? { key: key("never"), body: (id) => contractDraftBody(id, v, stale) } : null,
+    });
+    expect(outcome).toMatchObject({ kind: "employee_created", contract: null });
+    expect(calls).toEqual([EMPLOYEES_PATH]);
+    const personId = (outcome as { personId: string }).personId;
+    expect(await db().employment.count({ where: { personId } })).toBe(1);
+    expect(await db().jobAssignment.count({ where: { employment: { personId } } })).toBe(1); // not degraded: period + assignment as before
+    expect(await db().contract.count({ where: { employment: { personId } } })).toBe(0);
+  });
+
+  it("2. separate idempotency: Employee POST once; Contract POST fails; Retry sends only the Contract operation with the contract key", async () => {
+    const v = person();
+    const keys = { employee: key("emp-idem"), contract: key("ctr-idem") };
+    const bad = contract({ effective_from: addDays(today, 5) }); // refused by the Contract API
+    const { outcome, srv } = await onboard(v, bad, server(), keys);
+    if (outcome.kind !== "employee_created" || outcome.contract?.status !== "failed") throw new Error(JSON.stringify(outcome));
+    const editor = (await db().appUser.findFirstOrThrow({ where: { displayName: "Test HR Editor" } })).id;
+    const records = async () =>
+      (await db().idempotencyRecord.findMany({ where: { actorUserId: editor, idempotencyKey: { in: [keys.employee, keys.contract] } } })).map((r) => `${r.operation}:${r.idempotencyKey === keys.employee ? "E" : "C"}`).sort();
+    // The rejected Contract request left its key unused; the employee key belongs to createEmployee only.
+    expect(await records()).toEqual(["createEmployee:E"]);
+
+    const fixed = { ...bad, effective_from: null };
+    const retry = await createContractDraft(srv.post, contractDraftBody(outcome.employmentId!, v, fixed), keys.contract);
+    if (retry.status !== "created") throw new Error(JSON.stringify(retry));
+    const again = await createContractDraft(srv.post, contractDraftBody(outcome.employmentId!, v, fixed), keys.contract); // double click / repeat
+    expect(again).toEqual(retry); // replayed: the same Draft
+    expect(srv.calls.map((x) => `${x.path === EMPLOYEES_PATH ? "employee" : "contract"}:${x.key === keys.employee ? "E" : "C"}`)).toEqual([
+      "employee:E",
+      "contract:C",
+      "contract:C",
+      "contract:C",
+    ]);
+    expect(await records()).toEqual(["createContract:C", "createEmployee:E"]);
+    expect(await employeeCount(v.full_name)).toBe(1);
+    expect(await db().contract.count({ where: { employmentId: outcome.employmentId! } })).toBe(1);
+  });
+
+  it("3. the Draft links to the Employment Period id returned by the successful Add Employee response — nothing else", async () => {
+    const v = person();
+    const responses: unknown[] = [];
+    const base = server();
+    const post: PostFn = async (path, body, k) => {
+      const r = await base.post(path, body, k);
+      responses.push(r);
+      return r;
+    };
+    const { outcome } = await onboard(v, contract(), { post, calls: base.calls });
+    if (outcome.kind !== "employee_created" || outcome.contract?.status !== "created") throw new Error(JSON.stringify(outcome));
+    const returnedPeriod = (responses[0] as { employments: { id: string }[] }).employments[0].id;
+    expect(outcome.employmentId).toBe(returnedPeriod);
+    expect(base.calls[1].body.employment_id).toBe(returnedPeriod);
+    expect(base.calls.map((c) => c.path)).toEqual([EMPLOYEES_PATH, CONTRACTS_PATH]); // no lookup of a "current" period in between
+    const draft = await db().contract.findUniqueOrThrow({ where: { id: outcome.contract.contractId }, include: { employment: true } });
+    expect([draft.employmentId, draft.employment.personId]).toEqual([returnedPeriod, outcome.personId]);
   });
 });

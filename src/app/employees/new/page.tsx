@@ -19,6 +19,7 @@ import {
   contractDraftBody,
   contractEffectiveFrom,
   contractErrors,
+  contractReviewMode,
   createdHref,
   hasAssignmentInput,
   hasEmployment,
@@ -28,6 +29,7 @@ import {
   stepErrors,
   stepsFor,
   wizardCapabilities,
+  wantsContractDraft,
   wizardReducer,
   workEmailExpected,
   type ContractField,
@@ -193,7 +195,7 @@ export default function NewEmployeePage() {
     const payloadText = JSON.stringify(buildPayload(v, caps));
     // The same content reuses the same Idempotency-Key, so saving again after a lost response never creates a duplicate.
     if (!attempt.current || attempt.current.payload !== payloadText) attempt.current = { key: crypto.randomUUID(), payload: payloadText };
-    const wantsContract = caps.createContract && c.enabled;
+    const wantsContract = wantsContractDraft(caps, c);
     if (wantsContract && !contractKey.current) contractKey.current = crypto.randomUUID();
     savingRef.current = true;
     dispatch({ type: "saveStart" });
@@ -434,7 +436,8 @@ export default function NewEmployeePage() {
         ],
         hasEmployment(v) && v.department_id && v.job_title_id ? undefined : t("wizard.noAssignmentReview"),
       )}
-      {reviewSection(
+      {contractReviewMode(caps, c) !== "hidden" &&
+        reviewSection(
         "contract",
         t("wizard.review.contractTitle"),
         [
@@ -444,11 +447,11 @@ export default function NewEmployeePage() {
           [t("contracts.fields.effectiveFrom"), contractEffectiveFrom(v, c) ? formatDate(contractEffectiveFrom(v, c)) : ""],
           [t("contracts.form.termLabel"), c.term === "open" ? t("contracts.openEnded") : c.effective_to ? formatDate(c.effective_to) : ""],
         ],
-        !caps.createContract ? t("wizard.review.contractUnavailable") : !c.enabled ? t("wizard.review.contractNone") : undefined,
+        contractReviewMode(caps, c) === "none" ? t("wizard.review.contractNone") : undefined,
       )}
       <p className="muted small">{t("wizard.healthNote")}</p>
       <p className="muted small">{t("wizard.saveNote")}</p>
-      {caps.createContract && c.enabled && <p className="muted small">{t("wizard.review.contractSeparate")}</p>}
+      {contractReviewMode(caps, c) === "draft" && <p className="muted small">{t("wizard.review.contractSeparate")}</p>}
     </>
   );
 

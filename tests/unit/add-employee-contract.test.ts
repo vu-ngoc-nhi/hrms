@@ -8,13 +8,16 @@ import {
   contractDraftBody,
   contractEffectiveFrom,
   contractErrors,
+  contractReviewMode,
   isDirty,
   stepsFor,
+  wantsContractDraft,
   wizardCapabilities,
   type ContractStepValues,
   type WizardValues,
 } from "@/app/employees/new/wizardModel";
 import { t } from "@/i18n";
+import { en } from "@/i18n/messages/en";
 import { ApiCallError } from "@/lib/client/api";
 
 // Slice 2A-6: optional Contract Draft in Add Employee — model, defaults, checks and the two-operation submission.
@@ -58,11 +61,26 @@ describe("Optionality and permissions", () => {
     // The employee request is the unchanged Phase 1 payload: no contract field ever enters it.
     expect(JSON.stringify(buildPayload(v(), { writePersonal: true, setCode: false }))).not.toMatch(/contract|effective_to|is_open_ended/);
   });
-  it("a user without contracts.manage gets a clear Review note, never a blocked save", () => {
-    expect(t("wizard.review.contractUnavailable")).toMatch(/Not available for your account.*the employee is saved as usual/);
-    const page = readFileSync("src/app/employees/new/page.tsx", "utf8");
-    expect(page).toContain('!caps.createContract ? t("wizard.review.contractUnavailable")');
-    expect(page).toContain("const wantsContract = caps.createContract && c.enabled;");
+  it("without contracts.manage: the Phase 1 four-step flow, no Contract section on Review, no Contract request, no Contract Type lookup", () => {
+    const caps = wizardCapabilities((p) => ["employees.create", "employees.write_personal"].includes(p));
+    expect(caps.createContract).toBe(false);
+    expect(stepsFor(caps)).toEqual(["personal", "employment", "assignment", "review"]);
+    expect(contractReviewMode(caps, EMPTY_CONTRACT)).toBe("hidden");
+    expect(contractReviewMode(caps, c())).toBe("hidden"); // even a stale "on" value never surfaces
+    expect(wantsContractDraft(caps, c())).toBe(false); // → submitOnboarding receives contract: null (one request)
+    const page = code("src/app/employees/new/page.tsx");
+    expect(page).toContain("const wantsContract = wantsContractDraft(caps, c);");
+    expect(page).toContain("contract: wantsContract ? {");
+    expect(page).toContain('contractReviewMode(caps, c) !== "hidden" &&');
+    expect(page).toContain("useContractTypes(caps.createContract)"); // no /contract-types call without the permission
+    expect(JSON.stringify(en.wizard.review)).not.toMatch(/Not available for your account/);
+  });
+  it("with contracts.manage: Review shows the optional section — 'none' when off, 'draft' when on", () => {
+    const caps = { createContract: true };
+    expect(contractReviewMode(caps, EMPTY_CONTRACT)).toBe("none");
+    expect(contractReviewMode(caps, c())).toBe("draft");
+    expect(wantsContractDraft(caps, EMPTY_CONTRACT)).toBe(false);
+    expect(wantsContractDraft(caps, c())).toBe(true);
   });
 });
 
@@ -106,6 +124,36 @@ describe("Contract Draft request", () => {
   });
   it("the Add Employee and Contract steps use only active Contract Types", () => {
     expect(readFileSync("src/app/employees/new/page.tsx", "utf8")).toContain('contractTypeOptions(typeRows ?? [], "new")');
+  });
+});
+
+describe("Authoritative Employment Period link (owner close-out check 3)", () => {
+  it("the body always carries the id returned by Add Employee; the form has no period/person field and cannot replace it", () => {
+    expect(Object.keys(EMPTY_CONTRACT)).not.toEqual(expect.arrayContaining(["employment_id"]));
+    expect(Object.keys(EMPTY_CONTRACT).some((k) => /employ|person|period/.test(k))).toBe(false);
+    const tampered = { ...c({ term: "open" }), employment_id: "browser-chosen", person_id: "someone-else" } as unknown as ContractStepValues;
+    const body = contractDraftBody("returned-period", v(), tampered);
+    expect(body.employment_id).toBe("returned-period");
+    expect(body).not.toHaveProperty("person_id");
+  });
+  it("submitOnboarding hands the RESPONSE's period id to the Contract body; no lookup by date, status or 'current employment'", async () => {
+    const response = { id: "p-9", employments: [{ id: "period-from-response", start_date: "2026-11-02" }] };
+    const seen: string[] = [];
+    const f = fake({ [EMPLOYEES_PATH]: () => response, [CONTRACTS_PATH]: () => ({ id: "k-9" }) });
+    await submitOnboarding(f.post, {
+      employeePayload: "{}",
+      employeeKey: "emp-key-0009",
+      startDate: "2026-11-02",
+      contract: { key: "ctr-key-0009", body: (id) => (seen.push(id), contractDraftBody(id, v(), c({ term: "open" }))) },
+    });
+    expect(seen).toEqual(["period-from-response"]);
+    expect(f.calls[1].body.employment_id).toBe("period-from-response");
+    // The module has no transport of its own (only the injected POST) and the page's retry reuses the stored id.
+    const mod = code("src/app/employees/new/onboardingSubmit.ts");
+    expect(mod).not.toMatch(/fetch\(|\bapi\(|\/employments|current_employment|employment_status/);
+    const page = code("src/app/employees/new/page.tsx");
+    expect(page).toContain("contractDraftBody(result.employmentId, v, c)");
+    expect(page).not.toMatch(/api<[^>]*>\(`\/api\/v1\/core-hr\/employees\/\$\{/); // never re-reads the employee to find a period
   });
 });
 

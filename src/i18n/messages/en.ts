@@ -288,7 +288,6 @@ export const en = {
       contractYes: "Will be created after the employee is saved",
       notAssigned: "Not assigned yet",
       contractNone: "No Contract Draft will be created. The employee does not need a contract to be saved.",
-      contractUnavailable: "Not available for your account. A Contract Draft can be prepared later by someone with contract permissions; the employee is saved as usual.",
       contractSeparate: "The Contract Draft is a separate step after the employee is saved. If it cannot be created, the employee stays saved and you can retry the Contract Draft.",
     },
     result: {
