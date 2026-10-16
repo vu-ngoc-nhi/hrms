@@ -167,7 +167,7 @@ The server is authoritative for document state, time state, allowed actions and 
 
 ### 4.2 Review items (warnings / Needs Review)
 
-`review.items[]` = `{ code, message, related_contract_id?, related_contract_number?, affected_from?, affected_to? }` (the last three are server-computed presentation facts added at owner acceptance, C-118: the other contract's number and the first / last business date concerned — overlapping days, uncovered gap days; they never enter the warning fingerprint; the same shape is used for `finalize_check.warnings` and the `FINALIZE_CONFIRMATION_REQUIRED` details); `needs_review` is true when any item exists. Computed on read for Finalized/Signed contracts and for contracts on an invalid period:
+`review.items[]` = `{ code, message, related_contract_id?, related_contract_number?, affected_from?, affected_to? }` (the last three are server-computed presentation facts added at owner acceptance, C-118: the other contract's number and the first / last business date concerned — overlapping days, uncovered gap days; `affected_from` / `affected_to` are part of the warning fingerprint (C-120), the number is not; the same shape is used for `finalize_check.warnings` and the `FINALIZE_CONFIRMATION_REQUIRED` details); `needs_review` is true when any item exists. Computed on read for Finalized/Signed contracts and for contracts on an invalid period:
 
 | Code | Meaning |
 |---|---|
@@ -185,7 +185,7 @@ The server is authoritative for document state, time state, allowed actions and 
   "ready": false,
   "blockers": [ { "field": "contract_number", "code": "REQUIRED", "message": "…" } ],
   "warnings": [ { "code": "ANOTHER_OPEN_DRAFT_FOR_PERIOD", "message": "…" } ],
-  "warning_fingerprint": "w1:3f9a…  (null when there are no warnings)"
+  "warning_fingerprint": "w2:3f9a…  (null when there are no warnings; C-120: SHA-256 of the sorted JSON facts code / related_contract_id / field / affected_from / affected_to of each warning)"
 }
 ```
 Blocker codes: `REQUIRED` (contract_type_id, contract_number, effective_from, term), `CONTRACT_TYPE_INACTIVE`, `EFFECTIVE_FROM_OUTSIDE_PERIOD`, `PERIOD_NOT_VALID`, `INVALID_TERM`, `RENEWAL_STARTS_BEFORE_PARENT` (2A-5). Warning codes: `OVERLAPPING_CONTRACT`, `GAP_AFTER_PREDECESSOR`, `RENEWAL_OVERLAPS_PREDECESSOR` (2A-5), `CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD`, `ANOTHER_OPEN_DRAFT_FOR_PERIOD`. The Finalize action re-evaluates; this block is a preview.
