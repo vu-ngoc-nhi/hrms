@@ -19,6 +19,25 @@ export const en = {
   ui: { close: "Close", required: "required", stepCompleted: "completed" },
   // UI-1 Home / Action Center (PV-30): labels for the dashboard's machine codes; no score, no headcount wording.
   home: {
+    // Phase 2A slice 2A-4: Contract Attention (one section; every signal says what HR should do).
+    contracts: {
+      title: "Contract Attention",
+      note: "Contracts that need an HR action. Expiring soon covers the next 30 days.",
+      expiringTitle: "Expiring soon",
+      expiringAction: "Decide what happens next: a new contract, a relationship change or ending employment.",
+      awaitingTitle: "Awaiting signature",
+      awaitingAction: "Confirm the signed date once all required parties have signed.",
+      reviewTitle: "Needs review",
+      reviewAction: "Check and correct the contract data.",
+      viewAll: "View all",
+      viewAllLabel: "View all {total} contracts: {title}",
+      none: "Nothing to do.",
+      endsToday: "Ends today",
+      endsInOne: "Ends in 1 day",
+      endsIn: "Ends in {days} days",
+      unavailable: "Contract attention could not be loaded.",
+      draft: "Draft contract",
+    },
     title: "Home",
     subtitle: "Here’s what’s happening with your workforce today.",
     greeting: {
@@ -771,6 +790,14 @@ export const en = {
     timeState: "Time status",
     needsReviewFilter: "Needs review",
     needsReviewOnly: "Needs review only",
+    attention: "Attention",
+    attentionOption: {
+      needs_review: "Needs review",
+      awaiting_signature: "Awaiting signature",
+      expiring_30: "Expiring within 30 days",
+      expiring_60: "Expiring within 60 days",
+      expiring_90: "Expiring within 90 days",
+    },
     effectiveFromFrom: "Effective from (from)",
     effectiveFromTo: "Effective from (to)",
     includeDisposed: "Include discarded and voided",

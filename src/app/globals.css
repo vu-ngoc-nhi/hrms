@@ -538,3 +538,13 @@ a.home-stat:hover .home-stat-hint { color: var(--color-primary); }
 .state-label { font-size: var(--font-size-xs); color: var(--color-text-2); }
 .contract-states.compact { gap: var(--space-1) var(--space-2); }
 .contract-table td:nth-child(2) > div:first-child { white-space: nowrap; }
+
+/* ===================== Phase 2A slice 2A-4 — Home Contract Attention (one section, three signals) ===================== */
+.home-contracts { margin-top: var(--space-4); }
+.home-signals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.home-signal { display: grid; align-content: start; gap: var(--space-2); min-width: 0; padding-top: var(--space-2); border-top: 1px solid var(--color-border); }
+.home-signal-title { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: var(--font-size-sm); }
+.home-signal-action { margin: 0; color: var(--color-text-2); }
+.home-signal-list { margin: 0; }
+.badge.neutral.home-count { background: var(--color-neutral-subtle); color: var(--color-text-2); }
+@media (max-width: 900px) { .home-signals { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); } }

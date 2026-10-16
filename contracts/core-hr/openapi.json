@@ -3833,6 +3833,33 @@
             }
           },
           {
+            "name": "expiring_within",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Finalized/Signed operational contracts whose own Effective To is from today through today + N days, both inclusive (Asia/Ho_Chi_Minh); open-ended, disposed and cancelled/voided-period contracts excluded. Home uses 30 (M-20).",
+              "type": "string",
+              "enum": [
+                "30",
+                "60",
+                "90"
+              ]
+            }
+          },
+          {
+            "name": "awaiting_signature",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Finalized, not Signed, operational (a cancelled/voided period shows under Needs Review instead). No deadline implied.",
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
             "name": "include_disposed",
             "in": "query",
             "required": false,
@@ -4639,6 +4666,63 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core-hr/contract-reminders": {
+      "get": {
+        "operationId": "getContractReminders",
+        "summary": "Contract Attention for Home: Expiring soon (30 days), Awaiting signature, Needs review",
+        "description": "contracts.read; no query parameters (400). Totals and at most five contracts per signal, computed for today in Asia/Ho_Chi_Minh by the same predicates as GET /contracts?expiring_within=30 / ?awaiting_signature=true / ?needs_review=true, so Home and the filtered Contracts page always agree. Expiring soon: own Effective To from today through today + 30 (inclusive). Discarded/voided contracts never appear; a contract of a cancelled/voided period appears only under Needs review.\n\nRequired permission: `contracts.read`.",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contract Attention",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractReminders"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
             "content": {
               "application/json": {
                 "schema": {
@@ -7021,6 +7105,413 @@
           "history",
           "not_operational",
           "create"
+        ],
+        "additionalProperties": false
+      },
+      "ContractReminders": {
+        "type": "object",
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "window_days": {
+            "type": "number",
+            "const": 30,
+            "description": "Home expiry window (M-20): fixed 30 days in MVP."
+          },
+          "expiring_soon": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "items": {
+                "maxItems": 5,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "contract_number": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "employee": {
+                      "type": "object",
+                      "properties": {
+                        "person_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "employee_code": {
+                          "type": "string"
+                        },
+                        "full_name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "person_id",
+                        "employee_code",
+                        "full_name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "contract_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "effective_from": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "effective_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "document_state": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "finalized",
+                        "signed"
+                      ]
+                    },
+                    "days_to_end": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Days from today to Effective To (0 = ends today)."
+                    },
+                    "review_reason": {
+                      "description": "Needs Review items only: the main condition (machine code; the UI shows plain words).",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "contract_number",
+                    "employee",
+                    "contract_type",
+                    "effective_from",
+                    "effective_to",
+                    "document_state",
+                    "days_to_end",
+                    "review_reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "total",
+              "items"
+            ],
+            "additionalProperties": false,
+            "description": "Same rule as GET /contracts?expiring_within=30."
+          },
+          "awaiting_signature": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "items": {
+                "maxItems": 5,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "contract_number": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "employee": {
+                      "type": "object",
+                      "properties": {
+                        "person_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "employee_code": {
+                          "type": "string"
+                        },
+                        "full_name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "person_id",
+                        "employee_code",
+                        "full_name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "contract_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "effective_from": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "effective_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "document_state": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "finalized",
+                        "signed"
+                      ]
+                    },
+                    "days_to_end": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Days from today to Effective To (0 = ends today)."
+                    },
+                    "review_reason": {
+                      "description": "Needs Review items only: the main condition (machine code; the UI shows plain words).",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "contract_number",
+                    "employee",
+                    "contract_type",
+                    "effective_from",
+                    "effective_to",
+                    "document_state",
+                    "days_to_end",
+                    "review_reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "total",
+              "items"
+            ],
+            "additionalProperties": false,
+            "description": "Same rule as GET /contracts?awaiting_signature=true."
+          },
+          "needs_review": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "items": {
+                "maxItems": 5,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "contract_number": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "employee": {
+                      "type": "object",
+                      "properties": {
+                        "person_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "employee_code": {
+                          "type": "string"
+                        },
+                        "full_name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "person_id",
+                        "employee_code",
+                        "full_name"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "contract_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "effective_from": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "effective_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "document_state": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "finalized",
+                        "signed"
+                      ]
+                    },
+                    "days_to_end": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Days from today to Effective To (0 = ends today)."
+                    },
+                    "review_reason": {
+                      "description": "Needs Review items only: the main condition (machine code; the UI shows plain words).",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "contract_number",
+                    "employee",
+                    "contract_type",
+                    "effective_from",
+                    "effective_to",
+                    "document_state",
+                    "days_to_end",
+                    "review_reason"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "total",
+              "items"
+            ],
+            "additionalProperties": false,
+            "description": "Same rule as GET /contracts?needs_review=true."
+          }
+        },
+        "required": [
+          "as_of",
+          "window_days",
+          "expiring_soon",
+          "awaiting_signature",
+          "needs_review"
         ],
         "additionalProperties": false
       },

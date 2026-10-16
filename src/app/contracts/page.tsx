@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
 import { Button, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
@@ -9,6 +10,10 @@ import { IconAttention } from "@/components/ui/icons";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import {
+  ATTENTION_OPTIONS,
+  attentionValue,
+  withAttention,
+  type AttentionOption,
   contractCapabilities,
   contractFiltersFromQuery,
   contractQueryFromFilters,
@@ -28,10 +33,21 @@ type Page = { data: ContractSummary[]; total: number; page: number; page_size: n
 type TypeOption = { id: string; name: string; is_active: boolean };
 const PAGE_SIZE = 20;
 
+// The router's search params (not window.location) carry the canonical filters: on a client-side navigation — e.g.
+// Home "View all" → /contracts?expiring_within=30 — window.location is not updated yet when the page first renders.
 export default function ContractsPage() {
+  return (
+    <Suspense fallback={<p className="muted">{t("contracts.loading")}</p>}>
+      <ContractsList />
+    </Suspense>
+  );
+}
+
+function ContractsList() {
   const session = useSession();
   const caps = contractCapabilities((p) => Boolean(session?.can(p)));
-  const [initial] = useState(() => contractFiltersFromQuery(typeof window === "undefined" ? "" : window.location.search));
+  const searchParams = useSearchParams();
+  const [initial] = useState(() => contractFiltersFromQuery(searchParams.toString()));
   const [filters, setFilters] = useState<ContractFilters>(initial.filters);
   const [page, setPage] = useState(initial.page);
   const [result, setResult] = useState<Page | null>(null);
@@ -148,11 +164,29 @@ export default function ContractsPage() {
           </label>
           <input id="contract-from-to" type="date" value={filters.effective_from_to} onChange={set("effective_from_to")} />
         </div>
-        <div className="filter-field filter-checks">
-          <label className="checkbox-field">
-            <input type="checkbox" checked={filters.needs_review === "true"} onChange={set("needs_review")} />
-            <span>{t("contracts.needsReviewOnly")}</span>
+        <div className="filter-field">
+          <label htmlFor="contract-attention" className="filter-label">
+            {t("contracts.attention")}
           </label>
+          {/* One compact control over the canonical attention parameters (needs_review / awaiting_signature /
+              expiring_within) — the same URL the Home Contract Attention links use. */}
+          <select
+            id="contract-attention"
+            value={attentionValue(filters)}
+            onChange={(e) => {
+              setPage(1);
+              setFilters((f) => withAttention(f, e.target.value as AttentionOption | ""));
+            }}
+          >
+            <option value="">{t("contracts.all")}</option>
+            {ATTENTION_OPTIONS.map((v) => (
+              <option key={v} value={v}>
+                {t(`contracts.attentionOption.${v}`)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-field filter-checks">
           <label className="checkbox-field">
             <input type="checkbox" checked={filters.include_disposed === "true"} onChange={set("include_disposed")} />
             <span>{t("contracts.includeDisposed")}</span>

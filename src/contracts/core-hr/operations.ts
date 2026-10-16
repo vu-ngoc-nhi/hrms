@@ -596,6 +596,21 @@ export const operations = {
     success: { status: 200, description: "Grouped contracts", schema: S.EmployeeContractsSchema },
     errors: [400, ...AUTH_ERRORS, 404],
   },
+  // ---------------- Phase 2A slice 2A-4: Home Contract Attention ----------------
+  getContractReminders: {
+    operationId: "getContractReminders",
+    method: "get",
+    path: "/api/v1/core-hr/contract-reminders",
+    summary: "Contract Attention for Home: Expiring soon (30 days), Awaiting signature, Needs review",
+    description:
+      "contracts.read; no query parameters (400). Totals and at most five contracts per signal, computed for today in Asia/Ho_Chi_Minh by the same predicates as GET /contracts?expiring_within=30 / ?awaiting_signature=true / ?needs_review=true, so Home and the filtered Contracts page always agree. Expiring soon: own Effective To from today through today + 30 (inclusive). Discarded/voided contracts never appear; a contract of a cancelled/voided period appears only under Needs review.",
+    tag: "Contracts",
+    auth: true,
+    permission: "contracts.read",
+    query: S.ContractRemindersQuerySchema,
+    success: { status: 200, description: "Contract Attention", schema: S.ContractRemindersSchema },
+    errors: [400, ...AUTH_ERRORS],
+  },
   listContractHistory: {
     operationId: "listContractHistory",
     method: "get",

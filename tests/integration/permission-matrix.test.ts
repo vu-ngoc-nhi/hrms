@@ -59,6 +59,8 @@ const DOCUMENTED: Record<string, Permission | null> = {
   // Phase 2A slice 2A-3: read models for the contract UI.
   listContracts: "contracts.read",
   listEmployeeContracts: "contracts.read",
+  // Phase 2A slice 2A-4: Home Contract Attention.
+  getContractReminders: "contracts.read",
   getInternalOpenApi: "docs.read",
 };
 

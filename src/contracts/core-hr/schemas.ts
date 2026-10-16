@@ -338,6 +338,11 @@ export const ContractListQuerySchema = z.strictObject({
   needs_review: boolQuery.describe("Computed Needs Review (overlap, gap, end after period end, period cancelled/voided…)."),
   effective_from_from: isoDate().optional(),
   effective_from_to: isoDate().optional(),
+  expiring_within: z
+    .enum(["30", "60", "90"])
+    .optional()
+    .describe("Finalized/Signed operational contracts whose own Effective To is from today through today + N days, both inclusive (Asia/Ho_Chi_Minh); open-ended, disposed and cancelled/voided-period contracts excluded. Home uses 30 (M-20)."),
+  awaiting_signature: boolQuery.describe("Finalized, not Signed, operational (a cancelled/voided period shows under Needs Review instead). No deadline implied."),
   include_disposed: boolQuery.describe("Include discarded/cancelled and voided contracts (evidence). Default false."),
   sort: z.enum(["operational_end", "effective_from", "contract_number", "employee_code"]).optional().describe("Default operational_end (soonest end first, no end last)."),
 });
@@ -366,6 +371,32 @@ export const EmployeeContractsSchema = reg(
   }),
   "Server-side grouping for the Employee Detail Contracts tab.",
 );
+
+// ---------------- Slice 2A-4: Home Contract Attention ----------------
+const reminderItemSchema = z.object({
+  id: z.uuid(),
+  contract_number: z.string().nullable(),
+  employee: z.object({ person_id: z.uuid(), employee_code: z.string(), full_name: z.string() }),
+  contract_type: z.string().nullable(),
+  effective_from: isoDate().nullable(),
+  effective_to: isoDate().nullable(),
+  document_state: z.enum(["draft", "finalized", "signed"]),
+  days_to_end: z.int().nullable().describe("Days from today to Effective To (0 = ends today)."),
+  review_reason: z.string().nullable().describe("Needs Review items only: the main condition (machine code; the UI shows plain words)."),
+});
+const reminderSignal = () => z.object({ total: z.int(), items: z.array(reminderItemSchema).max(5) });
+export const ContractRemindersSchema = reg(
+  "ContractReminders",
+  z.object({
+    as_of: isoDate(),
+    window_days: z.literal(30).describe("Home expiry window (M-20): fixed 30 days in MVP."),
+    expiring_soon: reminderSignal().describe("Same rule as GET /contracts?expiring_within=30."),
+    awaiting_signature: reminderSignal().describe("Same rule as GET /contracts?awaiting_signature=true."),
+    needs_review: reminderSignal().describe("Same rule as GET /contracts?needs_review=true."),
+  }),
+  "Home Contract Attention: three actionable signals with authoritative totals and at most five contracts each.",
+);
+export const ContractRemindersQuerySchema = z.strictObject({}).describe("No query parameters: the window is fixed (M-20).");
 
 export const ContractHistorySchema = reg(
   "ContractHistory",

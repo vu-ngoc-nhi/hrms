@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { notFound } from "@/lib/http/errors";
 import type { Principal } from "@/modules/identity/authenticate";
 import { representativeEmployment } from "@/modules/core-hr/employments/status";
-import { reviewItems, timeState, type ContractInContext } from "./evaluation";
+import { awaitingSignature, daysUntil, expiresWithin, HOME_EXPIRY_WINDOW_DAYS, reviewItems, timeState, type ContractInContext } from "./evaluation";
 import { toContractInContext } from "./facts";
 import { contractDisposition, periodFacts } from "./queries";
 
@@ -22,7 +22,7 @@ function loadRows(where: { employment?: { personId: string } } = {}) {
   return db().contract.findMany({ where, include: ROW_INCLUDE });
 }
 
-type Evaluated = { row: Row; x: ContractInContext; summary: ContractSummary };
+type Evaluated = { row: Row; x: ContractInContext; others: ContractInContext[]; summary: ContractSummary };
 
 /** Evaluates rows with their person's other contracts as context (overlap is person-wide). */
 function evaluate(rows: Row[], today: string): Evaluated[] {
@@ -65,7 +65,7 @@ function evaluate(rows: Row[], today: string): Evaluated[] {
       },
       review: { needs_review: review.length > 0, codes: [...new Set(review.map((i) => i.code))] },
     };
-    return { row, x, summary };
+    return { row, x, others, summary };
   });
 }
 
@@ -73,7 +73,7 @@ function evaluate(rows: Row[], today: string): Evaluated[] {
 const norm = (s: string) => s.trim().toLocaleLowerCase("vi");
 const disposed = (x: ContractInContext) => x.contract.cancelled || x.contract.voided;
 
-function matches(e: Evaluated, q: ContractListQuery): boolean {
+function matches(e: Evaluated, q: ContractListQuery, today: string): boolean {
   const s = e.summary;
   if (q.include_disposed !== "true" && disposed(e.x)) return false;
   if (q.search) {
@@ -86,6 +86,9 @@ function matches(e: Evaluated, q: ContractListQuery): boolean {
   if (q.time_state && s.state.time_state !== q.time_state) return false;
   if (q.needs_review === "true" && !s.review.needs_review) return false;
   if (q.needs_review === "false" && s.review.needs_review) return false;
+  // Attention filters (2A-4): the same predicates as the Home Contract Attention section.
+  if (q.expiring_within && !expiresWithin(e.x, e.others, today, Number(q.expiring_within))) return false;
+  if (q.awaiting_signature === "true" && !awaitingSignature(e.x)) return false;
   if (q.effective_from_from && (!s.effective_from || s.effective_from < q.effective_from_from)) return false;
   if (q.effective_from_to && (!s.effective_from || s.effective_from > q.effective_from_to)) return false;
   return true;
@@ -119,7 +122,7 @@ function order(q: ContractListQuery) {
 
 export async function listContracts(q: ContractListQuery) {
   const today = todayInVietnam();
-  const all = evaluate(await loadRows(), today).filter((e) => matches(e, q)).sort(order(q));
+  const all = evaluate(await loadRows(), today).filter((e) => matches(e, q, today)).sort(order(q));
   const start = (q.page - 1) * q.page_size;
   return { data: all.slice(start, start + q.page_size).map((e) => e.summary), total: all.length, page: q.page, page_size: q.page_size, as_of: today };
 }
@@ -161,5 +164,46 @@ export async function employeeContracts(principal: Principal, personId: string) 
     history: pick((e) => op(e) && e.summary.state.time_state === "expired", byFromDesc),
     not_operational: pick((e) => !op(e), byFromDesc),
     create: { allowed: reasons.length === 0, reasons, periods },
+  };
+}
+
+// ---------------- Home Contract Attention (2A-4) ----------------
+const REMINDER_ITEMS = 5;
+
+function reminderItem(e: Evaluated, today: string) {
+  const s = e.summary;
+  return {
+    id: s.id,
+    contract_number: s.contract_number,
+    employee: s.employee,
+    contract_type: s.contract_type?.name ?? null,
+    effective_from: s.effective_from,
+    effective_to: s.effective_to,
+    document_state: s.state.document_state,
+    days_to_end: s.effective_to ? daysUntil(s.effective_to, today) : null,
+    // Needs Review only: the main condition, as a stable code the UI turns into plain words.
+    review_reason: s.review.codes[0] ?? null,
+  };
+}
+
+/**
+ * GET /contract-reminders: three actionable signals with authoritative totals and a short list each. The totals equal
+ * the Contracts list totals for ?expiring_within=30, ?awaiting_signature=true and ?needs_review=true (same predicates,
+ * same default exclusion of discarded/voided records).
+ */
+export async function contractReminders() {
+  const today = todayInVietnam();
+  const live = evaluate(await loadRows(), today).filter((e) => !(e.x.contract.cancelled || e.x.contract.voided));
+  const signal = (f: (e: Evaluated) => boolean, sort: (a: Evaluated, b: Evaluated) => number) => {
+    const all = live.filter(f).sort(sort);
+    return { total: all.length, items: all.slice(0, REMINDER_ITEMS).map((e) => reminderItem(e, today)) };
+  };
+  const byNumber = (a: Evaluated, b: Evaluated) => cmp(a.summary.contract_number, b.summary.contract_number) || (a.summary.id < b.summary.id ? -1 : 1);
+  return {
+    as_of: today,
+    window_days: HOME_EXPIRY_WINDOW_DAYS,
+    expiring_soon: signal((e) => expiresWithin(e.x, e.others, today, HOME_EXPIRY_WINDOW_DAYS), (a, b) => cmp(a.summary.effective_to, b.summary.effective_to) || byNumber(a, b)),
+    awaiting_signature: signal((e) => awaitingSignature(e.x), (a, b) => cmp(a.summary.effective_from, b.summary.effective_from) || byNumber(a, b)),
+    needs_review: signal((e) => e.summary.review.needs_review, (a, b) => cmp(a.summary.effective_from, b.summary.effective_from) || byNumber(a, b)),
   };
 }

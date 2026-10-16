@@ -7,11 +7,13 @@ import { Button, EmptyState, StatusBadge } from "@/components/ui";
 import { IconAttention, IconBars, IconCalendar, IconUserCheck, IconUserClock, IconUserMinus } from "@/components/ui/icons";
 import { formatDate, formatDayMonth, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
+import { ContractAttention } from "./ContractAttention";
 import { greeting, homeCapabilities, needsAttentionView, snapshotView, summaryCards, upcomingView, type Dashboard } from "./homeModel";
 
 // UI-1 Home / Action Center (PV-30), visual refresh (owner-approved post-freeze refinement, 2026-10-12): greeting,
 // four summary cards, Needs Attention, Upcoming — next 30 days and a proportional Workforce Snapshot bar. Same single
 // request and the same server-decided numbers; no new data, no department breakdown, no trends (BD-H2 … BD-H4).
+// Phase 2A slice 2A-4 (C-113): one Contract Attention section below the existing panels, only with contracts.read.
 
 const CARD_ICONS: Record<string, ReactNode> = {
   active: <IconUserCheck />,
@@ -261,6 +263,8 @@ export default function HomePage() {
           </section>
         </div>
       )}
+
+      {session?.can("contracts.read") && <ContractAttention />}
     </div>
   );
 }

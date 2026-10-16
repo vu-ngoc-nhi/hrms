@@ -166,11 +166,15 @@ describe("Visual refresh (owner-approved post-freeze refinement, 2026-10-12)", (
     expect(formatDayMonth("2026-09-30")).toEqual({ day: "30", month: "Sep" });
   });
 
-  it("no Phase 2 content, fake trends or totals on Home", () => {
+  it("no unapproved Phase 2 content, fake trends or totals on Home", () => {
+    // The only approved Phase 2 addition is the Contract Attention section (C-108, slice 2A-4 / C-113), mounted once
+    // behind contracts.read; everything else stays as frozen in C-101 / C-102.
     const code = readFileSync("src/app/page.tsx", "utf8")
       .split("\n")
       .filter((l) => !l.trim().startsWith("//"))
-      .join("\n");
+      .join("\n")
+      .replace('import { ContractAttention } from "./ContractAttention";', "")
+      .replace('{session?.can("contracts.read") && <ContractAttention />}', "");
     expect(code).not.toMatch(/leave|payroll|contract|recruit|performance|turnover|trend|headcount|total employees|wfh/i);
     expect(JSON.stringify(en.home)).not.toMatch(/total employees|on leave|trend|turnover|this month/i);
     expect(en.home.needsNote).toContain("Record Health");

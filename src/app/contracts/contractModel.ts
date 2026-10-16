@@ -62,6 +62,8 @@ export type ContractFilters = {
   document_state: string;
   time_state: string;
   needs_review: string;
+  expiring_within: string;
+  awaiting_signature: string;
   effective_from_from: string;
   effective_from_to: string;
   include_disposed: string;
@@ -72,6 +74,8 @@ export const EMPTY_CONTRACT_FILTERS: ContractFilters = {
   document_state: "",
   time_state: "",
   needs_review: "",
+  expiring_within: "",
+  awaiting_signature: "",
   effective_from_from: "",
   effective_from_to: "",
   include_disposed: "",
@@ -92,6 +96,8 @@ export function contractFiltersFromQuery(query: string): { filters: ContractFilt
       document_state: oneOf(get("document_state"), DOCUMENT_STATES),
       time_state: oneOf(get("time_state"), TIME_STATES),
       needs_review: oneOf(get("needs_review"), ["true"]),
+      expiring_within: oneOf(get("expiring_within"), EXPIRY_WINDOWS),
+      awaiting_signature: oneOf(get("awaiting_signature"), ["true"]),
       effective_from_from: DATE.test(get("effective_from_from")) ? get("effective_from_from") : "",
       effective_from_to: DATE.test(get("effective_from_to")) ? get("effective_from_to") : "",
       include_disposed: oneOf(get("include_disposed"), ["true"]),
@@ -109,6 +115,61 @@ export function contractQueryFromFilters(filters: ContractFilters, page: number)
 }
 
 export const hasContractFilters = (f: ContractFilters) => Object.values(f).some((v) => v.trim() !== "");
+
+// ---------------- Attention (2A-4): one compact control over the canonical attention parameters ----------------
+export const EXPIRY_WINDOWS = ["30", "60", "90"] as const;
+export const HOME_EXPIRY_WINDOW = "30"; // M-20: Home always uses the next 30 days
+export const ATTENTION_OPTIONS = ["needs_review", "awaiting_signature", "expiring_30", "expiring_60", "expiring_90"] as const;
+export type AttentionOption = (typeof ATTENTION_OPTIONS)[number];
+
+/** The single "Attention" select value represented by the canonical parameters ("" = none or a combination). */
+export function attentionValue(f: ContractFilters): AttentionOption | "" {
+  const set = [f.needs_review === "true" && "needs_review", f.awaiting_signature === "true" && "awaiting_signature", f.expiring_within && `expiring_${f.expiring_within}`].filter(Boolean);
+  return set.length === 1 ? (set[0] as AttentionOption) : "";
+}
+
+/** Sets one attention filter through the canonical parameters (the others are cleared). */
+export function withAttention(f: ContractFilters, value: AttentionOption | ""): ContractFilters {
+  return {
+    ...f,
+    needs_review: value === "needs_review" ? "true" : "",
+    awaiting_signature: value === "awaiting_signature" ? "true" : "",
+    expiring_within: value.startsWith("expiring_") ? value.slice("expiring_".length) : "",
+  };
+}
+
+/** Canonical Contracts links for the Home signals — the same URL a user gets by choosing the filter on the page. */
+export const ATTENTION_LINKS = {
+  expiring_soon: `/contracts${contractQueryFromFilters(withAttention(EMPTY_CONTRACT_FILTERS, "expiring_30"), 1)}`,
+  awaiting_signature: `/contracts${contractQueryFromFilters(withAttention(EMPTY_CONTRACT_FILTERS, "awaiting_signature"), 1)}`,
+  needs_review: `/contracts${contractQueryFromFilters(withAttention(EMPTY_CONTRACT_FILTERS, "needs_review"), 1)}`,
+} as const;
+
+export type ReminderItem = {
+  id: string;
+  contract_number: string | null;
+  employee: { person_id: string; employee_code: string; full_name: string };
+  contract_type: string | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  document_state: "draft" | "finalized" | "signed";
+  days_to_end: number | null;
+  review_reason: string | null;
+};
+export type Reminders = {
+  as_of: string;
+  window_days: number;
+  expiring_soon: { total: number; items: ReminderItem[] };
+  awaiting_signature: { total: number; items: ReminderItem[] };
+  needs_review: { total: number; items: ReminderItem[] };
+};
+
+/** "Ends today" / "Ends in 1 day" / "Ends in N days" for an expiring contract. */
+export function endsInText(days: number | null): string {
+  if (days === null) return "";
+  if (days === 0) return t("home.contracts.endsToday");
+  return days === 1 ? t("home.contracts.endsInOne") : t("home.contracts.endsIn", { days });
+}
 
 /** What the contract screens may offer, from server capabilities (never role names). */
 export const contractCapabilities = (can: (p: string) => boolean) => ({ read: can("contracts.read"), catalogs: can("catalogs.read") });

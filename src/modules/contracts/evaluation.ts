@@ -256,3 +256,42 @@ export function actions(x: ContractInContext, others: ContractInContext[], can: 
     }),
   ) as Record<ActionKey, ActionView>;
 }
+
+// ---------------- Attention (slice 2A-4; PV-36 → M-20) ----------------
+// The ONLY definitions behind the Home Contract Attention section and the matching Contracts filters, so a Home count,
+// its list and the filtered Contracts page always agree.
+
+/** M-20: Home uses a fixed 30-day expiry window (not configurable in MVP). The Contracts page also offers 60 / 90. */
+export const HOME_EXPIRY_WINDOW_DAYS = 30;
+export const EXPIRY_WINDOWS = [30, 60, 90] as const;
+
+/**
+ * Expiring within N days: a Finalized/Signed contract that is operational (not discarded/cancelled/voided and its
+ * period not Cancelled/Voided), not open-ended, whose own Effective To lies from today through today + N — both
+ * ends INCLUSIVE (T and T+N count, T+N+1 does not), Asia/Ho_Chi_Minh business dates. Excluded as well: a contract
+ * already over because its employment period ended earlier, and one replaced by a finalized renewal (C-104).
+ * Drafts are not reminders: they have no time state until Finalized (they surface through Needs Review / Drafts).
+ */
+export function expiresWithin(x: ContractInContext, others: ContractInContext[], today: string, days: number): boolean {
+  const c = x.contract;
+  if (!isOperational(x) || !isFinal(c) || c.isOpenEnded || !c.effectiveTo) return false;
+  if (c.effectiveTo < today || c.effectiveTo > addDays(today, days)) return false;
+  const range = operationalRange(x, others);
+  if (range?.end !== null && range?.end !== undefined && range.end < today) return false; // ended with its period
+  if (finalizedRenewalOf(c, others)) return false;
+  return true;
+}
+
+/**
+ * Awaiting signature: Finalized, not Signed, not discarded/cancelled/voided, and its period not Cancelled/Voided —
+ * such a contract is shown under Needs Review instead (PERIOD_CANCELLED / PERIOD_VOIDED), not as a clean reminder.
+ * No deadline is implied.
+ */
+export function awaitingSignature(x: ContractInContext): boolean {
+  return isOperational(x) && x.contract.documentState === "finalized";
+}
+
+/** Days from today to the contract's own Effective To (0 = ends today). */
+export function daysUntil(date: string, today: string): number {
+  return Math.round((Date.parse(date) - Date.parse(today)) / 86_400_000);
+}
