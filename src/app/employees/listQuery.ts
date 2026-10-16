@@ -44,6 +44,16 @@ export function queryFromFilters(filters: ListFilters, page: number): string {
 
 export const hasActiveFilters = (filters: ListFilters) => Object.values(filters).some((v) => v.trim() !== "");
 
+/**
+ * Phase 1 post-freeze regression fix: the URL is the source of truth. When the address changes while the list stays
+ * mounted (Back / Forward, an in-app link to another filter), the list adopts the URL state; returns null when the URL
+ * already represents the current state (e.g. right after the list wrote it itself), so nothing loops.
+ */
+export function urlStateChange(current: { filters: ListFilters; page: number }, urlQuery: string): { filters: ListFilters; page: number } | null {
+  const next = filtersFromQuery(urlQuery);
+  return queryFromFilters(next.filters, next.page) === queryFromFilters(current.filters, current.page) ? null : next;
+}
+
 /** What the Employee List may offer, from server-provided capabilities (never role names). */
 export function listCapabilities(can: (permission: string) => boolean) {
   return { read: can("employees.read"), addEmployee: can("employees.create"), catalogFilters: can("catalogs.read") };

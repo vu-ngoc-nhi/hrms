@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { EMPTY_FILTERS, filtersFromQuery, hasActiveFilters, listBackHref, listCapabilities, queryFromFilters } from "@/app/employees/listQuery";
+import { EMPTY_FILTERS, filtersFromQuery, hasActiveFilters, listBackHref, listCapabilities, queryFromFilters, urlStateChange } from "@/app/employees/listQuery";
 
 // UX-3 / UI-2: Employee List filters are initialised from and synchronised with the URL query (canonical API names).
 const DEPT = "1460e54f-0b1b-4035-a1be-982831c351c3";
@@ -50,5 +51,39 @@ describe("Employee List capabilities (permission-based, never role names)", () =
     expect(listCapabilities(can(["employees.read", "employees.create", "catalogs.read"]))).toEqual({ read: true, addEmployee: true, catalogFilters: true });
     expect(listCapabilities(can(["employees.read"]))).toEqual({ read: true, addEmployee: false, catalogFilters: false });
     expect(listCapabilities(can(["docs.read"]))).toEqual({ read: false, addEmployee: false, catalogFilters: false });
+  });
+});
+
+// Phase 1 post-freeze regression fix (2026-10-16): Home → Employees canonical filters were lost on in-app navigation
+// because the list read window.location (still the previous page) on its first render.
+describe("URL is the source of truth for the Employee List (regression fix)", () => {
+  const page = readFileSync("src/app/employees/page.tsx", "utf8");
+  it("reads its filters from the router's search params on first render, inside a Suspense boundary", () => {
+    expect(page).toContain("useSearchParams().toString()");
+    expect(page).toContain("filtersFromQuery(search)");
+    expect(page).not.toContain("window.location.search)"); // stale during client-side navigation
+    expect(page).toContain("<Suspense");
+  });
+  it("every Home link to the list is a canonical URL the list reads back exactly (Active, Pre-start, Ended, Needs Attention)", () => {
+    for (const href of [
+      "/employees?employment_status=active",
+      "/employees?employment_status=not_started",
+      "/employees?employment_status=ended",
+      "/employees?operational_completeness=incomplete",
+    ]) {
+      const { filters, page: p } = filtersFromQuery(href.slice("/employees".length));
+      expect(`/employees${queryFromFilters(filters, p)}`).toBe(href);
+    }
+  });
+  it("adopts a changed URL (Back / Forward, another in-app link) and ignores the URL it wrote itself", () => {
+    const current = { filters: { ...EMPTY_FILTERS, employment_status: "active" }, page: 2 };
+    expect(urlStateChange(current, "employment_status=active&page=2")).toBeNull(); // own replaceState: no loop
+    expect(urlStateChange(current, "operational_completeness=incomplete")).toEqual({ filters: { ...EMPTY_FILTERS, operational_completeness: "incomplete" }, page: 1 });
+    expect(urlStateChange(current, "")).toEqual({ filters: EMPTY_FILTERS, page: 1 }); // back to the bare list: no stale filter
+    expect(urlStateChange(current, "employment_status=bogus")).toEqual({ filters: EMPTY_FILTERS, page: 1 }); // malformed values still dropped
+  });
+  it("filter changes still write the canonical URL (no second state model)", () => {
+    expect(page).toContain("window.history.replaceState(null, \"\", url)");
+    expect(page).toContain("queryFromFilters(filters, page)");
   });
 });

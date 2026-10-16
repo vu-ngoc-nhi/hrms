@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { useSession } from "@/components/AppShell";
 import { ErrorBox } from "@/components/ErrorBox";
 import { Button, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { IconAttention } from "@/components/ui/icons";
 import { formatDate, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
-import { EMPTY_FILTERS, filtersFromQuery, hasActiveFilters, LIST_COMPLETENESS, LIST_STATUSES, listCapabilities, queryFromFilters, rememberListQuery, type ListFilters } from "./listQuery";
+import { EMPTY_FILTERS, filtersFromQuery, hasActiveFilters, LIST_COMPLETENESS, LIST_STATUSES, listCapabilities, queryFromFilters, rememberListQuery, urlStateChange, type ListFilters } from "./listQuery";
 
 type Ref = { id: string; code: string; name: string } | null;
 type Item = {
@@ -28,13 +29,35 @@ type Option = { id: string; name: string; is_active?: boolean };
 
 const PAGE_SIZE = 20;
 
+// Phase 1 post-freeze regression fix (2026-10-16): filters come from the router's search params, not window.location —
+// during an in-app navigation (e.g. Home → /employees?operational_completeness=incomplete) window.location still
+// holds the previous page when the list first renders, so the filter was lost. Same pattern as the Contracts page.
 export default function EmployeesPage() {
+  return (
+    <Suspense fallback={<p className="muted">{t("employees.loading")}</p>}>
+      <EmployeeList />
+    </Suspense>
+  );
+}
+
+function EmployeeList() {
   const session = useSession();
   const caps = listCapabilities((p) => Boolean(session?.can(p)));
-  // UX-3: initial state comes from the URL (this page renders client-side only, inside the signed-in AppShell).
-  const [initial] = useState(() => filtersFromQuery(typeof window === "undefined" ? "" : window.location.search));
+  // UX-3: state comes from the URL, which stays the source of truth.
+  const search = useSearchParams().toString();
+  const [initial] = useState(() => filtersFromQuery(search));
   const [filters, setFilters] = useState<ListFilters>(initial.filters);
   const [page, setPage] = useState(initial.page);
+  // The address changed while the list stayed mounted (Back / Forward, another in-app link): adopt the URL state.
+  const [seenSearch, setSeenSearch] = useState(search);
+  if (search !== seenSearch) {
+    setSeenSearch(search);
+    const next = urlStateChange({ filters, page }, search);
+    if (next) {
+      setFilters(next.filters);
+      setPage(next.page);
+    }
+  }
   const [result, setResult] = useState<Page | null>(null);
   // The query whose response is currently shown; "loading" is derived (no state update inside the effect body).
   const [loadedFor, setLoadedFor] = useState<string | null>(null);

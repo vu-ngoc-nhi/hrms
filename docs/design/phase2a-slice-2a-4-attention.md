@@ -37,7 +37,7 @@ One section below the existing Home panels (Workforce summary cards, Needs Atten
 
 One compact **Attention** select (All · Needs review · Awaiting signature · Expiring within 30 / 60 / 90 days) replaces the earlier "Needs review only" checkbox; it writes the canonical parameters, so `/contracts?expiring_within=30`, `?awaiting_signature=true`, `?needs_review=true` are both the Home links and what a user gets by choosing the option.
 
-**Defect found and fixed:** the page read its initial filters from `window.location`, which is not yet updated during a client-side navigation — following a Home link landed on `/contracts` with the filter lost. It now reads the router's search params (`useSearchParams`, inside a Suspense boundary). **The same defect exists in the frozen Phase 1 Employees list** (Home *Needs Attention → View all* → `/employees?operational_completeness=incomplete` opens unfiltered); it was **not** changed in this slice and is proposed as a separate fix.
+**Defect found and fixed:** the page read its initial filters from `window.location`, which is not yet updated during a client-side navigation — following a Home link landed on `/contracts` with the filter lost. It now reads the router's search params (`useSearchParams`, inside a Suspense boundary). **The same defect exists in the frozen Phase 1 Employees list** (Home *Needs Attention → View all* → `/employees?operational_completeness=incomplete` opens unfiltered); it was **not** changed in this slice; it was fixed afterwards, with owner approval, as the Phase 1 post-freeze regression fix C-114.
 
 ## Responsive / browser review (synthetic data, Test HR Editor)
 
