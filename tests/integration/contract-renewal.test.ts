@@ -11,6 +11,7 @@ import { POST as renewRoute } from "@/app/api/v1/core-hr/contracts/[id]/renewals
 import { POST as returnRoute } from "@/app/api/v1/core-hr/contracts/[id]/return-to-draft/route";
 import { GET as getRoute } from "@/app/api/v1/core-hr/contracts/[id]/route";
 import { POST as voidRoute } from "@/app/api/v1/core-hr/contracts/[id]/void/route";
+import { POST as periodCorrectionRoute } from "@/app/api/v1/core-hr/employments/[id]/period-corrections/route";
 import { GET as remindersRoute } from "@/app/api/v1/core-hr/contract-reminders/route";
 import { GET as listRoute, POST as createRoute } from "@/app/api/v1/core-hr/contracts/route";
 import { ContractDetailSchema, ContractHistorySchema } from "@/contracts/core-hr/schemas";
@@ -517,7 +518,7 @@ describe("Permissions, idempotency and concurrency", () => {
 });
 
 describe("Owner acceptance fix: warnings carry the authoritative facts (codes and fingerprint unchanged)", () => {
-  it("overlap names the other contract and the overlapping days; the confirmation fingerprint is still code + related id", async () => {
+  it("overlap names the other contract and the overlapping days; the confirmation fingerprint covers those facts (w2, C-120)", async () => {
     const e = await period("2026-01-01");
     const a = await finalized(e, "2026-01-01", "2026-12-31");
     const aNumber = (await get(a)).contract_number;
@@ -527,8 +528,12 @@ describe("Owner acceptance fix: warnings carry the authoritative facts (codes an
     expect(r.body.details).toEqual([
       expect.objectContaining({ code: "OVERLAPPING_CONTRACT", related_contract_id: a, related_contract_number: aNumber, affected_from: "2026-06-01", affected_to: "2026-12-31" }),
     ]);
+    // C-120: the old pinned value (sha256 of "OVERLAPPING_CONTRACT|<id>", prefix w1) was insufficient — it ignored the
+    // overlapping dates, so a confirmation stayed valid after the facts HR reviewed had changed. v2 binds to the facts.
     const { createHash } = await import("node:crypto");
-    expect(r.body.warning_fingerprint).toBe(`w1:${createHash("sha256").update(`OVERLAPPING_CONTRACT|${a}`).digest("hex")}`);
+    expect(r.body.warning_fingerprint).not.toBe(`w1:${createHash("sha256").update(`OVERLAPPING_CONTRACT|${a}`).digest("hex")}`);
+    const facts = JSON.stringify([JSON.stringify({ code: "OVERLAPPING_CONTRACT", related_contract_id: a, field: null, affected_from: "2026-06-01", affected_to: "2026-12-31" })]);
+    expect(r.body.warning_fingerprint).toBe(`w2:${createHash("sha256").update(facts).digest("hex")}`);
     await finalize(b);
     expect((await get(b)).review.items).toEqual([expect.objectContaining({ code: "OVERLAPPING_CONTRACT", related_contract_number: aNumber, affected_from: "2026-06-01", affected_to: "2026-12-31" })]);
   });
@@ -546,5 +551,88 @@ describe("Owner acceptance fix: warnings carry the authoritative facts (codes an
     expect((await get(overlap)).finalize_check?.warnings).toEqual([
       expect.objectContaining({ code: "RENEWAL_OVERLAPS_PREDECESSOR", related_contract_number: parentNumber, affected_from: "2026-06-01", affected_to: "2026-06-30" }),
     ]);
+  });
+});
+
+describe("C-120: a stale M-19 confirmation is rejected when the warning facts change (same code, same related contract)", () => {
+  const codes = (r: { body: { details: { code: string }[] } }) => r.body.details.map((d) => d.code);
+
+  it("overlap: the related contract's end is corrected after HR reviewed → old fingerprint refused, new warnings + new fingerprint; then the new one finalizes", async () => {
+    const e = await period("2026-01-01");
+    const a = await finalized(e, "2026-01-01", "2026-12-31");
+    await sign(a, "2026-01-01");
+    const b = await draft(e, "2026-06-01", "2027-06-30");
+    const reviewed = await finalizeCall(b, { expected_revision: await rev(b) });
+    expect(reviewed.body.error).toBe("FINALIZE_CONFIRMATION_REQUIRED");
+    expect(reviewed.body.details).toEqual([expect.objectContaining({ code: "OVERLAPPING_CONTRACT", related_contract_id: a, affected_from: "2026-06-01", affected_to: "2026-12-31" })]);
+    const f1 = reviewed.body.warning_fingerprint as string;
+
+    // The related context changes; the warning keeps its code and related contract.
+    const c = await correct(a, { expected_revision: await rev(a), reason: "End date typed late (synthetic)", effective_to: "2026-09-30" }, "admin");
+    expect(c.status, JSON.stringify(c.body)).toBe(201);
+
+    const stale = await finalizeCall(b, { expected_revision: await rev(b), confirmed_warning_fingerprint: f1 });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toBe("FINALIZE_CONFIRMATION_REQUIRED");
+    expect(stale.body.details).toEqual([expect.objectContaining({ code: "OVERLAPPING_CONTRACT", related_contract_id: a, affected_from: "2026-06-01", affected_to: "2026-09-30" })]);
+    const f2 = stale.body.warning_fingerprint as string;
+    expect(f2).not.toBe(f1);
+    expect((await get(b)).state.document_state).toBe("draft"); // nothing finalized
+    expect(await db().contractHistoryEvent.count({ where: { contractId: b, eventType: "finalized" } })).toBe(0);
+
+    const ok = await finalizeCall(b, { expected_revision: await rev(b), confirmed_warning_fingerprint: f2 });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    expect((await get(b)).state.document_state).toBe("finalized");
+  });
+
+  it("gap: the parent's end is corrected after HR reviewed → the reviewed gap range no longer confirms", async () => {
+    const e = await period("2026-01-01");
+    const parent = await finalized(e, "2026-03-01", "2026-06-30");
+    await sign(parent, "2026-03-01");
+    const renewal = await renewed(parent, { effective_from: "2026-07-15" });
+    const reviewed = await finalizeCall(renewal, { expected_revision: await rev(renewal) });
+    expect(reviewed.body.details).toEqual([expect.objectContaining({ code: "GAP_AFTER_PREDECESSOR", affected_from: "2026-07-01", affected_to: "2026-07-14" })]);
+    await correct(parent, { expected_revision: await rev(parent), reason: "End date correction (synthetic)", effective_to: "2026-06-15" }, "admin");
+    const stale = await finalizeCall(renewal, { expected_revision: await rev(renewal), confirmed_warning_fingerprint: reviewed.body.warning_fingerprint });
+    expect(stale.body.error).toBe("FINALIZE_CONFIRMATION_REQUIRED");
+    expect(stale.body.details).toEqual([expect.objectContaining({ code: "GAP_AFTER_PREDECESSOR", related_contract_id: parent, affected_from: "2026-06-16", affected_to: "2026-07-14" })]);
+    expect(stale.body.warning_fingerprint).not.toBe(reviewed.body.warning_fingerprint);
+    expect((await get(renewal)).state.document_state).toBe("draft");
+    expect((await finalizeCall(renewal, { expected_revision: await rev(renewal), confirmed_warning_fingerprint: stale.body.warning_fingerprint })).status).toBe(201);
+  });
+
+  it("ends after the period: the period end is corrected after HR reviewed → the old confirmation is refused", async () => {
+    const e = await period("2026-01-01", "2026-12-31");
+    const d = await draft(e, "2026-01-01", "2027-06-30");
+    const reviewed = await finalizeCall(d, { expected_revision: await rev(d) });
+    expect(codes(reviewed)).toEqual(["CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD"]);
+    expect(reviewed.body.details[0]).toMatchObject({ field: "effective_to", affected_from: "2027-01-01", affected_to: "2027-06-30" });
+    const personId = (await db().employment.findUniqueOrThrow({ where: { id: e } })).personId;
+    const personRev = (await db().person.findUniqueOrThrow({ where: { id: personId } })).revision;
+    const pc = await call(periodCorrectionRoute, {
+      path: "/x",
+      method: "POST",
+      user: "admin",
+      params: { id: e },
+      body: { expected_revision: personRev, reason: "Period end entered wrongly (synthetic)", end_date: "2026-11-30" },
+      headers: { "idempotency-key": key("pc") },
+    });
+    expect(pc.status, JSON.stringify(pc.body)).toBe(200);
+    const stale = await finalizeCall(d, { expected_revision: await rev(d), confirmed_warning_fingerprint: reviewed.body.warning_fingerprint });
+    expect(stale.body.error).toBe("FINALIZE_CONFIRMATION_REQUIRED");
+    expect(stale.body.details[0]).toMatchObject({ code: "CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD", affected_from: "2026-12-01", affected_to: "2027-06-30" });
+    expect((await get(d)).state.document_state).toBe("draft");
+  });
+
+  it("unchanged facts: confirming the reviewed fingerprint still finalizes; blockers are never overridden by a fingerprint", async () => {
+    const e = await period("2026-01-01");
+    await finalized(e, "2026-01-01", "2026-12-31");
+    const b = await draft(e, "2026-06-01", "2027-06-30");
+    const reviewed = await finalizeCall(b, { expected_revision: await rev(b) });
+    const ok = await finalizeCall(b, { expected_revision: await rev(b), confirmed_warning_fingerprint: reviewed.body.warning_fingerprint });
+    expect(ok.status).toBe(201);
+    const blocked = await call(createRoute, { path: PATH, method: "POST", user: "editor", body: { employment_id: e }, headers: { "idempotency-key": key("blk") } });
+    const r = await finalizeCall(blocked.body.id, { expected_revision: await rev(blocked.body.id), confirmed_warning_fingerprint: reviewed.body.warning_fingerprint });
+    expect(r.body.error).toBe("CONTRACT_NOT_READY");
   });
 });

@@ -32,7 +32,8 @@ export type ContractInContext = { contract: ContractFacts; period: PeriodFacts }
 /**
  * A blocker / warning / review item. `related_contract_number`, `affected_from` and `affected_to` are presentation
  * facts computed here (owner acceptance fix) so the UI can name the other contract and the dates concerned without
- * re-deriving any rule; they never take part in the M-19 warning fingerprint (code + related id only).
+ * re-deriving any rule. `affected_from` / `affected_to` are authoritative facts and are part of the M-19 warning
+ * fingerprint (C-120); `related_contract_number` and `message` are presentation and never are.
  */
 export type Finding = {
   code: string;
@@ -195,7 +196,14 @@ function dataWarnings(x: ContractInContext, others: ContractInContext[]): Findin
     }
   }
   if (!c.isOpenEnded && c.effectiveTo && x.period.endDate !== null && c.effectiveTo > x.period.endDate) {
-    out.push({ field: "effective_to", code: WARNING.CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD, message: "Effective To is after the end of the employment period." });
+    out.push({
+      field: "effective_to",
+      code: WARNING.CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD,
+      message: "Effective To is after the end of the employment period.",
+      // The days the contract runs beyond the period (a later period correction changes them).
+      affected_from: addDays(x.period.endDate, 1),
+      affected_to: c.effectiveTo,
+    });
   }
   return out;
 }
@@ -243,10 +251,31 @@ function sortFindings(fs: Finding[]): Finding[] {
  * M-19 warning fingerprint: a change detector over the warning SET (code + related contract), server-issued and
  * recomputed in the writing transaction. Not a security token — every blocker is re-checked regardless.
  */
+/**
+ * The facts that define a warning for M-19 confirmation (C-120): code, the related contract's stable id, the field
+ * and the affected business-date range. A confirmation binds to these facts, so HR re-reviews when e.g. an overlap
+ * range or a gap changes even though the code and the related contract stay the same. Display text (message,
+ * translations, formatting) and the related contract NUMBER are presentation, never identity. Fixed key order.
+ */
+export function warningFingerprintFacts(w: Finding) {
+  return {
+    code: w.code,
+    related_contract_id: w.related_contract_id ?? null,
+    field: w.field ?? null,
+    affected_from: w.affected_from ?? null,
+    affected_to: w.affected_to ?? null,
+  };
+}
+
+/**
+ * M-19 warning fingerprint, version 2: sha256 over the JSON array of each warning's facts serialized as JSON and
+ * sorted (order-independent, unambiguous — no delimiter concatenation). Version 1 hashed only code + related id and
+ * therefore accepted a stale confirmation after the overlap / gap dates changed; a w1 value never matches a w2 value.
+ */
 export function warningFingerprint(warnings: Finding[]): string | null {
   if (warnings.length === 0) return null;
-  const canonical = warnings.map((w) => `${w.code}|${w.related_contract_id ?? ""}`).sort().join("\n");
-  return `w1:${createHash("sha256").update(canonical).digest("hex")}`;
+  const canonical = JSON.stringify(warnings.map((w) => JSON.stringify(warningFingerprintFacts(w))).sort());
+  return `w2:${createHash("sha256").update(canonical).digest("hex")}`;
 }
 
 // ---------------- Allowed actions (per caller) ----------------
