@@ -47,6 +47,15 @@ const DOCUMENTED: Record<string, Permission | null> = {
   listContractTypes: "catalogs.read",
   createContractType: "catalogs.manage",
   updateContractType: "catalogs.manage",
+  // Phase 2A slice 2A-2 (C-106): contract records.
+  createContract: "contracts.manage",
+  getContract: "contracts.read",
+  updateContractDraft: "contracts.manage",
+  createContractDiscard: "contracts.manage",
+  createContractFinalize: "contracts.finalize",
+  createContractReturnToDraft: "contracts.finalize",
+  createContractSignatureConfirmation: "contracts.finalize",
+  listContractHistory: "contracts.read",
   getInternalOpenApi: "docs.read",
 };
 

@@ -23,9 +23,23 @@ export type ErrorCode =
   | "LATER_LIFECYCLE_EVENT"
   | "PROTECTED_FIELD_NOT_ENABLED"
   | "SERVICE_UNAVAILABLE"
-  | "INTERNAL_ERROR";
+  | "INTERNAL_ERROR"
+  // Phase 2A contracts (docs/api/contracts-api-draft.md §9)
+  | "DUPLICATE_CONTRACT_NUMBER"
+  | "CONTRACT_NOT_DRAFT"
+  | "CONTRACT_STATE_CONFLICT"
+  | "CONTRACT_READ_ONLY"
+  | "DEPENDENT_CONTRACTS_EXIST"
+  | "CONTRACT_NOT_READY"
+  | "FINALIZE_CONFIRMATION_REQUIRED"
+  | "INVALID_TERM"
+  | "CONTRACT_TYPE_INACTIVE"
+  | "EFFECTIVE_FROM_OUTSIDE_PERIOD"
+  | "PERIOD_NOT_VALID"
+  | "SIGNED_AT_IN_FUTURE"
+  | "REASON_REQUIRED";
 
-export type ErrorDetail = { field?: string; code: string; message: string };
+export type ErrorDetail = { field?: string; code: string; message: string; related_contract_id?: string };
 
 export class ApiError extends Error {
   constructor(
@@ -33,6 +47,8 @@ export class ApiError extends Error {
     public readonly code: ErrorCode,
     message: string,
     public readonly details?: ErrorDetail[],
+    /** Extra top-level body fields for a specific error (e.g. warning_fingerprint, M-19). */
+    public readonly extra?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiError";

@@ -20,7 +20,7 @@ const page = <T extends z.ZodType>(item: T) =>
 // ---------------- Common ----------------
 export const ErrorDetailSchema = reg(
   "ErrorDetail",
-  z.object({ field: z.string().optional(), code: z.string(), message: z.string() }),
+  z.object({ field: z.string().optional(), code: z.string(), message: z.string(), related_contract_id: z.uuid().optional() }),
 );
 export const ErrorResponseSchema = reg(
   "ErrorResponse",
@@ -29,6 +29,7 @@ export const ErrorResponseSchema = reg(
     message: z.string(),
     request_id: z.string(),
     details: z.array(ErrorDetailSchema).optional(),
+    warning_fingerprint: z.string().optional().describe("FINALIZE_CONFIRMATION_REQUIRED only (M-19): fingerprint of the warnings in details."),
   }),
 );
 
@@ -175,6 +176,137 @@ export const ContractTypeUpdateSchema = reg(
     .refine(nonEmpty, NON_EMPTY_MESSAGE),
 );
 export const ContractTypeListSchema = reg("ContractTypeList", page(ContractTypeSchema));
+
+// ---------------- Phase 2A contracts — slice 2A-2 core lifecycle (ADR-0005; M-15 … M-19; C-109 … C-111) ----------------
+// The server is authoritative for document state, time state, Needs Review, Finalize readiness and allowed actions; the
+// UI renders them and never re-derives lifecycle rules. Codes are machine values; labels live in the UI catalog.
+const contractNumber = () =>
+  z.string().max(100).describe("HR-entered; surrounding whitespace is trimmed and an empty value means no number. Unique case-insensitively across all contracts (M-18).");
+const findingSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  field: z.string().optional(),
+  related_contract_id: z.uuid().optional(),
+});
+const actorSchema = z.object({ user_id: z.uuid(), display_name: z.string() }).nullable();
+const actionSchema = z.object({ allowed: z.boolean(), reasons: z.array(z.string()) });
+
+export const ContractDetailSchema = reg(
+  "ContractDetail",
+  z.object({
+    id: z.uuid(),
+    revision: z.int(),
+    as_of: isoDate().describe("Business date (Asia/Ho_Chi_Minh) the computed fields refer to."),
+    employee: z.object({ person_id: z.uuid(), employee_code: z.string(), full_name: z.string() }),
+    employment: z.object({
+      id: z.uuid(),
+      start_date: isoDate(),
+      end_date: isoDate().nullable(),
+      disposition: z.enum(["cancelled", "voided"]).nullable(),
+      employee_type: z.object({ id: z.uuid(), code: z.string(), name: z.string() }).nullable(),
+    }),
+    contract_type: z.object({ id: z.uuid(), code: z.string(), name: z.string(), name_vi: z.string().nullable(), is_active: z.boolean() }).nullable(),
+    contract_number: z.string().nullable(),
+    effective_from: isoDate().nullable(),
+    effective_to: isoDate().nullable().describe("Inclusive last day of the term."),
+    is_open_ended: z.boolean(),
+    summary: z.string().nullable(),
+    signed_at: isoDate().nullable().describe("Business date HR confirmed full execution by all required parties (C-105)."),
+    relationship: z.object({
+      type: z.enum(["renewal"]).nullable(),
+      parent_id: z.uuid().nullable(),
+      renewal_id: z.uuid().nullable(),
+    }),
+    state: z.object({
+      document_state: z.enum(["draft", "finalized", "signed"]),
+      disposition: z.enum(["cancelled", "voided"]).nullable(),
+      operational: z.boolean().describe("Not Cancelled/Voided and the period is not Cancelled/Voided."),
+      time_state: z.enum(["upcoming", "active", "expired"]).nullable().describe("Finalized/Signed operational contracts only."),
+      time_state_detail: z.enum(["closed_by_employment_end", "replaced_by_renewal"]).nullable(),
+      operational_end: isoDate().nullable(),
+      days_to_operational_end: z.int().nullable(),
+    }),
+    review: z.object({ needs_review: z.boolean(), items: z.array(findingSchema) }).describe("Needs Review; confirming a warning at Finalize never resolves it."),
+    finalize_check: z
+      .object({
+        ready: z.boolean(),
+        blockers: z.array(findingSchema).describe("Never overridable (M-19)."),
+        warnings: z.array(findingSchema).describe("Non-blocking; Finalize needs one explicit confirmation (M-19)."),
+        warning_fingerprint: z.string().nullable().describe("Send as confirmed_warning_fingerprint with Finalize Anyway; null when there are no warnings."),
+      })
+      .nullable()
+      .describe("Drafts only."),
+    actions: z.object({ edit: actionSchema, discard: actionSchema, finalize: actionSchema, return_to_draft: actionSchema, confirm_signed: actionSchema }),
+    finalized_at: isoDateTime().nullable(),
+    finalized_by: actorSchema,
+    created_at: isoDateTime(),
+    created_by: actorSchema,
+  }),
+  "A contract record documenting terms of one Employment Period (ADR-0005). Contracts never change employment data.",
+);
+export type ContractDetail = z.infer<typeof ContractDetailSchema>;
+
+const draftFields = {
+  contract_type_id: z.uuid().nullable().optional(),
+  contract_number: contractNumber().nullable().optional(),
+  effective_from: isoDate().nullable().optional(),
+  effective_to: isoDate().nullable().optional(),
+  is_open_ended: z.boolean().optional(),
+  summary: z.string().max(1000).nullable().optional(),
+};
+export const ContractCreateSchema = reg(
+  "ContractCreate",
+  z.strictObject({ employment_id: z.uuid().describe("Employment Period; must not be Cancelled or Voided."), ...draftFields }),
+  "Create a Contract Draft. Missing fields are allowed in a Draft; objectively invalid values are refused.",
+);
+export type ContractCreateInput = z.infer<typeof ContractCreateSchema>;
+export const ContractUpdateSchema = reg(
+  "ContractUpdate",
+  z.strictObject({ expected_revision: z.int().min(1).describe("Contract revision last read; stale → 409 REVISION_CONFLICT."), ...draftFields }),
+  "Edit a Draft. null clears a field; the Employment Period cannot be changed (discard and re-create instead).",
+);
+export type ContractUpdateInput = z.infer<typeof ContractUpdateSchema>;
+const contractRevision = () => z.int().min(1).describe("Contract revision last read; stale → 409 REVISION_CONFLICT.");
+export const ContractDiscardSchema = reg(
+  "ContractDiscard",
+  z.strictObject({ expected_revision: contractRevision(), reason: z.string().max(1000).optional() }),
+);
+export type ContractDiscardInput = z.infer<typeof ContractDiscardSchema>;
+export const ContractFinalizeSchema = reg(
+  "ContractFinalize",
+  z.strictObject({
+    expected_revision: contractRevision(),
+    confirmed_warning_fingerprint: z.string().max(200).optional().describe("The warning_fingerprint HR reviewed (Finalize Anyway, M-19)."),
+  }),
+);
+export type ContractFinalizeInput = z.infer<typeof ContractFinalizeSchema>;
+export const ContractReturnToDraftSchema = reg(
+  "ContractReturnToDraft",
+  z.strictObject({ expected_revision: contractRevision(), reason: z.string().min(1).max(1000).describe("Mandatory; shown on the contract history.") }),
+);
+export type ContractReturnToDraftInput = z.infer<typeof ContractReturnToDraftSchema>;
+export const ContractConfirmSignedSchema = reg(
+  "ContractConfirmSigned",
+  z.strictObject({ expected_revision: contractRevision(), signed_at: isoDate().describe("Not a future business date in Asia/Ho_Chi_Minh.") }),
+);
+export type ContractConfirmSignedInput = z.infer<typeof ContractConfirmSignedSchema>;
+
+export const ContractHistorySchema = reg(
+  "ContractHistory",
+  z.object({
+    data: z.array(
+      z.object({
+        event_type: z.string(),
+        effective_date: isoDate().nullable(),
+        recorded_at: isoDateTime(),
+        recorded_by: actorSchema,
+        reason: z.string().nullable().describe("Returned to Draft, Discarded, Cancelled, Corrected and Voided only."),
+        related_contract_id: z.uuid().nullable(),
+      }),
+    ),
+  }),
+  "Business-readable contract history (C-108): action, effective date where applicable, recorded by / at, reason where relevant.",
+);
 
 // ---------------- Employees ----------------
 export const EmploymentStatusSchema = z

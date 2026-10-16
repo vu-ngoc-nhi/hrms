@@ -34,7 +34,7 @@ describe("Database guarantees (H7)", () => {
     expect(await q("SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'job_assignment' AND column_name = 'cancelled_at'")).toEqual([{ n: 1 }]);
     expect(await q("SELECT to_regclass('public.access_audit_event') IS NOT NULL AS ok")).toEqual([{ ok: true }]); // not readable by the app role
     expect(await q("SELECT to_regclass('public.contract_history_event') IS NOT NULL AS ok")).toEqual([{ ok: true }]);
-    expect(folders.at(-1)).toBe("20261015000000_contract_foundation");
+    expect(folders.at(-1)).toBe("20261016000000_contract_voided_parent_guard");
   });
 
   it("exclusion, CHECK and partial unique constraints exist (cancelled and voided periods excluded where approved)", async () => {
@@ -96,6 +96,7 @@ describe("Database guarantees (H7)", () => {
       "access_audit_event_no_truncate_trg",
       "contract_structural_rules_trg",
       "contract_disposition_is_terminal_trg",
+      "contract_voided_parent_read_only_trg",
     ]) {
       expect(triggers, t).toContain(t);
     }

@@ -8,7 +8,10 @@
 //
 // Employment Status (Pre-start / Active / Ended) is deliberately NOT part of the predicate: it never gates contracts.
 import type { Prisma } from "@/generated/prisma/client";
+import { fromDbDate } from "@/lib/dates";
+import type { Tx } from "@/lib/db";
 import { isOperationalPeriod, operationalEmploymentWhere } from "@/modules/core-hr/employments/queries";
+import type { PeriodFacts } from "./evaluation";
 import type { Disposition } from "./model";
 
 // cancelled_at IS NULL AND voided_at IS NULL
@@ -31,4 +34,23 @@ export function contractDisposition(c: ContractDispositions): Disposition {
 /** In-memory counterpart of `operationalContractWhere` for rows loaded with their period dispositions. */
 export function isOperationalContract(c: ContractDispositions & { employment: Parameters<typeof isOperationalPeriod>[0] }): boolean {
   return contractDisposition(c) === null && isOperationalPeriod(c.employment);
+}
+
+// ---------------- Facts for the evaluation module (slice 2A-2) ----------------
+// The disposition markers are read and written only here (contract boundary test).
+type PeriodRow = { id: string; startDate: Date; endDate: Date | null; cancelledAt: Date | null; voidedAt: Date | null };
+
+/** Period facts for `evaluation.ts`: dates as business dates, dispositions as flags. Ended is not a disposition. */
+export function periodFacts(e: PeriodRow): PeriodFacts {
+  return { id: e.id, startDate: fromDbDate(e.startDate), endDate: fromDbDate(e.endDate), cancelled: e.cancelledAt !== null, voided: e.voidedAt !== null };
+}
+
+/** The contract's own disposition flags. */
+export function contractDispositionFlags(c: ContractDispositions): { cancelled: boolean; voided: boolean } {
+  return { cancelled: c.cancelledAt !== null, voided: c.voidedAt !== null };
+}
+
+/** Discard a Draft (C-107): the Cancelled marker; content, number and history stay (terminal, DB trigger). */
+export async function markContractDiscarded(tx: Tx, id: string, at: Date): Promise<void> {
+  await tx.contract.update({ where: { id }, data: { cancelledAt: at, revision: { increment: 1 }, updatedAt: at } });
 }

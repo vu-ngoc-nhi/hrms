@@ -49,6 +49,7 @@ export function errorResponse(error: unknown, requestId: string): Response {
         message: error.message,
         request_id: requestId,
         ...(error.details?.length ? { details: error.details } : {}),
+        ...(error.extra ?? {}),
       }),
       { status: error.status, headers },
     );
