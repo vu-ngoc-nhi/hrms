@@ -25,7 +25,9 @@ export type ApiErrorBody = {
   error: string;
   message: string;
   request_id: string;
-  details?: { field?: string; code: string; message: string }[];
+  details?: { field?: string; code: string; message: string; related_contract_id?: string }[];
+  /** FINALIZE_CONFIRMATION_REQUIRED only (M-19). */
+  warning_fingerprint?: string;
 };
 
 export class ApiCallError extends Error {

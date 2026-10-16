@@ -3716,6 +3716,193 @@
             }
           }
         }
+      },
+      "get": {
+        "operationId": "listContracts",
+        "summary": "Contract portfolio list with canonical filters",
+        "description": "contracts.read. Filters: search (Contract Number, employee name or code), contract_type_id, document_state, time_state, needs_review, effective_from_from / effective_from_to, include_disposed (default false). Computed fields (time state, Needs Review) use the same evaluation as the contract detail, for today in Asia/Ho_Chi_Minh. Default sort: operational end (soonest first).\n\nRequired permission: `contracts.read`.",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Contract Number, employee name or Employee Code (case-insensitive, contains).",
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "contract_type_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "name": "document_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "finalized",
+                "signed"
+              ]
+            }
+          },
+          {
+            "name": "time_state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Computed for today (Asia/Ho_Chi_Minh); Drafts have none.",
+              "type": "string",
+              "enum": [
+                "upcoming",
+                "active",
+                "expired"
+              ]
+            }
+          },
+          {
+            "name": "needs_review",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Computed Needs Review (overlap, gap, end after period end, period cancelled/voided…).",
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "effective_from_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "effective_from_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            }
+          },
+          {
+            "name": "include_disposed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Include discarded/cancelled and voided contracts (evidence). Default false.",
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Default operational_end (soonest end first, no end last).",
+              "type": "string",
+              "enum": [
+                "operational_end",
+                "effective_from",
+                "contract_number",
+                "employee_code"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of contracts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/core-hr/contracts/{id}": {
@@ -4373,6 +4560,85 @@
           },
           "422": {
             "description": "Business rule violation, operational profile incomplete, or a protected field that is not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/core-hr/employees/{id}/contracts": {
+      "get": {
+        "operationId": "listEmployeeContracts",
+        "summary": "Contracts of one employee, grouped for the Employee Contracts tab",
+        "description": "contracts.read. Server-side groups: current, upcoming, drafts, history, not_operational; plus whether a Draft may be created here and for which Employment Periods (not Cancelled/Voided; default = representative period).\n\nRequired permission: `contracts.read`.",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Grouped contracts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeContracts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request or a field that is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token (signature, issuer, audience, tenant, expiry or scope)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Authenticated but not permitted, or no HRMS account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -6227,6 +6493,534 @@
         "required": [
           "expected_revision",
           "signed_at"
+        ],
+        "additionalProperties": false
+      },
+      "ContractSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "employee": {
+            "type": "object",
+            "properties": {
+              "person_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "employee_code": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "person_id",
+              "employee_code",
+              "full_name"
+            ],
+            "additionalProperties": false
+          },
+          "employment": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "start_date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "end_date": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "disposition": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "cancelled",
+                      "voided"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "employee_type": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "code": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "code",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "start_date",
+              "end_date",
+              "disposition",
+              "employee_type"
+            ],
+            "additionalProperties": false
+          },
+          "contract_type": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "code",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contract_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_open_ended": {
+            "type": "boolean"
+          },
+          "signed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "relationship": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "renewal"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "parent_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "renewal_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "parent_id",
+              "renewal_id"
+            ],
+            "additionalProperties": false
+          },
+          "state": {
+            "type": "object",
+            "properties": {
+              "document_state": {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "finalized",
+                  "signed"
+                ]
+              },
+              "disposition": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "cancelled",
+                      "voided"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "operational": {
+                "type": "boolean"
+              },
+              "time_state": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "upcoming",
+                      "active",
+                      "expired"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "time_state_detail": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "closed_by_employment_end",
+                      "replaced_by_renewal"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "operational_end": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "days_to_operational_end": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "document_state",
+              "disposition",
+              "operational",
+              "time_state",
+              "time_state_detail",
+              "operational_end",
+              "days_to_operational_end"
+            ],
+            "additionalProperties": false
+          },
+          "review": {
+            "type": "object",
+            "properties": {
+              "needs_review": {
+                "type": "boolean"
+              },
+              "codes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "needs_review",
+              "codes"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "employee",
+          "employment",
+          "contract_type",
+          "contract_number",
+          "effective_from",
+          "effective_to",
+          "is_open_ended",
+          "signed_at",
+          "relationship",
+          "state",
+          "review"
+        ],
+        "additionalProperties": false
+      },
+      "ContractList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractSummary"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "page": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          }
+        },
+        "required": [
+          "data",
+          "total",
+          "page",
+          "page_size",
+          "as_of"
+        ],
+        "additionalProperties": false
+      },
+      "EmployeeContracts": {
+        "type": "object",
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "current": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractSummary"
+            },
+            "description": "Operational Finalized/Signed contracts in force today."
+          },
+          "upcoming": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractSummary"
+            },
+            "description": "Operational Finalized/Signed contracts starting later."
+          },
+          "drafts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractSummary"
+            },
+            "description": "Operational Drafts."
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractSummary"
+            },
+            "description": "Operational contracts that have ended."
+          },
+          "not_operational": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractSummary"
+            },
+            "description": "Discarded/cancelled/voided contracts and contracts of a cancelled/voided period."
+          },
+          "create": {
+            "type": "object",
+            "properties": {
+              "allowed": {
+                "type": "boolean"
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "PERMISSION_REQUIRED, NO_VALID_EMPLOYMENT_PERIOD"
+              },
+              "periods": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "start_date": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "end_date": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "employee_type": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "is_default": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "start_date",
+                    "end_date",
+                    "employee_type",
+                    "is_default"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Employment Periods a new Draft may be linked to (not Cancelled/Voided)."
+              }
+            },
+            "required": [
+              "allowed",
+              "reasons",
+              "periods"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "as_of",
+          "current",
+          "upcoming",
+          "drafts",
+          "history",
+          "not_operational",
+          "create"
         ],
         "additionalProperties": false
       },

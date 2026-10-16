@@ -499,3 +499,42 @@ a.home-stat:hover .home-stat-hint { color: var(--color-primary); }
 .list-lead { margin: 0 0 var(--space-1); }
 .flush { margin: 0; }
 .stack-form { display: grid; gap: var(--space-2); }
+
+/* ===================== Phase 2A slice 2A-3 — contracts (reuses the Employee List / Detail patterns) ===================== */
+.contract-table th, .contract-table td { padding-left: var(--space-2); padding-right: var(--space-2); }
+.contract-table th:first-child, .contract-table td:first-child { padding-left: var(--space-4); }
+.contract-table .col-name { white-space: nowrap; }
+.contract-table .col-name a { font-weight: var(--font-weight-semibold); text-decoration: none; color: var(--color-text); }
+.contract-table .col-name a:hover { color: var(--color-primary); text-decoration: underline; }
+.contract-table .col-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Needs Review is an operational signal (warning tone, icon + text), never the brand red or an error. */
+.review-flag { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.review-flag svg { width: 14px; height: 14px; }
+.filter-checks { display: grid; gap: var(--space-1); align-self: end; }
+.finding-list { margin: var(--space-2) 0; padding-left: 18px; }
+.finding-list li + li { margin-top: var(--space-1); }
+.info-grid .info-wide { grid-column: 1 / -1; }
+.pre-line { white-space: pre-line; }
+.contract-history { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+.contract-history li { padding-left: var(--space-3); border-left: 2px solid var(--color-border); }
+.contract-history-title { overflow-wrap: anywhere; }
+.tab-toolbar { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.tab-toolbar p { margin: 0; }
+.contract-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.contract-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2) var(--space-3); flex-wrap: wrap; padding: var(--space-2) 0; border-top: 1px solid var(--color-border); }
+.contract-row:first-child { border-top: 0; padding-top: 0; }
+.contract-row-main { min-width: 0; }
+.contract-row-title { font-weight: var(--font-weight-semibold); text-decoration: none; color: var(--color-text); overflow-wrap: anywhere; }
+.contract-row-title:hover { color: var(--color-primary); text-decoration: underline; }
+.contract-row-badges { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.contract-row.muted-row .contract-row-title { color: var(--color-text-2); }
+.contract-subhead { font-size: var(--font-size-sm); color: var(--color-text-2); margin: var(--space-4) 0 var(--space-2); }
+.contract-term { border: 0; padding: 0; margin: 0; display: grid; gap: var(--space-1); }
+.contract-term legend { padding: 0; }
+.contract-form { display: grid; gap: var(--space-3); }
+.filter-checks input { width: auto; }
+.contract-states { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+.state-pair { display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
+.state-label { font-size: var(--font-size-xs); color: var(--color-text-2); }
+.contract-states.compact { gap: var(--space-1) var(--space-2); }
+.contract-table td:nth-child(2) > div:first-child { white-space: nowrap; }

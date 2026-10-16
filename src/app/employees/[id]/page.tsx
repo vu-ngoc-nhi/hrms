@@ -17,12 +17,14 @@ import { openWorkflow, successTab, type DetailTab, type OpenWorkflow, type Workf
 import { HistoryTab } from "./HistoryTab";
 import type { TabContext } from "./tabContext";
 import { AssignmentTab } from "./AssignmentTab";
+import { ContractsTab } from "./ContractsTab";
 import { EmploymentTab } from "./EmploymentTab";
 import { headerActions, latestPeriod, overview, type ActionId, type Detail } from "./detailModel";
 
 // UI-3 Employee Detail shell: compact header with the primary assignment action and person-level More actions (UI-9),
-// tabs, and one workflow surface. Documents is not shown: it has no function yet (roadmap only).
-const TABS: readonly DetailTab[] = ["overview", "personal", "employment", "assignment", "history"];
+// tabs, and one workflow surface. Documents is not shown: it has no function yet (roadmap only). Contracts (Phase 2A,
+// C-108) appears only with contracts.read.
+const TABS: readonly DetailTab[] = ["overview", "personal", "employment", "assignment", "contracts", "history"];
 type TabId = DetailTab;
 
 function tabFromUrl(): TabId {
@@ -128,12 +130,19 @@ export default function EmployeeDetailPage() {
 
       {workflow && <WorkflowHost key={workflow.n} wf={workflow} d={d} can={can} onSaved={saved} onClose={() => setWorkflow(null)} />}
 
-      <Tabs<TabId> idPrefix="employee" label={t("detail.sectionsLabel")} items={TABS.map((id) => ({ id, label: t(`detail.tabs.${id}`) }))} value={tab} onChange={setTab} />
+      <Tabs<TabId>
+        idPrefix="employee"
+        label={t("detail.sectionsLabel")}
+        items={TABS.filter((id) => id !== "contracts" || can("contracts.read")).map((id) => ({ id, label: t(`detail.tabs.${id}`) }))}
+        value={tab}
+        onChange={setTab}
+      />
       <div role="tabpanel" id={`panel-employee-${tab}`} aria-labelledby={`tab-employee-${tab}`} tabIndex={0} className="tab-panel">
         {tab === "overview" && <OverviewTab o={o} status={d.employment_status} statusAsOf={d.status_as_of} />}
         {tab === "personal" && <PersonalTab profile={d} can={can} onEdit={() => launch("edit_personal")} />}
         {tab === "employment" && <EmploymentTab ctx={ctx} />}
         {tab === "assignment" && <AssignmentTab ctx={ctx} />}
+        {tab === "contracts" && can("contracts.read") && <ContractsTab personId={d.id} />}
         {tab === "history" && <HistoryTab d={d} />}
       </div>
     </>

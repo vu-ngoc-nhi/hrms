@@ -2,7 +2,7 @@
 // workflows, long previews) or a Modal (short ones). Business logic stays in the unchanged workflow forms and the server.
 import type { ActionId } from "./detailModel";
 
-export type DetailTab = "overview" | "personal" | "employment" | "assignment" | "history";
+export type DetailTab = "overview" | "personal" | "employment" | "assignment" | "contracts" | "history";
 export type WorkflowTarget = { periodId?: string; assignmentId?: string };
 export type OpenWorkflow = { action: ActionId; target: WorkflowTarget; n: number };
 

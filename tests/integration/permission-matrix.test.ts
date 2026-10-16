@@ -56,6 +56,9 @@ const DOCUMENTED: Record<string, Permission | null> = {
   createContractReturnToDraft: "contracts.finalize",
   createContractSignatureConfirmation: "contracts.finalize",
   listContractHistory: "contracts.read",
+  // Phase 2A slice 2A-3: read models for the contract UI.
+  listContracts: "contracts.read",
+  listEmployeeContracts: "contracts.read",
   getInternalOpenApi: "docs.read",
 };
 

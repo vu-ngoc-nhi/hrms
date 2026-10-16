@@ -567,6 +567,35 @@ export const operations = {
     success: { status: 201, description: "The Signed contract (or replayed result)", schema: S.ContractDetailSchema },
     errors: [400, ...AUTH_ERRORS, 404, 409, 422],
   },
+  // ---------------- Phase 2A slice 2A-3: read models for the contract UI ----------------
+  listContracts: {
+    operationId: "listContracts",
+    method: "get",
+    path: "/api/v1/core-hr/contracts",
+    summary: "Contract portfolio list with canonical filters",
+    description:
+      "contracts.read. Filters: search (Contract Number, employee name or code), contract_type_id, document_state, time_state, needs_review, effective_from_from / effective_from_to, include_disposed (default false). Computed fields (time state, Needs Review) use the same evaluation as the contract detail, for today in Asia/Ho_Chi_Minh. Default sort: operational end (soonest first).",
+    tag: "Contracts",
+    auth: true,
+    permission: "contracts.read",
+    query: S.ContractListQuerySchema,
+    success: { status: 200, description: "A page of contracts", schema: S.ContractListSchema },
+    errors: [400, ...AUTH_ERRORS],
+  },
+  listEmployeeContracts: {
+    operationId: "listEmployeeContracts",
+    method: "get",
+    path: "/api/v1/core-hr/employees/{id}/contracts",
+    summary: "Contracts of one employee, grouped for the Employee Contracts tab",
+    description:
+      "contracts.read. Server-side groups: current, upcoming, drafts, history, not_operational; plus whether a Draft may be created here and for which Employment Periods (not Cancelled/Voided; default = representative period).",
+    tag: "Contracts",
+    auth: true,
+    permission: "contracts.read",
+    pathParams: S.IdPathSchema,
+    success: { status: 200, description: "Grouped contracts", schema: S.EmployeeContractsSchema },
+    errors: [400, ...AUTH_ERRORS, 404],
+  },
   listContractHistory: {
     operationId: "listContractHistory",
     method: "get",

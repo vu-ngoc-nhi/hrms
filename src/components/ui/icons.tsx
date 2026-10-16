@@ -36,6 +36,13 @@ export const IconDocs = () => (
     <path d="M14 3v5h5M9 13h7M9 17h5" />
   </Icon>
 );
+export const IconContract = () => (
+  <Icon>
+    <path d="M6 3h9l4 4v14H6z" />
+    <path d="M14 3v5h5" />
+    <path d="M9 17c1.2-1.6 2.2-1.6 3 0s1.8 1.6 3 0" />
+  </Icon>
+);
 export const IconSignOut = () => (
   <Icon>
     <path d="M15 4h4v16h-4" />

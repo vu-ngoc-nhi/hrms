@@ -3,7 +3,7 @@
 import { tMaybe } from "@/i18n";
 
 export type BadgeVariant = "success" | "info" | "neutral" | "warning" | "danger" | "primary";
-export type StatusKind = "employment" | "completeness" | "disposition" | "catalog";
+export type StatusKind = "employment" | "completeness" | "disposition" | "catalog" | "contractDocument" | "contractTime" | "contractDisposition";
 
 const VARIANTS: Record<StatusKind, Record<string, BadgeVariant>> = {
   // Computed employment status (C-16): Active / Pre-start / Ended / No Employment Record.
@@ -14,6 +14,10 @@ const VARIANTS: Record<StatusKind, Record<string, BadgeVariant>> = {
   disposition: { cancelled: "neutral", voided: "neutral" },
   // Reference data (UI-10): inactive values stay on historical records; not deleted.
   catalog: { active: "success", inactive: "neutral" },
+  // Phase 2A contracts: document state, computed time state and contract dispositions (never the brand red).
+  contractDocument: { draft: "neutral", finalized: "info", signed: "success" },
+  contractTime: { upcoming: "info", active: "success", expired: "neutral" },
+  contractDisposition: { cancelled: "neutral", voided: "neutral" },
 };
 
 const LABEL_KEY: Record<StatusKind, (code: string) => string> = {
@@ -21,6 +25,9 @@ const LABEL_KEY: Record<StatusKind, (code: string) => string> = {
   completeness: (c) => `completeness.${c}`,
   disposition: (c) => `detail.${c}Badge`,
   catalog: (c) => `organization.statusValue.${c}`,
+  contractDocument: (c) => `contracts.documentStateValue.${c}`,
+  contractTime: (c) => `contracts.timeStateValue.${c}`,
+  contractDisposition: (c) => `contracts.dispositionValue.${c}`,
 };
 
 export function statusVariant(kind: StatusKind, code: string): BadgeVariant {

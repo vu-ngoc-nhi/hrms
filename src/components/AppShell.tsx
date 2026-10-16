@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { t } from "@/i18n";
 import { api, clearToken, getToken } from "@/lib/client/api";
-import { IconDocs, IconHome, IconOrganization, IconSignOut, IconUsers } from "./ui/icons";
+import { IconContract, IconDocs, IconHome, IconOrganization, IconSignOut, IconUsers } from "./ui/icons";
 
 type Me = { display_name: string; roles: string[]; auth_issuer: "entra" | "test" };
 type Perms = { permissions: string[] };
@@ -55,10 +55,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  // Core HR Phase 1 navigation: Home, Employees, Organization — each gated by a capability, never a role name.
+  // Navigation: Home, Employees, Contracts (Phase 2A), Organization — each gated by a capability, never a role name.
   const nav = [
     { key: "home", href: "/", label: t("nav.home"), icon: <IconHome />, show: session?.can("employees.read") },
     { key: "employees", href: "/employees", label: t("nav.employees"), icon: <IconUsers />, show: session?.can("employees.read") },
+    // Phase 2A (C-108): contract records need contracts.read — employees.read never implies it.
+    { key: "contracts", href: "/contracts", label: t("nav.contracts"), icon: <IconContract />, show: session?.can("contracts.read") },
     { key: "organization", href: "/catalogs", label: t("nav.organization"), icon: <IconOrganization />, show: session?.can("catalogs.read") },
   ];
 

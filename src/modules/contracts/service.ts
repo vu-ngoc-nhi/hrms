@@ -33,17 +33,15 @@ import {
   timeState,
   warningFingerprint,
   type ActionKey,
-  type ContractInContext,
   type Finding,
 } from "./evaluation";
-import { documentState, isSignedDateAllowed, normalizeContractNumber } from "./model";
-import { contractDisposition, contractDispositionFlags, markContractDiscarded, periodFacts } from "./queries";
+import { FACTS_INCLUDE, toContractInContext } from "./facts";
+import { isSignedDateAllowed, normalizeContractNumber } from "./model";
+import { contractDisposition, markContractDiscarded, periodFacts } from "./queries";
 
 type Client = Tx | ReturnType<typeof db>;
 
 // ---------------- Loading ----------------
-const CONTEXT_INCLUDE = { contractType: true, employment: true } as const;
-
 async function loadContext(client: Client, id: string) {
   const row = await client.contract.findUnique({
     where: { id },
@@ -51,26 +49,9 @@ async function loadContext(client: Client, id: string) {
   });
   if (!row) throw notFound("Contract not found.");
   // Every contract of the same person: overlap is person-wide, renewals and drafts are period-wide.
-  const siblings = await client.contract.findMany({ where: { employment: { personId: row.employment.personId } }, include: CONTEXT_INCLUDE });
-  const facts = (r: (typeof siblings)[number]): ContractInContext => ({
-    contract: {
-      id: r.id,
-      employmentId: r.employmentId,
-      parentContractId: r.parentContractId,
-      relationshipType: r.relationshipType,
-      contractTypeId: r.contractTypeId,
-      contractTypeActive: r.contractType ? r.contractType.isActive : null,
-      contractNumber: r.contractNumber,
-      effectiveFrom: fromDbDate(r.effectiveFrom),
-      effectiveTo: fromDbDate(r.effectiveTo),
-      isOpenEnded: r.isOpenEnded,
-      documentState: documentState(r),
-      ...contractDispositionFlags(r),
-    },
-    period: periodFacts(r.employment),
-  });
-  const self = facts(siblings.find((s) => s.id === id)!);
-  const others = siblings.filter((s) => s.id !== id).map(facts);
+  const siblings = await client.contract.findMany({ where: { employment: { personId: row.employment.personId } }, include: FACTS_INCLUDE });
+  const self = toContractInContext(siblings.find((s) => s.id === id)!);
+  const others = siblings.filter((s) => s.id !== id).map(toContractInContext);
   return { row, x: self, others };
 }
 type Context = Awaited<ReturnType<typeof loadContext>>;

@@ -1,0 +1,260 @@
+// Slice 2A-3 contract UI model. Pure helpers over the server representation (ContractDetail / ContractSummary):
+// URL ↔ filters, labels for server codes, which server-allowed actions to show, the M-19 Finalize protocol outcome and
+// draft-form request bodies. No lifecycle rule is re-derived here: states, Needs Review, readiness and allowed actions
+// always come from the API; the form only performs convenience checks the server repeats.
+import { tMaybe, t, formatDate } from "@/i18n";
+
+// ---------------- Server shapes (subset used by the UI) ----------------
+export type Finding = { code: string; message: string; field?: string; related_contract_id?: string };
+export type ActionView = { allowed: boolean; reasons: string[] };
+export type ContractState = {
+  document_state: "draft" | "finalized" | "signed";
+  disposition: "cancelled" | "voided" | null;
+  operational: boolean;
+  time_state: "upcoming" | "active" | "expired" | null;
+  time_state_detail: "closed_by_employment_end" | "replaced_by_renewal" | null;
+  operational_end: string | null;
+  days_to_operational_end: number | null;
+};
+type Employment = { id: string; start_date: string; end_date: string | null; disposition: "cancelled" | "voided" | null; employee_type: { name: string } | null };
+export type ContractSummary = {
+  id: string;
+  revision: number;
+  employee: { person_id: string; employee_code: string; full_name: string };
+  employment: Employment;
+  contract_type: { id: string; code: string; name: string } | null;
+  contract_number: string | null;
+  effective_from: string | null;
+  effective_to: string | null;
+  is_open_ended: boolean;
+  signed_at: string | null;
+  state: ContractState;
+  review: { needs_review: boolean; codes: string[] };
+};
+export type ActionKey = "edit" | "discard" | "finalize" | "return_to_draft" | "confirm_signed";
+export type ContractDetail = Omit<ContractSummary, "review" | "contract_type"> & {
+  as_of: string;
+  contract_type: { id: string; code: string; name: string; name_vi: string | null; is_active: boolean } | null;
+  summary: string | null;
+  review: { needs_review: boolean; items: Finding[] };
+  finalize_check: { ready: boolean; blockers: Finding[]; warnings: Finding[]; warning_fingerprint: string | null } | null;
+  actions: Record<ActionKey, ActionView>;
+  finalized_at: string | null;
+  finalized_by: { user_id: string; display_name: string } | null;
+  created_at: string;
+  created_by: { user_id: string; display_name: string } | null;
+};
+export type HistoryItem = {
+  event_type: string;
+  effective_date: string | null;
+  recorded_at: string;
+  recorded_by: { user_id: string; display_name: string } | null;
+  reason: string | null;
+  related_contract_id: string | null;
+};
+
+// ---------------- Portfolio list URL state (canonical API parameter names, like the Employee List) ----------------
+export const DOCUMENT_STATES = ["draft", "finalized", "signed"] as const;
+export const TIME_STATES = ["upcoming", "active", "expired"] as const;
+export type ContractFilters = {
+  search: string;
+  contract_type_id: string;
+  document_state: string;
+  time_state: string;
+  needs_review: string;
+  effective_from_from: string;
+  effective_from_to: string;
+  include_disposed: string;
+};
+export const EMPTY_CONTRACT_FILTERS: ContractFilters = {
+  search: "",
+  contract_type_id: "",
+  document_state: "",
+  time_state: "",
+  needs_review: "",
+  effective_from_from: "",
+  effective_from_to: "",
+  include_disposed: "",
+};
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const oneOf = (v: string, allowed: readonly string[]) => (allowed.includes(v) ? v : "");
+
+/** Filters and page from a query string; unknown or malformed values are dropped (never sent to the API). */
+export function contractFiltersFromQuery(query: string): { filters: ContractFilters; page: number } {
+  const p = new URLSearchParams(query);
+  const get = (k: string) => p.get(k) ?? "";
+  const page = Number.parseInt(get("page") || "1", 10);
+  return {
+    filters: {
+      search: get("search").slice(0, 100),
+      contract_type_id: UUID.test(get("contract_type_id")) ? get("contract_type_id") : "",
+      document_state: oneOf(get("document_state"), DOCUMENT_STATES),
+      time_state: oneOf(get("time_state"), TIME_STATES),
+      needs_review: oneOf(get("needs_review"), ["true"]),
+      effective_from_from: DATE.test(get("effective_from_from")) ? get("effective_from_from") : "",
+      effective_from_to: DATE.test(get("effective_from_to")) ? get("effective_from_to") : "",
+      include_disposed: oneOf(get("include_disposed"), ["true"]),
+    },
+    page: Number.isInteger(page) && page >= 1 ? page : 1,
+  };
+}
+
+export function contractQueryFromFilters(filters: ContractFilters, page: number): string {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) if (v.trim()) p.set(k, v.trim());
+  if (page > 1) p.set("page", String(page));
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+export const hasContractFilters = (f: ContractFilters) => Object.values(f).some((v) => v.trim() !== "");
+
+/** What the contract screens may offer, from server capabilities (never role names). */
+export const contractCapabilities = (can: (p: string) => boolean) => ({ read: can("contracts.read"), catalogs: can("catalogs.read") });
+
+// ---------------- Labels for server codes (codes are never shown to HR) ----------------
+export const contractTitle = (c: { contract_number: string | null }) => c.contract_number ?? t("contracts.draftContract");
+
+/** Plain-language warning / review item; falls back to the server message only if a code is not catalogued. */
+export const findingText = (f: Finding) => tMaybe(`contracts.warning.${f.code}`) ?? f.message;
+
+export function blockerText(f: Finding): string {
+  if (f.code === "REQUIRED") return t("contracts.blocker.REQUIRED", { field: tMaybe(`contracts.blockerField.${f.field}`) ?? t("contracts.fields.contractNumber") });
+  return tMaybe(`contracts.blocker.${f.code}`) ?? f.message;
+}
+
+export const historyTitle = (e: HistoryItem) => tMaybe(`contracts.history.event.${e.event_type}`) ?? e.event_type;
+
+export function termText(c: { effective_to: string | null; is_open_ended: boolean }): string {
+  if (c.is_open_ended) return t("contracts.openEnded");
+  return formatDate(c.effective_to);
+}
+
+export function periodText(e: Employment): string {
+  const range = e.end_date ? t("contracts.periodRange", { from: formatDate(e.start_date), to: formatDate(e.end_date) }) : t("contracts.periodOpen", { from: formatDate(e.start_date) });
+  return e.employee_type ? t("contracts.periodWithType", { range, type: e.employee_type.name }) : range;
+}
+
+// ---------------- Actions: only what the server allows ----------------
+export type ActionPlacement = { primary: ActionKey | null; secondary: ActionKey[]; menu: ActionKey[] };
+
+/**
+ * Lays out the actions the server marks allowed (nothing else is shown). Finalize is the main step of a Draft and
+ * Confirm Signed of a Finalized contract; Edit stays visible; Return to Draft and Discard go to the More menu.
+ */
+export function placeActions(actions: Record<ActionKey, ActionView>): ActionPlacement {
+  const ok = (k: ActionKey) => actions[k]?.allowed === true;
+  const primary: ActionKey | null = ok("finalize") ? "finalize" : ok("confirm_signed") ? "confirm_signed" : null;
+  return {
+    primary,
+    secondary: (["edit"] as ActionKey[]).filter(ok),
+    menu: (["return_to_draft", "discard"] as ActionKey[]).filter(ok),
+  };
+}
+
+/**
+ * A server denial reason worth explaining to HR (the rest — permission, wrong state — simply hides the action).
+ * Parent-period reasons and "not ready" materially help HR decide what to do next.
+ */
+export function explainedReason(actions: Record<ActionKey, ActionView>): string | null {
+  const all = Object.values(actions).flatMap((a) => a.reasons);
+  if (all.includes("PERIOD_VOIDED")) return t("contracts.reason.PERIOD_VOIDED");
+  if (all.includes("PERIOD_CANCELLED")) return t("contracts.reason.PERIOD_CANCELLED");
+  return null;
+}
+
+/** Why "Create contract" is not offered on the Employee Contracts tab, when it helps HR (not for missing permission). */
+export function explainedReasonForCreate(reasons: string[]): string | null {
+  return reasons.includes("NO_VALID_EMPLOYMENT_PERIOD") && !reasons.includes("PERMISSION_REQUIRED") ? t("contracts.reason.NO_VALID_EMPLOYMENT_PERIOD") : null;
+}
+
+// ---------------- M-19 Finalize protocol ----------------
+export type FinalizeOutcome =
+  | { kind: "finalized" }
+  | { kind: "confirm"; warnings: Finding[]; fingerprint: string; changed: boolean }
+  | { kind: "error" };
+
+/**
+ * Interprets one Finalize response. A 409 FINALIZE_CONFIRMATION_REQUIRED opens (or refreshes) the review dialog with
+ * the server's current warnings and fingerprint; `changed` = this was the answer to a Finalize Anyway, i.e. the warning
+ * set changed since HR reviewed it. The UI never retries Finalize on its own.
+ */
+export function finalizeOutcome(
+  res: { ok: true } | { ok: false; status: number; body?: { error?: string; details?: Finding[]; warning_fingerprint?: string } },
+  sentFingerprint: string | null,
+): FinalizeOutcome {
+  if (res.ok) return { kind: "finalized" };
+  if (res.status === 409 && res.body?.error === "FINALIZE_CONFIRMATION_REQUIRED" && res.body.warning_fingerprint) {
+    return { kind: "confirm", warnings: res.body.details ?? [], fingerprint: res.body.warning_fingerprint, changed: sentFingerprint !== null };
+  }
+  return { kind: "error" };
+}
+
+/** Finalize request body: the fingerprint is sent only for Finalize Anyway (HR saw exactly these warnings). */
+export const finalizeBody = (revision: number, fingerprint: string | null) =>
+  fingerprint ? { expected_revision: revision, confirmed_warning_fingerprint: fingerprint } : { expected_revision: revision };
+
+// ---------------- Draft form ----------------
+export type DraftForm = {
+  employment_id: string;
+  contract_type_id: string;
+  contract_number: string;
+  effective_from: string;
+  term: "fixed" | "open";
+  effective_to: string;
+  summary: string;
+};
+export const EMPTY_DRAFT: DraftForm = { employment_id: "", contract_type_id: "", contract_number: "", effective_from: "", term: "fixed", effective_to: "", summary: "" };
+
+export function draftFromContract(c: ContractDetail): DraftForm {
+  return {
+    employment_id: c.employment.id,
+    contract_type_id: c.contract_type?.id ?? "",
+    contract_number: c.contract_number ?? "",
+    effective_from: c.effective_from ?? "",
+    term: c.is_open_ended ? "open" : "fixed",
+    effective_to: c.effective_to ?? "",
+    summary: c.summary ?? "",
+  };
+}
+
+/** Convenience checks only (the server validates everything again). Message keys from the catalogue. */
+export function draftErrors(f: DraftForm): Partial<Record<keyof DraftForm, string>> {
+  const e: Partial<Record<keyof DraftForm, string>> = {};
+  if (f.term === "fixed" && f.effective_from && f.effective_to && f.effective_to < f.effective_from) e.effective_to = "contracts.form.error.effectiveTo";
+  return e;
+}
+
+const orNull = (v: string) => (v.trim() === "" ? null : v.trim());
+
+function draftValues(f: DraftForm) {
+  return {
+    contract_type_id: orNull(f.contract_type_id),
+    contract_number: orNull(f.contract_number),
+    effective_from: orNull(f.effective_from),
+    effective_to: f.term === "open" ? null : orNull(f.effective_to),
+    is_open_ended: f.term === "open",
+    summary: orNull(f.summary),
+  };
+}
+
+/** POST /contracts body (empty fields omitted: a Draft may be incomplete). */
+export function createDraftBody(f: DraftForm): Record<string, unknown> {
+  const v = draftValues(f);
+  const body: Record<string, unknown> = { employment_id: f.employment_id };
+  for (const [k, val] of Object.entries(v)) if (val !== null && val !== false) body[k] = val;
+  return body;
+}
+
+/** PATCH body with only the changed fields plus expected_revision; null when nothing changed. */
+export function updateDraftBody(c: ContractDetail, f: DraftForm): Record<string, unknown> | null {
+  const before = draftValues(draftFromContract(c));
+  const after = draftValues(f);
+  const body: Record<string, unknown> = {};
+  for (const k of Object.keys(after) as (keyof typeof after)[]) if (after[k] !== before[k]) body[k] = after[k];
+  return Object.keys(body).length ? { expected_revision: c.revision, ...body } : null;
+}
+
+/** Client convenience for Confirm Signed: the server decides with the Asia/Ho_Chi_Minh business date. */
+export const signedDateIssue = (value: string, today: string): "required" | "future" | null => (!value ? "required" : value > today ? "future" : null);

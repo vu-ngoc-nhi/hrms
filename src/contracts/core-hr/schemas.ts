@@ -291,6 +291,82 @@ export const ContractConfirmSignedSchema = reg(
 );
 export type ContractConfirmSignedInput = z.infer<typeof ContractConfirmSignedSchema>;
 
+// ---------------- Slice 2A-3: list / employee grouping (read models) ----------------
+const contractStateSchema = () =>
+  z.object({
+    document_state: z.enum(["draft", "finalized", "signed"]),
+    disposition: z.enum(["cancelled", "voided"]).nullable(),
+    operational: z.boolean(),
+    time_state: z.enum(["upcoming", "active", "expired"]).nullable(),
+    time_state_detail: z.enum(["closed_by_employment_end", "replaced_by_renewal"]).nullable(),
+    operational_end: isoDate().nullable(),
+    days_to_operational_end: z.int().nullable(),
+  });
+export const ContractSummarySchema = reg(
+  "ContractSummary",
+  z.object({
+    id: z.uuid(),
+    revision: z.int(),
+    employee: z.object({ person_id: z.uuid(), employee_code: z.string(), full_name: z.string() }),
+    employment: z.object({
+      id: z.uuid(),
+      start_date: isoDate(),
+      end_date: isoDate().nullable(),
+      disposition: z.enum(["cancelled", "voided"]).nullable(),
+      employee_type: z.object({ id: z.uuid(), code: z.string(), name: z.string() }).nullable(),
+    }),
+    contract_type: z.object({ id: z.uuid(), code: z.string(), name: z.string() }).nullable(),
+    contract_number: z.string().nullable(),
+    effective_from: isoDate().nullable(),
+    effective_to: isoDate().nullable(),
+    is_open_ended: z.boolean(),
+    signed_at: isoDate().nullable(),
+    relationship: z.object({ type: z.enum(["renewal"]).nullable(), parent_id: z.uuid().nullable(), renewal_id: z.uuid().nullable() }),
+    state: contractStateSchema(),
+    review: z.object({ needs_review: z.boolean(), codes: z.array(z.string()) }),
+  }),
+  "List representation of a contract; all computed fields come from the server (same evaluation as the detail).",
+);
+export type ContractSummary = z.infer<typeof ContractSummarySchema>;
+
+export const ContractListQuerySchema = z.strictObject({
+  ...pageFields,
+  search: z.string().max(100).optional().describe("Contract Number, employee name or Employee Code (case-insensitive, contains)."),
+  contract_type_id: z.uuid().optional(),
+  document_state: z.enum(["draft", "finalized", "signed"]).optional(),
+  time_state: z.enum(["upcoming", "active", "expired"]).optional().describe("Computed for today (Asia/Ho_Chi_Minh); Drafts have none."),
+  needs_review: boolQuery.describe("Computed Needs Review (overlap, gap, end after period end, period cancelled/voided…)."),
+  effective_from_from: isoDate().optional(),
+  effective_from_to: isoDate().optional(),
+  include_disposed: boolQuery.describe("Include discarded/cancelled and voided contracts (evidence). Default false."),
+  sort: z.enum(["operational_end", "effective_from", "contract_number", "employee_code"]).optional().describe("Default operational_end (soonest end first, no end last)."),
+});
+export type ContractListQuery = z.infer<typeof ContractListQuerySchema>;
+export const ContractListSchema = reg(
+  "ContractList",
+  z.object({ data: z.array(ContractSummarySchema), total: z.int(), page: z.int(), page_size: z.int(), as_of: isoDate() }),
+);
+
+export const EmployeeContractsSchema = reg(
+  "EmployeeContracts",
+  z.object({
+    as_of: isoDate(),
+    current: z.array(ContractSummarySchema).describe("Operational Finalized/Signed contracts in force today."),
+    upcoming: z.array(ContractSummarySchema).describe("Operational Finalized/Signed contracts starting later."),
+    drafts: z.array(ContractSummarySchema).describe("Operational Drafts."),
+    history: z.array(ContractSummarySchema).describe("Operational contracts that have ended."),
+    not_operational: z.array(ContractSummarySchema).describe("Discarded/cancelled/voided contracts and contracts of a cancelled/voided period."),
+    create: z.object({
+      allowed: z.boolean(),
+      reasons: z.array(z.string()).describe("PERMISSION_REQUIRED, NO_VALID_EMPLOYMENT_PERIOD"),
+      periods: z.array(
+        z.object({ id: z.uuid(), start_date: isoDate(), end_date: isoDate().nullable(), employee_type: z.string().nullable(), is_default: z.boolean() }),
+      ).describe("Employment Periods a new Draft may be linked to (not Cancelled/Voided)."),
+    }),
+  }),
+  "Server-side grouping for the Employee Detail Contracts tab.",
+);
+
 export const ContractHistorySchema = reg(
   "ContractHistory",
   z.object({
