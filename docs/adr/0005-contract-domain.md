@@ -1,6 +1,6 @@
 # ADR-0005 — Contract domain (Phase 2A Contract Management)
 
-- Status: **Accepted (2026-10-15)** — freezes C-104 … C-113 and M-15 … M-20 for implementation. Staged delivery (C-109): **2A-0** done; **2A-1 Contract foundation implemented** (migration `20261015000000_contract_foundation`, §16); **2A-2 core lifecycle implemented** (§17); **2A-3 contract screens implemented** (§18); **2A-4 Contract Attention implemented** (§19); each later slice needs an owner checkpoint. Amendment workflow and Phase 2B are **not** authorized.
+- Status: **Accepted (2026-10-15)** — freezes C-104 … C-115 and M-15 … M-20 for implementation. Staged delivery (C-109): **2A-0** done; **2A-1 Contract foundation implemented** (migration `20261015000000_contract_foundation`, §16); **2A-2 core lifecycle implemented** (§17); **2A-3 contract screens implemented** (§18); **2A-4 Contract Attention implemented** (§19); each later slice needs an owner checkpoint. Amendment workflow and Phase 2B are **not** authorized.
 - Sources: `docs/design/phase2-contract-decision-pack.md` (revision 4), `docs/decision-register.md`, API draft `docs/api/contracts-api-draft.md`.
 - Governing principles: C-84 (*Lightweight HR operations, strong Core HR integrity*), C-85 (permission-based access), ADR-0003 (identity), ADR-0004 (history vs audit).
 - Synthetic data only. Real contract data needs PL-11, PL-12, PL-13 and the Real Data Gate.
@@ -26,7 +26,7 @@ A change to anything in this ADR is a new decision (register entry + ADR revisio
 - **Structural date rule (only one):** at Finalize, **Effective From** lies inside the linked period (`start_date ≤ effective_from` and, if the period has an end date, `effective_from ≤ end_date`). It does not concern created/finalized/signed timestamps — a contract may be created, finalized or signed before the period starts.
 - **Period validity** = the Phase 1 disposition predicate: the period is **not Cancelled and not Voided**. **Employment Status (Pre-start / Active / Ended) never gates a contract action.**
 - A contract whose period becomes Cancelled/Voided, or whose Effective From falls outside the period after a period correction, is kept unchanged, leaves operations through the shared query, and is flagged *Needs Review*.
-- **Operational end** of an agreement = `least(effective_to, period.end_date, renewal_successor.effective_from − 1)`; open-ended → period end or successor. The contract's own `effective_to` is never rewritten.
+- **Operational end** of an agreement = `least(effective_to, period.end_date, signed_renewal.effective_from − 1)`; only a **Signed** non-disposed renewal is the confirmed successor (C-115 — Draft and Finalized-unsigned renewals have no effect). The contract's own `effective_to` is never rewritten.
 
 ## 3. Phase 2A aggregate and model
 
@@ -40,8 +40,8 @@ Three tables; no Contract Version subsystem; no speculative fields (C-104 (6)).
 
 Database invariants (fail closed):
 - `parent_contract_id` and `relationship_type` both null or both set; **2A admits `relationship_type = 'renewal'` only** (amendment is added by forward migration after its checkpoint).
-- Parent in the same period: composite FK `(parent_contract_id, employment_id) → contract(id, employment_id)`; parent is an agreement; no cycles.
-- At most one renewal child per parent that is not Cancelled/Voided (partial unique index).
+- Parent in the same period: composite FK `(parent_contract_id, employment_id) → contract(id, employment_id)`; no cycles. *2A-1:* the parent may not itself have a parent. *Approved change (C-115, 2A-5 migration):* the parent may be an original **or a renewal** agreement (chains A → B → C), never an amendment; renewable parent = Finalized/Signed, not disposed, finite term.
+- **One non-disposed direct renewal per parent agreement** (partial unique index; disposed = Discarded, Cancelled or Voided).
 - `cancelled_at` and `voided_at` mutually exclusive; a Cancelled/Voided row is immutable (terminal trigger, as C-86).
 - `signed_at` requires `finalized_at`.
 - Finalized rows: Contract Type, Contract Number and Effective From set; exactly one of `effective_to ≥ effective_from` or `is_open_ended = true`.
@@ -75,7 +75,7 @@ Drafts and non-operational contracts have no time state. Time state does not dep
 
 ## 6. Cancelled / Voided disposition
 
-- **Cancelled** — (a) a discarded Draft, or (b) a Finalized/Signed contract that has not started (time state `upcoming`) and will not take effect (*Cancel planned contract*, reason, `contracts.finalize`, slice 2A-5).
+- **Cancelled** — (a) a discarded Draft, or (b) a **Finalized, unsigned** contract whose Effective From is after the Vietnam business date and which will not take effect (*Cancel planned contract*, reason, `contracts.finalize`, slice 2A-5). Withdrawing a **Signed** contract is PL-10 — no normal action (C-115).
 - **Voided** — a Finalized/Signed contract that should never have existed (reason, `contracts.correct`, slice 2A-5). **Final; no Unvoid.**
 - Both terminal; rows and events kept; excluded from operations by the **shared contract query predicate** (`cancelled_at IS NULL AND voided_at IS NULL AND period not Cancelled/Voided`), defined once beside `operationalEmploymentWhere` and contract-tested. No hard delete.
 
@@ -89,10 +89,10 @@ Drafts and non-operational contracts have no time state. Time state does not dep
 | **Finalize** | Draft | **finalize** | — | 2A-2 |
 | **Return to Draft** | Finalized, unsigned | **finalize** | mandatory | 2A-2 |
 | **Confirm signed** | Finalized, unsigned; period not Voided (C-111) | **finalize** | — | 2A-2 |
-| Create renewal Draft | Finalized/Signed | manage | — | 2A-5 |
-| Cancel planned contract | Finalized/Signed, upcoming | finalize | mandatory | 2A-5 |
+| Create renewal Draft | Finalized/Signed parent, not disposed, finite term, no non-disposed renewal (C-115) | manage | — | 2A-5 |
+| Cancel planned contract | Finalized **unsigned**, Effective From > today; no non-disposed renewal child (C-115) | finalize | mandatory | 2A-5 |
 | Correct | Signed | **correct** | mandatory | 2A-5 |
-| Void | Finalized/Signed | **correct** | mandatory | 2A-5 |
+| Void | Finalized/Signed, erroneous record only; no non-disposed renewal child (C-115) | **correct** | mandatory | 2A-5 |
 | Amend | — | — | — | **gated** |
 
 **Finalize** — blockers: Contract Type set and active; number present and unique; Effective From inside a valid period; term consistent; renewal parent valid. Warnings (M-17, never blocking): unlinked overlap with another operational agreement of the person, gap after the renewal predecessor, `effective_to` after the period's end date, another open Draft for the period. Warnings follow **M-19**: blockers can never be overridden; with warnings and no blockers the server returns `409 FINALIZE_CONFIRMATION_REQUIRED` with the current warnings instead of finalizing silently; HR confirms once (*Finalize Anyway*), sending the server-issued `warning_fingerprint`; the server recomputes blockers and warnings in the writing transaction and finalizes only if the fingerprint still matches. Confirming does not resolve a warning (the contract stays under Needs Review) and leaves no acknowledgement record — only the `finalized` history event.
@@ -166,7 +166,7 @@ Forward, additive migration `prisma/migrations/20261015000000_contract_foundatio
 | `contract` | id, **employment_id** (existing FK naming for the Employment Period), parent_contract_id, relationship_type, contract_type_id, contract_number, effective_from, effective_to (inclusive), **is_open_ended** (existing boolean naming), summary, finalized_at, finalized_by, signed_at (DATE), cancelled_at, voided_at, revision, created_at, created_by, updated_at (as on the Person aggregate) |
 | `contract_history_event` | id, contract_id, event_type, effective_date, recorded_at, recorded_by, reason, related_contract_id |
 | Constraints | `contract_relationship_type_check` (`renewal` only); `contract_relationship_pair_ck`; `contract_not_own_parent_ck`; `contract_parent_same_period_fk` (composite FK on `contract_id_employment_uq`); `contract_term_exclusive_ck`; `contract_dates_ck`; `contract_finalized_complete_ck`; `contract_finalized_by_ck`; `contract_signed_requires_finalized_ck`; `contract_single_disposition_ck`; `contract_void_requires_finalized_ck`; number CHECK (1–100 chars, no surrounding whitespace); `contract_history_event_reason_required_ck`; `contract_history_event_related_ck` |
-| Indexes | `contract_number_ci_uq` UNIQUE on `lower(contract_number COLLATE "und-x-icu")` — no disposition excluded (M-18; ICU folding is independent of the database default collation, so the server must provide ICU); `contract_one_live_renewal_uq` partial on live renewals |
+| Indexes | `contract_number_ci_uq` UNIQUE on `lower(contract_number COLLATE "und-x-icu")` — no disposition excluded (M-18; ICU folding is independent of the database default collation, so the server must provide ICU); `contract_one_live_renewal_uq` (renamed `contract_one_nondisposed_renewal_uq` in 2A-5): one non-disposed direct renewal per parent agreement |
 | Triggers | `contract_structural_rules_trg`: Effective From inside the period (on insert, on change of the date or period, and on finalization; never on period writes), new records/finalization only on a period that is not Cancelled/Voided (row read-locked), parent must be an agreement, link immutable, period fixed after Finalize. `contract_disposition_is_terminal_trg`: no insert already disposed, no change after Cancel/Void, disposing never changes content |
 | Grants | `hrms_app`: SELECT, INSERT, UPDATE on `contract_type`, `contract`; SELECT, INSERT on `contract_history_event`; no DELETE anywhere |
 | Audit | `audit_field_change_field_check` extended with the seven contract fields of §12 |
@@ -192,3 +192,7 @@ Contract screens over the 2A-2 API: sidebar **Contracts**, `/contracts` (portfol
 ## 19. Implementation record — slice 2A-4 (2026-10-16)
 
 Attention predicates `expiresWithin` (own Effective To from today through today + N, both inclusive; Finalized/Signed operational, not open-ended, not ended with its period, not replaced by a finalized renewal) and `awaitingSignature` (Finalized, not Signed, operational) live in `evaluation.ts` beside the Needs Review model and back both `GET /contract-reminders` and the `expiring_within` / `awaiting_signature` / `needs_review` list filters. Home window fixed at 30 days (M-20). Record: `docs/design/phase2a-slice-2a-4-attention.md`.
+
+## 20. Renewal decisions — PV-39 (C-115, 2026-10-16; implementation pending 2A-5)
+
+Full gate: `docs/design/phase2a-slice-2a-5-renewal-gate.md` (revision 2). Summary: renewal chains A → B → C (parent = original or renewal agreement, never an amendment, no branching); renewable parent = Finalized/Signed, not disposed, same period, finite term, no non-disposed direct renewal (Upcoming / Active / Expired allowed; Drafts and open-ended contracts not renewable); invariant "one non-disposed direct renewal per parent agreement" (disposed = Discarded / Cancelled / Voided); **only a Signed renewal** is the confirmed successor (derived parent end, Expiring Soon suppression) — Draft and Finalized-unsigned renewals have no effect on the parent; Effective From default parent end + 1, inside the period and after the parent's start; gap → `GAP_AFTER_PREDECESSOR`, overlap → `RENEWAL_OVERLAPS_PREDECESSOR`, both Needs Review; Cancel planned only for Finalized-unsigned future contracts (Signed withdrawal PL-10); Void only for erroneous records; a parent with a non-disposed renewal cannot be Cancelled / Voided / returned to Draft; never across Employment Periods. The exact forward migration (trigger replacement, renamed index `contract_one_nondisposed_renewal_uq`, parent guard trigger) is in the gate §11. **This supersedes** the 2A-1 parent rule, the earlier "finalized renewal ends the parent's term" projection (§2, §5 code until 2A-5) and Cancel planned for Signed contracts.

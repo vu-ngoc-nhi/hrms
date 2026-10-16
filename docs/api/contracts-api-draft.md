@@ -35,10 +35,10 @@ All Core HR conventions apply unchanged (`docs/api/core-hr-api.md`): JSON, snake
 | 2A-3 ✅ | listContracts | GET `/contracts` | contracts.read | Portfolio list/filter (§5) |
 | 2A-3 ✅ | listEmployeeContracts | GET `/employees/{id}/contracts` | contracts.read | Grouped for the Employee Contracts tab (§6) |
 | 2A-4 ✅ | getContractReminders | GET `/contract-reminders` | contracts.read | Home Contract Attention (§7) |
-| 2A-5 | createContractRenewal | POST `/contracts/{id}/renewals` | contracts.manage | Renewal Draft linked to `{id}` |
-| 2A-5 | createContractCancelPlanned | POST `/contracts/{id}/cancel-planned` | contracts.finalize | Upcoming Finalized/Signed → Cancelled |
+| 2A-5 | createContractRenewal | POST `/contracts/{id}/renewals` | contracts.manage | Renewal Draft linked to `{id}` (parent: Finalized/Signed, not disposed, finite term, no non-disposed renewal — C-115) |
+| 2A-5 | createContractCancelPlanned | POST `/contracts/{id}/cancel-planned` | contracts.finalize | Finalized **unsigned**, Effective From > today → Cancelled (Signed withdrawal = PL-10, not offered; C-115) |
 | 2A-5 | createContractCorrection | POST `/contracts/{id}/corrections` | contracts.correct | Correct Signed data |
-| 2A-5 | createContractVoid | POST `/contracts/{id}/void` | contracts.correct | Finalized/Signed → Voided |
+| 2A-5 | createContractVoid | POST `/contracts/{id}/void` | contracts.correct | Finalized/Signed **erroneous record** → Voided (never to stop a valid contract that has begun) |
 | 2A-6 | — | (wizard uses `createContract`) | contracts.manage | Optional Draft after `createEmployee` succeeded |
 | gated | — | Amendment | — | Not specified until PL-12 / PV-38 checkpoint |
 
@@ -70,7 +70,11 @@ Draft-time checks (objectively invalid input only): `effective_to < effective_fr
 
 **createContractSignatureConfirmation** — `{ expected_revision, signed_at: "YYYY-MM-DD" }` (≤ today in Asia/Ho_Chi_Minh, else 422 `SIGNED_AT_IN_FUTURE`). C-111: allowed under a Cancelled period; refused under a Voided period (422 `PERIOD_NOT_VALID`, detail `PERIOD_VOIDED`).
 
-**2A-5 (conceptual, finalized at that checkpoint):** renewal `{ contract_type_id?, contract_number?, effective_from?, effective_to?, is_open_ended?, summary? }` (defaults: parent's type; `effective_from` = parent operational end + 1); cancel-planned `{ expected_revision, reason }`; corrections `{ expected_revision, reason, contract_type_id?, contract_number?, effective_from?, effective_to?, is_open_ended?, signed_at? }`; void `{ expected_revision, reason }`.
+**2A-5 (decided by C-115; implementation pending — gate `docs/design/phase2a-slice-2a-5-renewal-gate.md`):**
+- **Renewal** `POST /contracts/{id}/renewals` `{ contract_type_id?, contract_number?, effective_from?, effective_to?, is_open_ended?, summary? }` + Idempotency-Key → new Draft with `relationship.type = renewal`. Defaults: parent's Contract Type, `effective_from` = parent Effective To + 1 (Asia/Ho_Chi_Minh). Refused: parent Draft / disposed / open-ended → 422 `PARENT_NOT_RENEWABLE`; non-disposed renewal exists → 409 `RENEWAL_EXISTS`; period Cancelled/Voided → 422 `PERIOD_NOT_VALID`. Finalize blocker `RENEWAL_STARTS_BEFORE_PARENT`; warnings `GAP_AFTER_PREDECESSOR`, `RENEWAL_OVERLAPS_PREDECESSOR` (M-19 confirmation). Parent history gets one `renewal_created` event ("Renewal draft created").
+- **Cancel planned** `{ expected_revision, reason }` — Finalized, not Signed, Effective From after today; blocked while a non-disposed renewal child exists (409 `DEPENDENT_CONTRACTS_EXIST`).
+- **Corrections** `{ expected_revision, reason, contract_type_id?, contract_number?, effective_from?, effective_to?, is_open_ended?, signed_at? }` — Signed data, transcription errors.
+- **Void** `{ expected_revision, reason }` — erroneous records only; blocked while a non-disposed renewal child exists.
 
 ## 4. Response representation — `ContractDetail`
 
@@ -153,11 +157,11 @@ The server is authoritative for document state, time state, allowed actions and 
 | `state.operational` | boolean | Shared predicate: not Cancelled/Voided and period not Cancelled/Voided |
 | `state.time_state` | `null` \| `upcoming` \| `active` \| `expired` | Only for operational Finalized/Signed contracts (ADR §5) |
 | `state.time_state_detail` | `null` \| `closed_by_employment_end` \| `replaced_by_renewal` | Which bound produced the operational end |
-| `state.operational_end` | date \| null | `least(effective_to, period end, renewal start − 1)`; null when open-ended and unbounded |
+| `state.operational_end` | date \| null | `least(effective_to, period end, signed renewal start − 1)` (only a **Signed** renewal counts, C-115); null when open-ended and unbounded |
 | `state.days_to_operational_end` | integer \| null | Relative to `as_of` |
-| `attention.expiring_soon` | boolean | Operational end within the reminder window (PV-36) and no Finalized/Signed renewal |
+| `attention.expiring_soon` | boolean | (not exposed on the detail; Home uses `GET /contract-reminders`) Expiring within the window and no **Signed** renewal (C-115) |
 | `attention.awaiting_signature` | boolean | Finalized, not Signed |
-| `attention.renewal_state` | `none` \| `draft` \| `finalized` \| `signed` | State of the operational renewal child |
+| `relationship.renewal_state` | `none` \| `draft` \| `finalized` \| `signed` | (2A-5) Document state of the non-disposed direct renewal |
 | `employment.employment_status` | `not_started` \| `active` \| `ended` | Core HR computation (context only; never gates contract actions) |
 
 ### 4.2 Review items (warnings / Needs Review)
@@ -166,8 +170,9 @@ The server is authoritative for document state, time state, allowed actions and 
 
 | Code | Meaning |
 |---|---|
-| `OVERLAPPING_CONTRACT` | Overlaps another operational agreement of the person that is not its renewal parent/child |
-| `GAP_AFTER_PREDECESSOR` | Renewal starts after the day following its parent's operational end |
+| `OVERLAPPING_CONTRACT` | Overlaps another operational agreement of the person that is not its renewal parent/child (that pair uses `RENEWAL_OVERLAPS_PREDECESSOR`) |
+| `GAP_AFTER_PREDECESSOR` | Renewal starts after the day following its parent's own Effective To |
+| `RENEWAL_OVERLAPS_PREDECESSOR` | (2A-5, C-115) Renewal starts on or before its parent's own Effective To |
 | `CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD` | `effective_to` after the period's end date |
 | `EFFECTIVE_FROM_OUTSIDE_PERIOD` | Became outside the period after a period correction |
 | `PERIOD_CANCELLED` / `PERIOD_VOIDED` | The linked period lost validity; contract left operations |
@@ -197,8 +202,10 @@ Blocker codes: `REQUIRED` (contract_type_id, contract_number, effective_from, te
 | `PERIOD_NOT_VALID` | Linked period Cancelled/Voided |
 | `DEPENDENT_CONTRACTS_EXIST` | A renewal child that is not Cancelled/Voided |
 | `NOT_READY` | Finalize blockers exist (see `finalize_check`) |
-| `NOT_UPCOMING` | (2A-5) Cancel planned requires time state `upcoming` |
-| `RENEWAL_EXISTS` | (2A-5) An operational renewal already exists |
+| `NOT_UPCOMING` | (2A-5) Cancel planned requires Effective From after today |
+| `ALREADY_SIGNED` | also: Cancel planned is not offered for Signed contracts (PL-10) |
+| `RENEWAL_EXISTS` | (2A-5) A non-disposed direct renewal already exists |
+| `PARENT_NOT_RENEWABLE` | (2A-5) Draft, disposed or open-ended parent |
 
 Capabilities are advisory: every action re-checks permission and state on the server.
 
@@ -283,6 +290,5 @@ Resolved at the 2A-1 checkpoint (C-110): Organization gains a **Contract Types**
 
 Later checkpoints:
 
-- 2A-5: whether Cancel planned / Void of a contract with a non-cancelled renewal child is blocked (`DEPENDENT_CONTRACTS_EXIST`, recommended, consistent with Return to Draft) — confirm at that checkpoint; PV-39 renewal eligibility.
-- 2A-4: reminder window (PV-36).
+- Resolved by C-115: Cancel planned / Void of a contract with a non-disposed renewal child is blocked (`DEPENDENT_CONTRACTS_EXIST`); renewal eligibility (PV-39). Resolved by M-20: reminder window (PV-36).
 - Amendment operations and representation: separate checkpoint (PL-12, PV-38).

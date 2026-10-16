@@ -13,6 +13,7 @@
 | 2 | 2026-10-15 | Owner review: `signed_at` definition; four permission semantics; amendment term change = Legal input; Finalized definition; overlap/gap = warning/review; explicit 2A/2B split; three-table model with `parent_contract_id` + `relationship_type`. |
 | 3 | 2026-10-15 | Owner approval in principle with corrections: **(A1)** Return to Draft is a controlled reversal with an exact MVP rule (§4.3); Signed never returns to Draft. **(A2)** No speculative `amended_end_date`; a confirmed need is added later by forward-only additive migration. **(A3)** 2B compatibility = *additive, no redesign or invalidation of the 2A aggregate*, not "zero changes". Owner decisions recorded (§22). Date boundary clarified (§3.1). Consequential simplifications: `contract_type.term_kind` removed (type-specific term rules are not approved — PV-31/PL-12); `effective_to` + explicit `is_open_ended` replace a nullable end date (C-106 / M-16). |
 | 4 | 2026-10-15 | **Final implementation authorization (staged, C-109)**: PV-42 Contract Number uniqueness (M-18); Return to Draft uses `contracts.finalize`; past-dated registration/finalization with `contracts.finalize`; `signed_at` never a future business date (Asia/Ho_Chi_Minh); Return to Draft no longer coupled to Employment Status — only to the period's validity (not Cancelled/Voided); **Amendment workflow gated** (PL-12/PV-38); slices 2A-0 … 2A-6. Employee Type / Contract Type mismatch warning removed from 2A (no compatibility rule exists — PV-31). |
+| 5 | 2026-10-16 | **PV-39 renewal decisions (C-115):** chains A → B → C; renewable parent rules; one non-disposed direct renewal per parent; only a Signed renewal affects the parent; overlap warns; Cancel planned only Finalized-unsigned future contracts (Signed = PL-10); Void boundary; parent cancel/void blocked while a renewal exists. Gate: `docs/design/phase2a-slice-2a-5-renewal-gate.md`. 2A-5 not yet authorized. |
 
 Design principle reaffirmed by A2: **prepare the architecture for extension, not the database for hypothetical fields.**
 
@@ -79,7 +80,7 @@ Relationship Change and End Employment stay the existing Phase 1 workflows; the 
 | **Contract** | A written agreement or amendment documenting terms of **one** Employment Period | Contract Type, number, effective dates, `signed_at`, document lifecycle, renewal/amendment link | Employment Status, Employee Type, period dates, Assignment, Probation |
 
 - `contract.employment_id` is mandatory. A Person without an operational period gets no contract (use *Add Initial Employment Period* / *Rehire* first). A planned (Pre-start) period is valid.
-- Operational end of an agreement = `least(effective_to, period end, renewal successor effective_from − 1)`; open-ended → period end or successor.
+- Operational end of an agreement = `least(effective_to, period end, signed renewal effective_from − 1)`; only a **Signed** renewal is the confirmed successor (C-115).
 - Contract Type never implies Employee Type; mismatch = warning (PV-31).
 - A probation-type agreement never creates, ends or evaluates Probation (C-17, PV-16).
 - Intern → Employee is a Relationship Change; the new period gets new contracts, never a cross-period "renewal".
@@ -175,7 +176,7 @@ Shared query module: operational contract = `cancelled_at IS NULL AND voided_at 
 | Draft | **Finalize** | Finalized | finalize | `finalized` |
 | Finalized, unsigned | **Return to Draft** (controlled, §4.3) | Draft | finalize | **mandatory**; `returned_to_draft` |
 | Finalized, unsigned | **Confirm signed** | Signed | finalize | `signed_confirmed` (recorded by/at) |
-| Finalized/Signed, Upcoming | **Cancel planned contract** | Cancelled | finalize | **mandatory**; `cancelled` |
+| Finalized **unsigned**, Effective From > today (C-115; Signed withdrawal = PL-10) | **Cancel planned contract** | Cancelled | finalize | **mandatory**; `cancelled` |
 | Finalized/Signed | **Void** | Voided | **correct** | **mandatory**; `voided` |
 | Signed | **Correct** recorded data (incl. wrong `signed_at`) | Signed | **correct** | **mandatory**; `corrected` (field names) |
 | Signed | Return to Draft | — | — | **Not allowed** — use Correction, Amendment or Void |
@@ -211,15 +212,15 @@ Effect, in one transaction: `finalized_at` / `finalized_by` cleared; `contract_n
 
 | Question | Position | Class |
 |---|---|---|
-| When can a renewal be created? | A Finalized/Signed, operational; Upcoming, Active, or Expired while the period is operational | BUSINESS DECISION REQUIRED (PV-39) |
+| When can a renewal be created? | Parent Finalized/Signed, not disposed, finite term (open-ended not renewable), no non-disposed direct renewal; Upcoming, Active or Expired; period not Cancelled/Voided | DECIDED (C-115) |
 | Future-dated renewal | Allowed | APPROVED RECOMMENDATION |
 | Same Employment Period | Structural | DECIDED (C-104) |
-| One operational renewal per contract | Structural | DECIDED (C-104) |
-| Different Contract Type | Allowed, labelled *Follow-on contract* | BUSINESS DECISION REQUIRED (PV-39) |
-| Overlap with predecessor | Intended; A's operational end = `B.effective_from − 1`; A's own dates kept | DECIDED (M-17) |
+| One non-disposed direct renewal per parent agreement; chains A → B → C allowed, never from an amendment | Structural | DECIDED (C-104, C-115) |
+| Different Contract Type | Prefilled from the parent, editable; no same-type invariant; no legal meaning inferred | DECIDED (C-115) |
+| Overlap with predecessor | Allowed **with warning** `RENEWAL_OVERLAPS_PREDECESSOR` (Needs Review); only a **Signed** B derives A's operational end = `B.effective_from − 1`; A's stored dates kept | DECIDED (C-115, supersedes the earlier no-warning rule) |
 | Gap / unlinked overlap | Warning → Needs Review | DECIDED (M-17) |
-| Cancel planned renewal | Cancel B (reason); A returns to *Expiring soon* automatically | APPROVED RECOMMENDATION |
-| Reminders | A leaves *Expiring soon* only with a **finalized** operational renewal; a draft renewal shows *Renewal in draft* | APPROVED RECOMMENDATION |
+| Cancel planned renewal | Draft B → Discard; Finalized-unsigned future B → Cancel planned (reason); Signed B → PL-10; A unchanged and re-evaluated | DECIDED (C-115) |
+| Reminders | A leaves *Expiring soon* only with a **Signed** renewal; Draft and Finalized-unsigned renewals leave A in *Expiring soon* (the Finalized B shows in *Awaiting signature*); no Home renewal signal | DECIDED (C-115) |
 | Renewal-count limits / conversion to open-ended | Not enforced | LEGAL INPUT REQUIRED (PL-12) |
 
 ---
@@ -366,7 +367,7 @@ Visible only with `contracts.read`; separate read-only endpoint; real contract d
 
 | Card | Rule | HR action | Click-through |
 |---|---|---|---|
-| Expiring soon | Operational Finalized/Signed agreement, operational end within N days (PV-36; recommended 30), no finalized renewal, period not ending first | Renew, new contract, Relationship Change, End Employment, or nothing | `/contracts?expiring_within=30` |
+| Expiring soon | Operational Finalized/Signed agreement, operational end within N days (M-20: 30), no **Signed** renewal (C-115), period not ending first | Renew, new contract, Relationship Change, End Employment, or nothing | `/contracts?expiring_within=30` |
 | Drafts | Operational drafts, oldest first | Finalize or discard | `/contracts?document_status=draft` |
 | Awaiting signature | Finalized, `signed_at` null, effective_from ≤ today + N | Confirm signed when fully executed | `/contracts?document_status=finalized` |
 | Needs review | Overlap, gap, end after period end, effective from outside period (after a period correction), period Cancelled/Voided | Correct, cancel/void, renew, or confirm intent | `/contracts?needs_review=true` |
