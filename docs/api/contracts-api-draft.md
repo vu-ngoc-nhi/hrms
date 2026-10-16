@@ -167,7 +167,7 @@ The server is authoritative for document state, time state, allowed actions and 
 
 ### 4.2 Review items (warnings / Needs Review)
 
-`review.items[]` = `{ code, message, related_contract_id? }`; `needs_review` is true when any item exists. Computed on read for Finalized/Signed contracts and for contracts on an invalid period:
+`review.items[]` = `{ code, message, related_contract_id?, related_contract_number?, affected_from?, affected_to? }` (the last three are server-computed presentation facts added at owner acceptance, C-118: the other contract's number and the first / last business date concerned — overlapping days, uncovered gap days; they never enter the warning fingerprint; the same shape is used for `finalize_check.warnings` and the `FINALIZE_CONFIRMATION_REQUIRED` details); `needs_review` is true when any item exists. Computed on read for Finalized/Signed contracts and for contracts on an invalid period:
 
 | Code | Meaning |
 |---|---|
