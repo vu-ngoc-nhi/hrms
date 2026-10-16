@@ -338,7 +338,7 @@ Naming follows the existing contract: snake_case, `status_as_of` (as in Employee
 |---|---|---|---|
 | BD-H1 | Snapshot shows **Active · Pre-start · Ended** only. No "Employee Records" total on Home (the API returns it). No-employment people appear via Needs Attention, not as a tile. Never "Headcount" | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
 | BD-H2 | **Merge** Data Quality into Needs Attention (total + breakdown); no separate card, no score | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
-| BD-H3 | **Defer** the department snapshot | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
+| BD-H3 | **Defer** the department snapshot | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** — superseded 2026-10-16 by the owner-approved Home dashboard refresh (§L, register C-119) |
 | BD-H4 | Integrity scanner **not** on HR Home in Phase 1 | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
 | BD-H5 | Needs Attention population = the canonical list filter (all statuses, incl. Ended and no-employment); preview order Active → Pre-start (nearest start) → no employment → Ended → code; preview 5 | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
 | BD-H6 | Upcoming window 30 days: starts / changes T+1 … T+30; planned ends with last day T … T+30 (same as Overview) | Approved 2026-10-11 | **BUSINESS DECISION — APPROVED** |
@@ -426,3 +426,21 @@ Approval clarifications are applied: there is no `employee_records`, and existin
 ## Addendum — Phase 2A Contract Attention (2026-10-16, C-113, M-20)
 
 Owner-approved Phase 2 extension of Home (C-108): one **Contract Attention** section below the panels above (which are unchanged), shown only with `contracts.read` and loaded from its own endpoint `GET /api/v1/core-hr/contract-reminders`. Three signals — Expiring soon (next 30 days, M-20), Awaiting signature, Needs review — each with an authoritative count, a one-line HR action, up to three contracts and *View all →* to the canonical Contracts filter. No charts, trends, KPI cards or renewal content. Record: `docs/design/phase2a-slice-2a-4-attention.md`.
+
+## L. Home dashboard refresh (owner-approved 2026-10-16, register C-119)
+
+Owner-approved change to the frozen Phase 1 Home (C-101 / C-102), built to the owner's reference screenshot. Layout: greeting + business date; four summary cards; two charts side by side; Needs Attention and Upcoming side by side; the existing Contract Attention section (C-113) unchanged below. Light gray page, white rounded cards, restrained shadows, red accents; one column on phones.
+
+| Element | Definition (server-side, `GET /api/v1/core-hr/dashboard`) |
+|---|---|
+| **Total Employees** | People whose current Employment Status is **Active** on the Asia/Ho_Chi_Minh business date, each counted once (the Employee List's `employment_status=active`). Excludes Pre-start, Ended and people without an operational Employment Period; Ended applies from the day after the last working day (inclusive last day, unchanged). Employment status — not login-account status. Equals Active; hint "Active employees only"; opens the Active Employee List. |
+| **Active** | Same number and link (no invented distinction). |
+| **On Leave** | No leave data: `workforce.on_leave = null`, rendered "—" ("Not available yet"), not a link, never 0. |
+| **Needs Attention** | Unchanged (Record Health, `operational_completeness=incomplete`). |
+| Trend slots / percentages | Reserved positions show "—" with the note "— means the data is not available yet." No arrows, growth figures or filled progress rings. |
+| **Employees by Department** (donut) | Active people only, by the Department of the assignment **in effect on the business date** (the list's Department rule; future assignments not counted); "Not assigned" kept (last). Sums to Active. Real values link to the Active list filtered by Department (same count). |
+| **Employee Type** (columns) | Active people only, by the Employee Type of the active Employment Period; actual catalog values; "Not assigned" kept. Sums to Active. Real values link to the Active list filtered by Employee Type. |
+| Pre-start / Ended | Removed from the summary cards; subdued links "Pre-start N · Ended N" to the canonical list filters. The Workforce Snapshot bar was removed. |
+| Upcoming | Unchanged item timeline (30-day rules, Employee Detail tab links); no totals derived from the 10-item preview, no "View all" (no destination). |
+
+API: additive read-only `workforce { total, by_department[], by_employee_type[], on_leave: null }`, computed over **all** people in the same pass and snapshot as `snapshot` (never from a preview). Charts are plain SVG / CSS (no chart dependency); the browser only draws server counts. Tests: `tests/integration/dashboard.test.ts` (population, last-day boundary, future assignment, Not assigned, sums, per-group equality with the Employee List filters over all people), `tests/unit/home.test.ts` (cards, unavailable values, links, chart views, guards).
