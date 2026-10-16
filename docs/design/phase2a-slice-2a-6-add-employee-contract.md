@@ -4,7 +4,7 @@
 
 ## 1. Wizard
 
-Personal → Employment → Assignment → **Contract (optional)** → Review. The Contract step appears only with `contracts.manage`; without it the wizard is the unchanged Phase 1 four-step flow and Review shows *Contract Draft — Optional: Not available for your account … the employee is saved as usual*. Personal / Employment / Assignment fields and their rules are unchanged. The shared `Stepper` now sizes its columns from the number of steps (four steps look as before) and lets a long label wrap instead of truncating.
+Personal → Employment → Assignment → **Contract (optional)** → Review. The Contract step appears only with `contracts.manage`; without it the wizard is the unchanged Phase 1 four-step flow: no Contract step, **no Contract section on Review**, no Contract Type lookup and no Contract request (`wantsContractDraft` / `contractReviewMode` = "hidden" in `wizardModel.ts`). Personal / Employment / Assignment fields and their rules are unchanged. The shared `Stepper` now sizes its columns from the number of steps (four steps look as before) and lets a long label wrap instead of truncating.
 
 Contract step: one checkbox **Create a Contract Draft for this employee**, off by default, with the explanation that the employee is saved first and the Draft is a separate step that stays a Draft (not finalized, signed or legally approved). It needs an Employment Period (a Start Date); without one the checkbox is disabled with an explanation. When on, Phase 2A Draft fields only: Contract Type (**active types only**), Contract Number (blank, never generated), Effective From (**defaults to the Employment Start Date**, follows it until HR changes it, must not be before it), End of term — **HR must choose** *Ends on a date* (then Effective To) or *Open-ended* (nothing is derived from Employee Type or Contract Type), Summary. No salary, ID, address, clauses, templates, documents or amendment data.
 
@@ -28,7 +28,16 @@ The Contract API re-validates everything against the created period (e.g. Effect
 | B — employee + Draft created | Result screen *Employee saved*: ✓ **Employee created successfully.** ✓ **Contract Draft created successfully.** (still a Draft); buttons *Open Contract Draft*, *Open employee*. |
 | C — employee created, Draft not created | ✓ **Employee created successfully.** ! **Contract Draft could not be created.** "The employee record is saved and was not affected." + the server's reason; buttons *Open employee* (Contracts tab), *Review contract details* (the kept contract form), *Retry Contract Draft*. Never "employee creation failed". |
 
-## 4. Retry and idempotency
+## 4. Retry and idempotency (exact behaviour, verified against the server's idempotency records)
+
+| Step | Request | Idempotency-Key | Server idempotency record afterwards |
+|---|---|---|---|
+| Save | `POST /employees` → 201 | employee key E (per employee payload, Phase 1 rule) | `createEmployee` / E |
+| (same Save) | `POST /contracts` → 4xx (e.g. Effective From outside the period) | contract key C (one per onboarding) | none for C — a rejected request leaves its key unused |
+| Retry Contract Draft (after Review contract details) | `POST /contracts` → 201 | C | `createContract` / C |
+| Retry again / double click | `POST /contracts` → 201 with the same Draft (server replay) | C | unchanged |
+
+Add Employee is never resent from the result screen; exactly one employee and one Draft exist (integration test *2. separate idempotency*).
 
 - Separate scopes: the employee key and the contract key are different values (enforced: the submission refuses equal keys before any request); the server scopes idempotency by actor + operation + key as well.
 - One contract key per onboarding, reused by every retry. *Retry Contract Draft* repeats **only** `POST /contracts`; it never resubmits Add Employee.
@@ -38,7 +47,11 @@ The Contract API re-validates everything against the created period (e.g. Effect
 
 ## 5. Permissions
 
-The Contract step needs `employees.create` (the page) and `contracts.manage`. Without `contracts.manage` Add Employee works exactly as in Phase 1 and the step is omitted with the Review note; the server independently refuses `POST /contracts` without `contracts.manage`. No role-name checks.
+The Contract step needs `employees.create` (the page) and `contracts.manage`. Without `contracts.manage` Add Employee works exactly as in Phase 1 (four steps, Review without any Contract section, one request); a stale "on" value can never produce a Contract request. The server independently refuses `POST /contracts` without `contracts.manage`. No role-name checks. Verified with a principal holding `employees.create` but no `contracts.*` permission (integration test *1. without contracts.manage*).
+
+### Authoritative Employment Period link
+
+The Contract body's `employment_id` is always the id of the period in the successful Add Employee **response** (`createdPeriodId`). The contract form has no person or period field (an injected value is ignored), `onboardingSubmit.ts` has no transport of its own (only the injected POST) and performs no lookup by date, status or "current employment"; the retry reuses the stored id. Pinned by unit tests (*Authoritative Employment Period link*) and integration test *3*.
 
 ## 6. C-44 alignment (Contract Type in Correction)
 
@@ -52,8 +65,8 @@ The Contract step needs `employees.create` (the page) and `contracts.manage`. Wi
 
 ## 7. Tests
 
-- `tests/integration/add-employee-contract.test.ts` (8) — the browser's submission module against the real route handlers on `hrms_test`: Add Employee without a Draft (one request); Employee + Draft (period id from the response, separate keys, a pure Draft, employee unaffected, no reminders); employee failure → no Contract request; Contract failure → partial success, employee intact, server re-validation, Contract-only retry with the same key, no duplicate employee or Draft; lost Contract response → retry replays the same Draft; changed details after a lost response → `IDEMPOTENCY_KEY_REUSED`, no second Draft; lost Add Employee response → replay, Draft created once; one shared key refused.
-- `tests/unit/add-employee-contract.test.ts` (18) — optionality and permissions, defaults (Effective From follows Start Date, blank number, no term invented), client checks, Draft fields only, period from the response, active types only, the five outcomes with a fake server, Contract-only retry, separate keys, Review and result wording, no Finalize / Confirm Signed.
+- `tests/integration/add-employee-contract.test.ts` (11, incl. the owner close-out checks 1–3) — the browser's submission module against the real route handlers on `hrms_test`: Add Employee without a Draft (one request); Employee + Draft (period id from the response, separate keys, a pure Draft, employee unaffected, no reminders); employee failure → no Contract request; Contract failure → partial success, employee intact, server re-validation, Contract-only retry with the same key, no duplicate employee or Draft; lost Contract response → retry replays the same Draft; changed details after a lost response → `IDEMPOTENCY_KEY_REUSED`, no second Draft; lost Add Employee response → replay, Draft created once; one shared key refused.
+- `tests/unit/add-employee-contract.test.ts` (21) — optionality and permissions, defaults (Effective From follows Start Date, blank number, no term invented), client checks, Draft fields only, period from the response, active types only, the five outcomes with a fake server, Contract-only retry, separate keys, Review and result wording, no Finalize / Confirm Signed.
 - `tests/unit/add-employee-wizard.test.ts` — Phase 1 regression with the four Phase 1 steps for users without `contracts.manage`; five steps with it; capabilities.
 - `tests/unit/contract-ui.test.ts` — C-44 choices per mode and per screen.
 - Full regression: see the slice report (typecheck, lint, all unit + integration suites, UAT rounds 1–2, integrity baseline and scan, build).
@@ -69,3 +82,5 @@ The Contract step needs `employees.create` (the page) and `contracts.manage`. Wi
 ## 9. Browser review (synthetic data, local Test HR Editor)
 
 Contract step off by default; client check "Choose Ends on a date or Open-ended."; active types only; Effective From prefilled 02 Nov 2026 from the Start Date. Review section as specified. Save with an already-used number SYN-HD-2026-001 → partial success C (employee *Trần Minh Onboard* ES0038 created; Draft refused with the duplicate-number reason); *Review contract details* kept the form; number changed to SYN-HD-2026-007 → *Retry Contract Draft* → B. Network log: one `POST /employees` (201), `POST /contracts` 409, `POST /contracts` 201 — Add Employee never resent. The Draft is linked to ES0038's period from 02 Nov 2026, Draft state, only "Contract created" in history. Widths 1440 / 1366 / 1280 / 900 / 768 / 390 / 375: no page-level horizontal overflow on the Contract step, Review and the partial-success screen; stepper one row from 768 up, two columns on phones; result buttons stack on phones.
+
+C-44 check (Test HR Admin; a synthetic type *Test Type Retired (synthetic)* was added and deactivated in the local `hrms_dev` catalog for this): Correct contract on SYN-HD-2026-001 offers Test Type A, Test Type B and "Test Type Retired (synthetic) (Inactive)", all selectable; Renew (SYN-HD-2026-001), Create contract (employee DEMO001) and Edit draft (SYN-HD-2026-003) offer Test Type A and B only. Nothing was saved in these dialogs.
