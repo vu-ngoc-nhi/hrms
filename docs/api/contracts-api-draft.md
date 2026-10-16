@@ -1,6 +1,6 @@
 # Contract API — Phase 2A draft (not implemented)
 
-- Status: **Draft (2A-0, 2026-10-15); slice 2A-1 implemented the Contract Type catalog operations** (`listContractTypes`, `createContractType`, `updateContractType`, now in the generated OpenAPI contract) and the four `contracts.*` permissions. Every operation not marked ✅ is still a draft and enters the contract only in its slice. Finalize warnings follow **M-19** (PV-43, 2026-10-16): explicit confirmation with a server-issued warning fingerprint (§3, §4.3). **Slice 2A-2 implemented the core lifecycle** (create / read / edit / discard Draft, Finalize, Return to Draft, Confirm Signed, history — §2 rows marked ✅); design and decisions: `docs/design/phase2a-slice-2a-2-lifecycle.md`, C-111. In 2A-2 `ContractDetail` omits `attention` (added in 2A-4, PV-36) and `relationship` is `{ type, parent_id, renewal_id }`.
+- Status: **Draft (2A-0, 2026-10-15); slice 2A-1 implemented the Contract Type catalog operations** (`listContractTypes`, `createContractType`, `updateContractType`, now in the generated OpenAPI contract) and the four `contracts.*` permissions. Every operation not marked ✅ is still a draft and enters the contract only in its slice. Finalize warnings follow **M-19** (PV-43, 2026-10-16): explicit confirmation with a server-issued warning fingerprint (§3, §4.3). **Slice 2A-2 implemented the core lifecycle** (create / read / edit / discard Draft, Finalize, Return to Draft, Confirm Signed, history — §2 rows marked ✅); design and decisions: `docs/design/phase2a-slice-2a-2-lifecycle.md`, C-111. In 2A-2 `ContractDetail` omits `attention` (added in 2A-4, PV-36) and `relationship` is `{ type, parent_id, renewal_id }`. **Slice 2A-3 implemented `listContracts` and `listEmployeeContracts`** (§5, §6) and the contract screens (`docs/design/phase2a-slice-2a-3-ux.md`).
 - Frozen design: `docs/adr/0005-contract-domain.md`. Decisions: C-104 … C-109, M-15 … M-18 (`docs/decision-register.md`).
 - **Amendment is not specified as implementation-ready** (gated, C-109). Phase 2B generation is out of scope.
 
@@ -32,8 +32,8 @@ All Core HR conventions apply unchanged (`docs/api/core-hr-api.md`): JSON, snake
 | 2A-2 ✅ | createContractReturnToDraft | POST `/contracts/{id}/return-to-draft` | contracts.finalize | Finalized (unsigned) → Draft |
 | 2A-2 ✅ | createContractSignatureConfirmation | POST `/contracts/{id}/confirm-signed` | contracts.finalize | Finalized → Signed |
 | 2A-2 ✅ | listContractHistory | GET `/contracts/{id}/history` | contracts.read | Business history |
-| 2A-3 | listContracts | GET `/contracts` | contracts.read | Portfolio list/filter (§5) |
-| 2A-3 | listEmployeeContracts | GET `/employees/{id}/contracts` | contracts.read | Grouped for the Employee Contracts tab (§6) |
+| 2A-3 ✅ | listContracts | GET `/contracts` | contracts.read | Portfolio list/filter (§5) |
+| 2A-3 ✅ | listEmployeeContracts | GET `/employees/{id}/contracts` | contracts.read | Grouped for the Employee Contracts tab (§6) |
 | 2A-4 | getContractReminders | GET `/contract-reminders` | contracts.read | Home cards (§7) |
 | 2A-5 | createContractRenewal | POST `/contracts/{id}/renewals` | contracts.manage | Renewal Draft linked to `{id}` |
 | 2A-5 | createContractCancelPlanned | POST `/contracts/{id}/cancel-planned` | contracts.finalize | Upcoming Finalized/Signed → Cancelled |
@@ -206,46 +206,44 @@ Capabilities are advisory: every action re-checks permission and state on the se
 
 `id`, `revision`, `employee`, `employment { id, employment_status, disposition, employee_type }`, `contract_type { id, code, name }`, `contract_number`, `effective_from`, `effective_to`, `is_open_ended`, `signed_at`, `relationship { type, parent_id, renewal_id }`, `state` (§4.1), `attention`, `review { needs_review, codes[] }`. No `actions`, `finalize_check`, audit or reasons.
 
-## 5. `GET /contracts` — list and filter (2A-3)
+## 5. `GET /contracts` — list and filter (implemented in 2A-3)
+
+As built (the smallest useful set the server provides authoritatively):
 
 | Parameter | Type | Meaning |
 |---|---|---|
-| `search` | string ≤ 100 | Employee name or code, or contract number (normalized) |
-| `employee_id` | uuid | Person |
-| `employment_id` | uuid | Period |
+| `search` | string ≤ 100 | Contract Number, employee name or Employee Code (case-insensitive, contains; accents kept) |
 | `contract_type_id` | uuid | |
-| `document_state` | `draft` \| `finalized` \| `signed` (repeatable) | |
-| `time_state` | `upcoming` \| `active` \| `expired` (repeatable) | |
-| `needs_review` | `true` \| `false` | |
-| `awaiting_signature` | `true` | |
-| `expiring_within` | `30` \| `60` \| `90` | Operational end within N days, no Finalized/Signed renewal |
-| `department_id` | uuid | Representative Department of the person (C-76 shared resolution) |
-| `employee_type_id` | uuid | Employee Type of the contract's own period |
+| `document_state` | `draft` \| `finalized` \| `signed` | |
+| `time_state` | `upcoming` \| `active` \| `expired` | Computed for today (Asia/Ho_Chi_Minh); Drafts have none |
+| `needs_review` | `true` \| `false` | Computed Needs Review |
 | `effective_from_from`, `effective_from_to` | date | Range on Effective From |
-| `contract_number` | string | Exact match after normalization |
-| `relationship` | `original` \| `renewal` | |
-| `include_non_operational` | `true` \| `false` (default false) | Include Cancelled, Voided and invalid-period contracts |
-| `sort` | `operational_end` (default) \| `effective_from` \| `contract_number` \| `employee_code` | Ties by `id` |
+| `include_disposed` | `true` \| `false` (default false) | Include discarded/cancelled and voided records. Contracts of a cancelled/voided **period** are always listed (they are what Needs Review points to) |
+| `sort` | `operational_end` (default; soonest end first, no end last) \| `effective_from` \| `contract_number` \| `employee_code` | Ties by number, then id |
 | `page`, `page_size` | | Standard |
 
-Response: `{ data: ContractSummary[], total, page, page_size, as_of }`. Home cards link to these canonical parameters. No export (D-UI-5).
+Response: `{ data: ContractSummary[], total, page, page_size, as_of }`. These names are also the URL parameters of the Contracts page (`/contracts?needs_review=true`, `?document_state=draft|finalized|signed`, `?time_state=upcoming|active|expired`, …), so Home cards deep-link with the same filter model. Not built (deferred until needed): `department_id`, `employee_type_id`, `employee_id`, `employment_id`, `contract_number` exact match, `relationship`, `awaiting_signature` and `expiring_within` (2A-4, PV-36). No export (D-UI-5). Scale note: computed states are evaluated in memory over the register (EmeSoft size); stored-field filters move to SQL if it ever grows to thousands of rows.
 
-## 6. `GET /employees/{id}/contracts` — Employee Contracts tab (2A-3)
+## 6. `GET /employees/{id}/contracts` — Employee Contracts tab (implemented in 2A-3)
 
 Server-side grouping so the tab does not infer lifecycle rules:
 
 ```json
 {
-  "as_of": "2026-10-15",
-  "current":  [ "ContractSummary (operational, time_state active)" ],
+  "as_of": "2026-10-16",
+  "current":  [ "ContractSummary (operational, Finalized/Signed, time_state active)" ],
   "upcoming": [ "ContractSummary (operational, Finalized/Signed, upcoming)" ],
   "drafts":   [ "ContractSummary (operational Drafts)" ],
   "history":  [ "ContractSummary (operational, expired)" ],
-  "not_operational": [ "ContractSummary (Cancelled, Voided, or on a Cancelled/Voided period)" ],
-  "can_create": { "allowed": true, "reasons": [], "default_employment_id": "uuid | null" }
+  "not_operational": [ "ContractSummary (discarded/cancelled, voided, or on a Cancelled/Voided period)" ],
+  "create": {
+    "allowed": true,
+    "reasons": [],
+    "periods": [ { "id": "uuid", "start_date": "2020-03-02", "end_date": null, "employee_type": "Employee", "is_default": true } ]
+  }
 }
 ```
-`current` may hold more than one contract (overlap is a warning, M-17). `can_create.default_employment_id` = the representative period (C-76); `reasons` include `PERMISSION_REQUIRED` or `NO_VALID_EMPLOYMENT_PERIOD`.
+`current` may hold more than one contract (overlap is a warning, M-17). `create.periods` = the person's periods that are not Cancelled/Voided (Ended included, C-109); `is_default` marks the representative period (C-76). `create.reasons`: `PERMISSION_REQUIRED`, `NO_VALID_EMPLOYMENT_PERIOD`. The tab shows Current · Upcoming & drafts · Contract history (with `not_operational` as muted evidence).
 
 ## 7. `GET /contract-reminders` — Home (2A-4, conceptual)
 

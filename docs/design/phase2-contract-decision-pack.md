@@ -1,6 +1,6 @@
 # Eme People — Phase 2 Contract Product & Architecture Decision Pack
 
-- Status: **Revision 4 (2026-10-15) — approved; staged implementation authorized (C-109).** Phase 2A is implemented slice by slice (2A-0 … 2A-6) with an **owner checkpoint between slices**; **2A-0 done; 2A-1 Contract foundation implemented (2026-10-15, C-110); 2A-2 core lifecycle API implemented (2026-10-16, M-19, C-111)** — no contract screen yet. Owner decisions: **C-104 … C-109**, **M-15 … M-18** in `docs/decision-register.md`. Frozen contract design: `docs/adr/0005-contract-domain.md`; API draft: `docs/api/contracts-api-draft.md`. Amendment workflow and Phase 2B are **not** authorized.
+- Status: **Revision 4 (2026-10-15) — approved; staged implementation authorized (C-109).** Phase 2A is implemented slice by slice (2A-0 … 2A-6) with an **owner checkpoint between slices**; **2A-0 done; 2A-1 Contract foundation implemented (2026-10-15, C-110); 2A-2 core lifecycle API implemented (2026-10-16, M-19, C-111); 2A-3 contract screens implemented (2026-10-16, C-112)** — Phase 2A not complete (2A-4 … 2A-6 remain). Owner decisions: **C-104 … C-109**, **M-15 … M-18** in `docs/decision-register.md`. Frozen contract design: `docs/adr/0005-contract-domain.md`; API draft: `docs/api/contracts-api-draft.md`. Amendment workflow and Phase 2B are **not** authorized.
 - Baseline: **Eme People — Core HR Phase 1 Product/UI Frozen — Owner Accepted** (C-101, C-103). Release status unchanged: *UAT Passed With Pre-Production Actions*, **not Production Ready**; Gate A is in external execution.
 - Governing principles: C-84, C-85, C-13 (Employee Type ≠ Contract Type), C-16, C-17, C-19 (9), PL-10.
 - Data: synthetic only (C-03). No real employee or contract data, template or signed file.
@@ -388,7 +388,7 @@ No persistent "acknowledged" state in 2A.
 | **2A-0** ✅ | Architecture records: decision pack, register, ADR-0005, Phase 2A API draft (no schema, no code) |
 | **2A-1** ✅ | Contract foundation (catalog, aggregate schema, permissions, shared query); Organization → Contract Types tab (C-110) |
 | **2A-2** ✅ | Core lifecycle: create/edit/discard Draft, Finalize (M-19), Return to Draft, Confirm signed, history — API only (C-111) |
-| **2A-3** | Employee Contracts tab + central Contracts module |
+| **2A-3** ✅ | Employee Contracts tab + central Contracts module + Contract Detail (C-112) |
 | **2A-4** | Contract reminders / Home integration |
 | **2A-5** | Renewal, Cancel Planned, Correction, Void (**Amendment remains gated** unless approved) |
 | **2A-6** | Optional Contract Draft during Add Employee |
