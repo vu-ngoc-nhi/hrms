@@ -553,6 +553,47 @@ a.home-stat:hover .home-stat-hint { color: var(--color-primary); }
   .home-stat-icon { width: 40px; height: 40px; }
 }
 
+/* Home desktop sizing (owner request, 2026-10-16): Home alone may use up to --home-max-width beside the sidebar
+   (every other screen keeps --content-max-width); type, KPI values and charts step up on desktop widths. No zoom or
+   transforms — only widths, gaps and font sizes. Phones are unchanged. */
+.page:has(> .home) { max-width: var(--home-max-width); }
+@media (min-width: 1200px) {
+  .page:has(> .home) { padding-left: var(--home-gutter-desktop); padding-right: var(--home-gutter-desktop); }
+  .home-hero h1 { font-size: var(--font-size-home-title); }
+  .home-hero-subtitle, .home-asof { font-size: var(--font-size-base); }
+  .home-stats { gap: var(--space-5); }
+  .home-stat { padding: var(--space-5); }
+  .home-stat-label { font-size: var(--font-size-base); }
+  .home-stat-trend { font-size: var(--font-size-sm); }
+  .home-stat-count { font-size: var(--font-size-kpi); }
+  .home-stat-icon { width: 44px; height: 44px; }
+  .home-status-links { font-size: var(--font-size-base); }
+  .home-charts, .home-main { gap: var(--space-5); }
+  .home-panel-heading h2 { font-size: var(--font-size-home-heading); }
+  .home-panel-note { font-size: var(--font-size-base); }
+  .home-chart-legend { font-size: var(--font-size-base); gap: var(--space-3); }
+  .home-chart-legend .home-chart-dot { margin-top: 6px; }
+  .home-chart-legend-scroll { max-height: 280px; }
+  .home-donut { width: clamp(184px, 14vw, 240px); height: clamp(184px, 14vw, 240px); }
+  .home-donut-center strong { font-size: var(--font-size-kpi); }
+  .home-donut-center span { font-size: var(--font-size-sm); max-width: 96px; } /* stays inside the ring */
+  .home-column-plot { height: clamp(200px, 15vw, 260px); }
+  .home-column-bar { width: min(56px, 70%); }
+  .home-column-count { font-size: var(--font-size-base); }
+  .home-columns .home-chart-name { font-size: var(--font-size-sm); }
+  .home-row-name { font-size: var(--font-size-base); }
+  .home-row-detail, .home-row-code, .home-chips li { font-size: var(--font-size-sm); }
+}
+@media (min-width: 1600px) {
+  .home-hero h1 { font-size: var(--font-size-home-title-xl); }
+  .home-stat-count, .home-donut-center strong { font-size: var(--font-size-kpi-xl); }
+  .home-panel-heading h2 { font-size: var(--font-size-home-heading-xl); }
+  .home-stat { padding: var(--space-5) var(--space-5) var(--space-5) var(--space-6); }
+  .home-stat-icon { width: 52px; height: 52px; }
+  .home-stat-hint { font-size: var(--font-size-sm); }
+  .home-donut-center span { max-width: 120px; }
+}
+
 /* Workflow form helpers (Phase 1 final polish): replace the legacy inline styles of the S4 workflow forms. */
 .choice-group { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: var(--space-2); }
 .choice-group legend { padding: 0; margin-bottom: var(--space-1); font-size: var(--font-size-sm); }

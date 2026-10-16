@@ -82,6 +82,14 @@
   --table-row-height: 44px;
   --sidebar-width: 236px;
   --content-max-width: 1240px;
+  --home-max-width: 1600px; /* Home dashboard only (owner-approved sizing): uses the width beside the sidebar */
+  --home-gutter-desktop: 32px;
+  --font-size-home-title: 28px;
+  --font-size-home-title-xl: 30px;
+  --font-size-home-heading: 18px;
+  --font-size-home-heading-xl: 20px;
+  --font-size-kpi: 36px;
+  --font-size-kpi-xl: 40px;
 
   /* ---- Typography (system font stack; no external fonts) ---- */
   --font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;

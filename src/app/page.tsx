@@ -127,7 +127,7 @@ export default function HomePage() {
                 </span>
                 <span className="home-stat-hint">
                   {c.hint}
-                  {c.href && " →"}
+                  {c.href && "\u00a0→"}
                 </span>
               </span>
               <span className="home-stat-icon" aria-hidden="true">
