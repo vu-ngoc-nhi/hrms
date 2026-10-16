@@ -1,6 +1,6 @@
 # Eme People — Phase 2 Contract Product & Architecture Decision Pack
 
-- Status: **Revision 4 (2026-10-15) — approved; staged implementation authorized (C-109).** Phase 2A is implemented slice by slice (2A-0 … 2A-6) with an **owner checkpoint between slices**; **2A-0 done; 2A-1 Contract foundation implemented (2026-10-15, C-110)** — schema, Contract Type catalog API and Organization tab, permissions, shared query foundation; no contract lifecycle API or contract screen yet. Owner decisions: **C-104 … C-109**, **M-15 … M-18** in `docs/decision-register.md`. Frozen contract design: `docs/adr/0005-contract-domain.md`; API draft: `docs/api/contracts-api-draft.md`. Amendment workflow and Phase 2B are **not** authorized.
+- Status: **Revision 4 (2026-10-15) — approved; staged implementation authorized (C-109).** Phase 2A is implemented slice by slice (2A-0 … 2A-6) with an **owner checkpoint between slices**; **2A-0 done; 2A-1 Contract foundation implemented (2026-10-15, C-110); 2A-2 core lifecycle API implemented (2026-10-16, M-19, C-111)** — no contract screen yet. Owner decisions: **C-104 … C-109**, **M-15 … M-18** in `docs/decision-register.md`. Frozen contract design: `docs/adr/0005-contract-domain.md`; API draft: `docs/api/contracts-api-draft.md`. Amendment workflow and Phase 2B are **not** authorized.
 - Baseline: **Eme People — Core HR Phase 1 Product/UI Frozen — Owner Accepted** (C-101, C-103). Release status unchanged: *UAT Passed With Pre-Production Actions*, **not Production Ready**; Gate A is in external execution.
 - Governing principles: C-84, C-85, C-13 (Employee Type ≠ Contract Type), C-16, C-17, C-19 (9), PL-10.
 - Data: synthetic only (C-03). No real employee or contract data, template or signed file.
@@ -201,7 +201,7 @@ Effect, in one transaction: `finalized_at` / `finalized_by` cleared; `contract_n
 
 **Block (structural):** Contract Type active and set; Contract Number present and unique (M-18); `effective_from` set and inside the period (§3.1); exactly one of `effective_to ≥ effective_from` or `is_open_ended`; valid renewal parent (same period, agreement, Finalized/Signed, one operational renewal); period not Cancelled/Voided.
 
-**Warn → Needs Review (M-17):** unlinked overlap with another operational agreement of the same person; gap after a renewal's predecessor; `effective_to` after the period's end; another open draft for the period. Finalize proceeds after HR acknowledges. (No Employee Type / Contract Type mismatch warning in 2A: no compatibility rule exists until PV-31.)
+**Warn → Needs Review (M-17):** unlinked overlap with another operational agreement of the same person; gap after a renewal's predecessor; `effective_to` after the period's end; another open draft for the period. Finalize proceeds after one explicit confirmation (M-19). (No Employee Type / Contract Type mismatch warning in 2A: no compatibility rule exists until PV-31.)
 
 ---
 
@@ -387,7 +387,7 @@ No persistent "acknowledged" state in 2A.
 |---|---|
 | **2A-0** ✅ | Architecture records: decision pack, register, ADR-0005, Phase 2A API draft (no schema, no code) |
 | **2A-1** ✅ | Contract foundation (catalog, aggregate schema, permissions, shared query); Organization → Contract Types tab (C-110) |
-| **2A-2** | Core lifecycle: create/edit/discard Draft, Finalize, Return to Draft, Confirm signed, history |
+| **2A-2** ✅ | Core lifecycle: create/edit/discard Draft, Finalize (M-19), Return to Draft, Confirm signed, history — API only (C-111) |
 | **2A-3** | Employee Contracts tab + central Contracts module |
 | **2A-4** | Contract reminders / Home integration |
 | **2A-5** | Renewal, Cancel Planned, Correction, Void (**Amendment remains gated** unless approved) |
@@ -477,7 +477,7 @@ AI-first (all future): field extraction from uploaded contracts with HR confirma
 |---|---|---|
 | **2A-0** | Commit pack + register; ADR-0005; Phase 2A API draft | Owner checkpoint |
 | 2A-1 | Forward migration, local `hrms_dev`/`hrms_test` only: `contract_type`, `contract`, `contract_history_event`; CHECKs (link pair with `relationship_type IN ('renewal')`, dispositions exclusive, term consistency on Finalized rows, `finalized_at` required for `signed_at`), terminal trigger, same-period composite FK, one operational renewal, unique normalized number; audit allow-list extension; insert-only synthetic seed. Permissions in `ROLE_PERMISSIONS` + `access_role_permission` mirror + permission-matrix tests; shared contract query + contract test; Contract Type catalog API | Owner checkpoint |
-| 2A-2 | Draft create/read/edit/discard, Finalize (warnings + acknowledgement), Return to Draft, Confirm signed, history, idempotency, revision; integration tests on `hrms_test` | Owner checkpoint |
+| 2A-2 | Draft create/read/edit/discard, Finalize (blockers + warning confirmation, M-19), Return to Draft, Confirm signed, history, idempotency, revision; integration tests on `hrms_test` | Owner checkpoint |
 | 2A-3 | Employee Contracts tab + Contracts module (list/filter) | Owner checkpoint |
 | 2A-4 | Reminder endpoint + Home cards | PV-36; owner checkpoint |
 | 2A-5 | Renewal, Cancel Planned, Correction, Void | PV-39; owner checkpoint |

@@ -1,6 +1,6 @@
 # ADR-0005 — Contract domain (Phase 2A Contract Management)
 
-- Status: **Accepted (2026-10-15)** — freezes C-104 … C-110 and M-15 … M-18 for implementation. Staged delivery (C-109): **2A-0** done; **2A-1 Contract foundation implemented** (migration `20261015000000_contract_foundation`, §16); each later slice needs an owner checkpoint. Amendment workflow and Phase 2B are **not** authorized.
+- Status: **Accepted (2026-10-15)** — freezes C-104 … C-111 and M-15 … M-19 for implementation. Staged delivery (C-109): **2A-0** done; **2A-1 Contract foundation implemented** (migration `20261015000000_contract_foundation`, §16); **2A-2 core lifecycle implemented** (§17); each later slice needs an owner checkpoint. Amendment workflow and Phase 2B are **not** authorized.
 - Sources: `docs/design/phase2-contract-decision-pack.md` (revision 4), `docs/decision-register.md`, API draft `docs/api/contracts-api-draft.md`.
 - Governing principles: C-84 (*Lightweight HR operations, strong Core HR integrity*), C-85 (permission-based access), ADR-0003 (identity), ADR-0004 (history vs audit).
 - Synthetic data only. Real contract data needs PL-11, PL-12, PL-13 and the Real Data Gate.
@@ -88,14 +88,14 @@ Drafts and non-operational contracts have no time state. Time state does not dep
 | Discard Draft | Draft | manage | optional | 2A-2 |
 | **Finalize** | Draft | **finalize** | — | 2A-2 |
 | **Return to Draft** | Finalized, unsigned | **finalize** | mandatory | 2A-2 |
-| **Confirm signed** | Finalized, unsigned | **finalize** | — | 2A-2 |
+| **Confirm signed** | Finalized, unsigned; period not Voided (C-111) | **finalize** | — | 2A-2 |
 | Create renewal Draft | Finalized/Signed | manage | — | 2A-5 |
 | Cancel planned contract | Finalized/Signed, upcoming | finalize | mandatory | 2A-5 |
 | Correct | Signed | **correct** | mandatory | 2A-5 |
 | Void | Finalized/Signed | **correct** | mandatory | 2A-5 |
 | Amend | — | — | — | **gated** |
 
-**Finalize** — blockers: Contract Type set and active; number present and unique; Effective From inside a valid period; term consistent; renewal parent valid. Warnings (M-17, never blocking): unlinked overlap with another operational agreement of the person, gap after the renewal predecessor, `effective_to` after the period's end date, another open Draft for the period. The caller acknowledges the current warnings explicitly; the server re-evaluates in the same transaction.
+**Finalize** — blockers: Contract Type set and active; number present and unique; Effective From inside a valid period; term consistent; renewal parent valid. Warnings (M-17, never blocking): unlinked overlap with another operational agreement of the person, gap after the renewal predecessor, `effective_to` after the period's end date, another open Draft for the period. Warnings follow **M-19**: blockers can never be overridden; with warnings and no blockers the server returns `409 FINALIZE_CONFIRMATION_REQUIRED` with the current warnings instead of finalizing silently; HR confirms once (*Finalize Anyway*), sending the server-issued `warning_fingerprint`; the server recomputes blockers and warnings in the writing transaction and finalizes only if the fingerprint still matches. Confirming does not resolve a warning (the contract stays under Needs Review) and leaves no acknowledgement record — only the `finalized` history event.
 
 **Past dates (C-109):** Effective From and `signed_at` in the past are accepted with `contracts.finalize`; `recorded_at` preserves when the record was entered.
 
@@ -174,3 +174,12 @@ Forward, additive migration `prisma/migrations/20261015000000_contract_foundatio
 | Code | `src/modules/contracts/model.ts` (number normalization, document state, value sets, `signed_at` business-date rule for later services), `src/modules/contracts/queries.ts` (shared operational predicate) |
 
 Clarification applied in 2A-1: the Effective-From-inside-period rule is enforced on every write that sets the date (Draft included), not only at Finalize — an out-of-period date is objectively invalid for that period; later Phase 1 period corrections remain unblocked (C-107).
+
+## 17. Implementation record — slice 2A-2 (2026-10-16)
+
+- Operations (all `/api/v1/core-hr`): `createContract`, `getContract`, `updateContractDraft`, `createContractDiscard`, `createContractFinalize`, `createContractReturnToDraft`, `createContractSignatureConfirmation`, `listContractHistory` — design `docs/design/phase2a-slice-2a-2-lifecycle.md`.
+- Code: `src/modules/contracts/evaluation.ts` (the single place that decides blockers, warnings, Needs Review, time state and allowed actions; services enforce through `stateReasons`), `src/modules/contracts/service.ts` (commands, projection, idempotent runner, database error mapping).
+- Finalize (M-19): blockers → 422 `CONTRACT_NOT_READY`; warnings `OVERLAPPING_CONTRACT`, `GAP_AFTER_PREDECESSOR`, `ANOTHER_OPEN_DRAFT_FOR_PERIOD`, `CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD` → 409 `FINALIZE_CONFIRMATION_REQUIRED` with `warning_fingerprint` (`w1:` + SHA-256 of the sorted code/related-contract pairs) unless the request confirms exactly the current set; recomputed in the writing transaction; no acknowledgement record.
+- Parent dispositions (C-111): under a Cancelled or Voided period a Draft is readable, keeps its history, cannot be edited or finalized and may be discarded; Confirm Signed is allowed under a Cancelled period and refused under a Voided one. Forward migration `20261016000000_contract_voided_parent_guard` makes a contract under a Voided period read-only in the database except for its own dispositions (Discard / Void).
+- Concurrency: row lock + `contract.revision`; Idempotency-Key claimed inside the transaction (a rejected request leaves the key unused); `person.revision` untouched.
+- The error envelope gained an optional `warning_fingerprint` (FINALIZE_CONFIRMATION_REQUIRED only) and `details[].related_contract_id`.

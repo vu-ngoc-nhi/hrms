@@ -1,6 +1,6 @@
 # Contract API — Phase 2A draft (not implemented)
 
-- Status: **Draft (2A-0, 2026-10-15); slice 2A-1 implemented the Contract Type catalog operations** (`listContractTypes`, `createContractType`, `updateContractType`, now in the generated OpenAPI contract) and the four `contracts.*` permissions. Every other operation is still a draft and enters the contract only in its slice. Finalize warning acknowledgement (§3) is **not approved** — decided in 2A-2 (PV-43).
+- Status: **Draft (2A-0, 2026-10-15); slice 2A-1 implemented the Contract Type catalog operations** (`listContractTypes`, `createContractType`, `updateContractType`, now in the generated OpenAPI contract) and the four `contracts.*` permissions. Every operation not marked ✅ is still a draft and enters the contract only in its slice. Finalize warnings follow **M-19** (PV-43, 2026-10-16): explicit confirmation with a server-issued warning fingerprint (§3, §4.3). **Slice 2A-2 implemented the core lifecycle** (create / read / edit / discard Draft, Finalize, Return to Draft, Confirm Signed, history — §2 rows marked ✅); design and decisions: `docs/design/phase2a-slice-2a-2-lifecycle.md`, C-111. In 2A-2 `ContractDetail` omits `attention` (added in 2A-4, PV-36) and `relationship` is `{ type, parent_id, renewal_id }`.
 - Frozen design: `docs/adr/0005-contract-domain.md`. Decisions: C-104 … C-109, M-15 … M-18 (`docs/decision-register.md`).
 - **Amendment is not specified as implementation-ready** (gated, C-109). Phase 2B generation is out of scope.
 
@@ -24,14 +24,14 @@ All Core HR conventions apply unchanged (`docs/api/core-hr-api.md`): JSON, snake
 | 2A-1 ✅ | listContractTypes | GET `/contract-types` | catalogs.read | Catalog (`include_inactive` flag) |
 | 2A-1 ✅ | createContractType | POST `/contract-types` | catalogs.manage | `{ code, name, name_vi? }`; 409 `DUPLICATE_CATALOG_CODE` |
 | 2A-1 ✅ | updateContractType | PATCH `/contract-types/{id}` | catalogs.manage | `name`, `name_vi`, `is_active`; code immutable |
-| 2A-2 | createContract | POST `/contracts` | contracts.manage | Create a Draft |
-| 2A-2 | getContract | GET `/contracts/{id}` | contracts.read | `ContractDetail` |
-| 2A-2 | updateContractDraft | PATCH `/contracts/{id}` | contracts.manage | Edit a Draft |
-| 2A-2 | createContractDiscard | POST `/contracts/{id}/discard` | contracts.manage | Draft → Cancelled |
-| 2A-2 | createContractFinalize | POST `/contracts/{id}/finalize` | contracts.finalize | Draft → Finalized |
-| 2A-2 | createContractReturnToDraft | POST `/contracts/{id}/return-to-draft` | contracts.finalize | Finalized (unsigned) → Draft |
-| 2A-2 | createContractSignatureConfirmation | POST `/contracts/{id}/confirm-signed` | contracts.finalize | Finalized → Signed |
-| 2A-2 | listContractHistory | GET `/contracts/{id}/history` | contracts.read | Business history |
+| 2A-2 ✅ | createContract | POST `/contracts` | contracts.manage | Create a Draft |
+| 2A-2 ✅ | getContract | GET `/contracts/{id}` | contracts.read | `ContractDetail` |
+| 2A-2 ✅ | updateContractDraft | PATCH `/contracts/{id}` | contracts.manage | Edit a Draft |
+| 2A-2 ✅ | createContractDiscard | POST `/contracts/{id}/discard` | contracts.manage | Draft → Cancelled |
+| 2A-2 ✅ | createContractFinalize | POST `/contracts/{id}/finalize` | contracts.finalize | Draft → Finalized |
+| 2A-2 ✅ | createContractReturnToDraft | POST `/contracts/{id}/return-to-draft` | contracts.finalize | Finalized (unsigned) → Draft |
+| 2A-2 ✅ | createContractSignatureConfirmation | POST `/contracts/{id}/confirm-signed` | contracts.finalize | Finalized → Signed |
+| 2A-2 ✅ | listContractHistory | GET `/contracts/{id}/history` | contracts.read | Business history |
 | 2A-3 | listContracts | GET `/contracts` | contracts.read | Portfolio list/filter (§5) |
 | 2A-3 | listEmployeeContracts | GET `/employees/{id}/contracts` | contracts.read | Grouped for the Employee Contracts tab (§6) |
 | 2A-4 | getContractReminders | GET `/contract-reminders` | contracts.read | Home cards (§7) |
@@ -62,13 +62,13 @@ Draft-time checks (objectively invalid input only): `effective_to < effective_fr
 
 **updateContractDraft** — same fields except `employment_id`, all optional (`null` clears), plus `expected_revision`. Only Drafts: otherwise 409 `CONTRACT_NOT_DRAFT`.
 
-**createContractDiscard** — `{ expected_revision, reason?: string ≤ 500 }`.
+**createContractDiscard** — `{ expected_revision, reason?: string ≤ 1000 }`.
 
-**createContractFinalize** — *(acknowledgement mechanism not approved; PV-43, decided in 2A-2)* `{ expected_revision, acknowledged_warnings: ["OVERLAPPING_CONTRACT", …] }`. The server re-evaluates blockers and warnings in the transaction; any current warning not in `acknowledged_warnings` → 422 `WARNINGS_NOT_ACKNOWLEDGED` with the current warnings in `details`.
+**createContractFinalize** (M-19) — `{ expected_revision, confirmed_warning_fingerprint?: string }`. The server recomputes blockers and warnings in the writing transaction. Blockers → 422 `CONTRACT_NOT_READY` (never overridable). No warnings → finalize. Warnings and no fingerprint, or a fingerprint that no longer matches the current warning set → 409 `FINALIZE_CONFIRMATION_REQUIRED` with the current warnings in `details`; nothing changes. Matching fingerprint → finalize (warnings are not resolved; the contract stays under Needs Review). The 409 body carries the current `warning_fingerprint` next to `details`.
 
-**createContractReturnToDraft** — `{ expected_revision, reason: string 1–500 }`.
+**createContractReturnToDraft** — `{ expected_revision, reason: string 1–1000 }`.
 
-**createContractSignatureConfirmation** — `{ expected_revision, signed_at: "YYYY-MM-DD" }` (≤ today in Asia/Ho_Chi_Minh, else 422 `SIGNED_AT_IN_FUTURE`).
+**createContractSignatureConfirmation** — `{ expected_revision, signed_at: "YYYY-MM-DD" }` (≤ today in Asia/Ho_Chi_Minh, else 422 `SIGNED_AT_IN_FUTURE`). C-111: allowed under a Cancelled period; refused under a Voided period (422 `PERIOD_NOT_VALID`, detail `PERIOD_VOIDED`).
 
 **2A-5 (conceptual, finalized at that checkpoint):** renewal `{ contract_type_id?, contract_number?, effective_from?, effective_to?, is_open_ended?, summary? }` (defaults: parent's type; `effective_from` = parent operational end + 1); cancel-planned `{ expected_revision, reason }`; corrections `{ expected_revision, reason, contract_type_id?, contract_number?, effective_from?, effective_to?, is_open_ended?, signed_at? }`; void `{ expected_revision, reason }`.
 
@@ -168,7 +168,7 @@ The server is authoritative for document state, time state, allowed actions and 
 |---|---|
 | `OVERLAPPING_CONTRACT` | Overlaps another operational agreement of the person that is not its renewal parent/child |
 | `GAP_AFTER_PREDECESSOR` | Renewal starts after the day following its parent's operational end |
-| `ENDS_AFTER_PERIOD_END` | `effective_to` after the period's end date |
+| `CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD` | `effective_to` after the period's end date |
 | `EFFECTIVE_FROM_OUTSIDE_PERIOD` | Became outside the period after a period correction |
 | `PERIOD_CANCELLED` / `PERIOD_VOIDED` | The linked period lost validity; contract left operations |
 
@@ -178,10 +178,11 @@ The server is authoritative for document state, time state, allowed actions and 
 "finalize_check": {
   "ready": false,
   "blockers": [ { "field": "contract_number", "code": "REQUIRED", "message": "…" } ],
-  "warnings": [ { "code": "OPEN_DRAFT_FOR_PERIOD", "message": "…" } ]
+  "warnings": [ { "code": "ANOTHER_OPEN_DRAFT_FOR_PERIOD", "message": "…" } ],
+  "warning_fingerprint": "w1:3f9a…  (null when there are no warnings)"
 }
 ```
-Blocker codes: `REQUIRED` (contract_type_id, contract_number, effective_from, term), `CONTRACT_TYPE_INACTIVE`, `EFFECTIVE_FROM_OUTSIDE_PERIOD`, `PERIOD_NOT_VALID`, `INVALID_TERM`, `INVALID_PARENT`. Warning codes: `OVERLAPPING_CONTRACT`, `GAP_AFTER_PREDECESSOR`, `ENDS_AFTER_PERIOD_END`, `OPEN_DRAFT_FOR_PERIOD`. The Finalize action re-evaluates; this block is a preview.
+Blocker codes: `REQUIRED` (contract_type_id, contract_number, effective_from, term), `CONTRACT_TYPE_INACTIVE`, `EFFECTIVE_FROM_OUTSIDE_PERIOD`, `PERIOD_NOT_VALID`, `INVALID_TERM`, `INVALID_PARENT`. Warning codes: `OVERLAPPING_CONTRACT`, `GAP_AFTER_PREDECESSOR`, `CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD`, `ANOTHER_OPEN_DRAFT_FOR_PERIOD`. The Finalize action re-evaluates; this block is a preview.
 
 ### 4.4 Actions (per caller)
 
@@ -285,8 +286,8 @@ Ordered by `recorded_at`. `reason` present for `returned_to_draft`, `discarded`,
 | 400 | `VALIDATION_ERROR`, `FIELD_NOT_ALLOWED`, `IDEMPOTENCY_KEY_REQUIRED` |
 | 401 / 403 | `UNAUTHENTICATED` / `FORBIDDEN` (audited, no payload) |
 | 404 | `NOT_FOUND` (contract, employment, contract type) |
-| 409 | `REVISION_CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `DUPLICATE_CONTRACT_NUMBER`, `CONTRACT_NOT_DRAFT`, `CONTRACT_STATE_CONFLICT` (e.g. already Finalized/Signed), `CONTRACT_READ_ONLY` (Cancelled/Voided), `DEPENDENT_CONTRACTS_EXIST`, `RENEWAL_EXISTS` (2A-5) |
-| 422 | `CONTRACT_NOT_READY` (details = blockers), `WARNINGS_NOT_ACKNOWLEDGED` (details = warnings), `INVALID_TERM`, `CONTRACT_TYPE_INACTIVE`, `EFFECTIVE_FROM_OUTSIDE_PERIOD`, `PERIOD_NOT_VALID`, `SIGNED_AT_IN_FUTURE`, `REASON_REQUIRED`, `NOT_UPCOMING` (2A-5) |
+| 409 | `FINALIZE_CONFIRMATION_REQUIRED` (details = current warnings; M-19), `REVISION_CONFLICT`, `IDEMPOTENCY_KEY_REUSED`, `DUPLICATE_CONTRACT_NUMBER`, `CONTRACT_NOT_DRAFT`, `CONTRACT_STATE_CONFLICT` (e.g. already Finalized/Signed), `CONTRACT_READ_ONLY` (Cancelled/Voided), `DEPENDENT_CONTRACTS_EXIST`, `RENEWAL_EXISTS` (2A-5) |
+| 422 | `CONTRACT_NOT_READY` (details = blockers), `INVALID_TERM`, `CONTRACT_TYPE_INACTIVE`, `EFFECTIVE_FROM_OUTSIDE_PERIOD`, `PERIOD_NOT_VALID`, `SIGNED_AT_IN_FUTURE`, `REASON_REQUIRED`, `NOT_UPCOMING` (2A-5) |
 
 ## 10. Open points
 
@@ -294,7 +295,6 @@ Resolved at the 2A-1 checkpoint (C-110): Organization gains a **Contract Types**
 
 Later checkpoints:
 
-- 2A-2: Finalize warning acknowledgement (PV-43) — warnings stay separate from blocking validation.
 - 2A-5: whether Cancel planned / Void of a contract with a non-cancelled renewal child is blocked (`DEPENDENT_CONTRACTS_EXIST`, recommended, consistent with Return to Draft) — confirm at that checkpoint; PV-39 renewal eligibility.
 - 2A-4: reminder window (PV-36).
 - Amendment operations and representation: separate checkpoint (PL-12, PV-38).
