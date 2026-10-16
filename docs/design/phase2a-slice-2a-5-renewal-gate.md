@@ -97,7 +97,9 @@ Its time state does not matter: **Upcoming, Active and Expired parents may be re
 
 No statutory limit is encoded by assumption.
 
-## 11. Exact forward migration (to be created only when 2A-5 is authorized)
+## 11. Exact forward migration
+
+> **Implemented (2A-5, C-116):** `prisma/migrations/20261017000000_contract_renewal_chains/migration.sql` is the authoritative SQL; the sketch below is kept as the approved specification. Implementation record: `docs/design/phase2a-slice-2a-5-renewal.md`.
 
 File `prisma/migrations/<YYYYMMDDhhmmss>_contract_renewal_chains/migration.sql` — forward-only, additive, no data change (no renewal rows exist; verified by a guard at the top of the migration):
 

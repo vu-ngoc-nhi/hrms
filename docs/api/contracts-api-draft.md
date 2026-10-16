@@ -1,6 +1,6 @@
 # Contract API — Phase 2A draft (not implemented)
 
-- Status: **Draft (2A-0, 2026-10-15); slice 2A-1 implemented the Contract Type catalog operations** (`listContractTypes`, `createContractType`, `updateContractType`, now in the generated OpenAPI contract) and the four `contracts.*` permissions. Every operation not marked ✅ is still a draft and enters the contract only in its slice. Finalize warnings follow **M-19** (PV-43, 2026-10-16): explicit confirmation with a server-issued warning fingerprint (§3, §4.3). **Slice 2A-2 implemented the core lifecycle** (create / read / edit / discard Draft, Finalize, Return to Draft, Confirm Signed, history — §2 rows marked ✅); design and decisions: `docs/design/phase2a-slice-2a-2-lifecycle.md`, C-111. In 2A-2 `ContractDetail` omits `attention` (added in 2A-4, PV-36) and `relationship` is `{ type, parent_id, renewal_id }`. **Slice 2A-3 implemented `listContracts` and `listEmployeeContracts`** (§5, §6) and the contract screens (`docs/design/phase2a-slice-2a-3-ux.md`). **Slice 2A-4 implemented `getContractReminders`** and the attention filters (§5, §7).
+- Status: **Draft (2A-0, 2026-10-15); slice 2A-1 implemented the Contract Type catalog operations** (`listContractTypes`, `createContractType`, `updateContractType`, now in the generated OpenAPI contract) and the four `contracts.*` permissions. Every operation not marked ✅ is still a draft and enters the contract only in its slice. Finalize warnings follow **M-19** (PV-43, 2026-10-16): explicit confirmation with a server-issued warning fingerprint (§3, §4.3). **Slice 2A-2 implemented the core lifecycle** (create / read / edit / discard Draft, Finalize, Return to Draft, Confirm Signed, history — §2 rows marked ✅); design and decisions: `docs/design/phase2a-slice-2a-2-lifecycle.md`, C-111. In 2A-2 `ContractDetail` omits `attention` (added in 2A-4, PV-36) and `relationship` is `{ type, parent_id, renewal_id }`. **Slice 2A-3 implemented `listContracts` and `listEmployeeContracts`** (§5, §6) and the contract screens (`docs/design/phase2a-slice-2a-3-ux.md`). **Slice 2A-4 implemented `getContractReminders`** and the attention filters (§5, §7). **Slice 2A-5 implemented Renew, Cancel planned, Correction and Void** (§2 rows marked ✅, §3) with renewal lineage on the detail and list (`docs/design/phase2a-slice-2a-5-renewal.md`, C-115, C-116).
 - Frozen design: `docs/adr/0005-contract-domain.md`. Decisions: C-104 … C-109, M-15 … M-18 (`docs/decision-register.md`).
 - **Amendment is not specified as implementation-ready** (gated, C-109). Phase 2B generation is out of scope.
 
@@ -35,10 +35,10 @@ All Core HR conventions apply unchanged (`docs/api/core-hr-api.md`): JSON, snake
 | 2A-3 ✅ | listContracts | GET `/contracts` | contracts.read | Portfolio list/filter (§5) |
 | 2A-3 ✅ | listEmployeeContracts | GET `/employees/{id}/contracts` | contracts.read | Grouped for the Employee Contracts tab (§6) |
 | 2A-4 ✅ | getContractReminders | GET `/contract-reminders` | contracts.read | Home Contract Attention (§7) |
-| 2A-5 | createContractRenewal | POST `/contracts/{id}/renewals` | contracts.manage | Renewal Draft linked to `{id}` (parent: Finalized/Signed, not disposed, finite term, no non-disposed renewal — C-115) |
-| 2A-5 | createContractCancelPlanned | POST `/contracts/{id}/cancel-planned` | contracts.finalize | Finalized **unsigned**, Effective From > today → Cancelled (Signed withdrawal = PL-10, not offered; C-115) |
-| 2A-5 | createContractCorrection | POST `/contracts/{id}/corrections` | contracts.correct | Correct Signed data |
-| 2A-5 | createContractVoid | POST `/contracts/{id}/void` | contracts.correct | Finalized/Signed **erroneous record** → Voided (never to stop a valid contract that has begun) |
+| 2A-5 ✅ | createContractRenewal | POST `/contracts/{id}/renewals` | contracts.manage | Renewal Draft linked to `{id}` (parent: Finalized/Signed, not disposed, finite term, no non-disposed renewal — C-115) |
+| 2A-5 ✅ | createContractCancelPlanned | POST `/contracts/{id}/cancel-planned` | contracts.finalize | Finalized **unsigned**, Effective From > today → Cancelled (Signed withdrawal = PL-10, not offered; C-115) |
+| 2A-5 ✅ | createContractCorrection | POST `/contracts/{id}/corrections` | contracts.correct | Correct Signed data |
+| 2A-5 ✅ | createContractVoid | POST `/contracts/{id}/void` | contracts.correct | Finalized/Signed **erroneous record** → Voided (never to stop a valid contract that has begun) |
 | 2A-6 | — | (wizard uses `createContract`) | contracts.manage | Optional Draft after `createEmployee` succeeded |
 | gated | — | Amendment | — | Not specified until PL-12 / PV-38 checkpoint |
 
@@ -70,11 +70,11 @@ Draft-time checks (objectively invalid input only): `effective_to < effective_fr
 
 **createContractSignatureConfirmation** — `{ expected_revision, signed_at: "YYYY-MM-DD" }` (≤ today in Asia/Ho_Chi_Minh, else 422 `SIGNED_AT_IN_FUTURE`). C-111: allowed under a Cancelled period; refused under a Voided period (422 `PERIOD_NOT_VALID`, detail `PERIOD_VOIDED`).
 
-**2A-5 (decided by C-115; implementation pending — gate `docs/design/phase2a-slice-2a-5-renewal-gate.md`):**
-- **Renewal** `POST /contracts/{id}/renewals` `{ contract_type_id?, contract_number?, effective_from?, effective_to?, is_open_ended?, summary? }` + Idempotency-Key → new Draft with `relationship.type = renewal`. Defaults: parent's Contract Type, `effective_from` = parent Effective To + 1 (Asia/Ho_Chi_Minh). Refused: parent Draft / disposed / open-ended → 422 `PARENT_NOT_RENEWABLE`; non-disposed renewal exists → 409 `RENEWAL_EXISTS`; period Cancelled/Voided → 422 `PERIOD_NOT_VALID`. Finalize blocker `RENEWAL_STARTS_BEFORE_PARENT`; warnings `GAP_AFTER_PREDECESSOR`, `RENEWAL_OVERLAPS_PREDECESSOR` (M-19 confirmation). Parent history gets one `renewal_created` event ("Renewal draft created").
-- **Cancel planned** `{ expected_revision, reason }` — Finalized, not Signed, Effective From after today; blocked while a non-disposed renewal child exists (409 `DEPENDENT_CONTRACTS_EXIST`).
-- **Corrections** `{ expected_revision, reason, contract_type_id?, contract_number?, effective_from?, effective_to?, is_open_ended?, signed_at? }` — Signed data, transcription errors.
-- **Void** `{ expected_revision, reason }` — erroneous records only; blocked while a non-disposed renewal child exists.
+**2A-5 (C-115; implemented in slice 2A-5, C-116 — gate `docs/design/phase2a-slice-2a-5-renewal-gate.md`, record `docs/design/phase2a-slice-2a-5-renewal.md`):** all four return `201` with the affected `ContractDetail` (Renew: the new renewal Draft) and take an Idempotency-Key.
+- **Renewal** `POST /contracts/{id}/renewals` `{ contract_type_id?, contract_number?, effective_from?, effective_to?, is_open_ended?, summary? }` + Idempotency-Key → new Draft with `relationship.type = renewal`. Defaults (also exposed read-only as `renewal_defaults` on the parent's `ContractDetail`): parent's Contract Type when still active, `effective_from` = parent Effective To + 1 (Asia/Ho_Chi_Minh); the number is never prefilled; there is no `employment_id` (always the parent's period). Refused: parent Draft / disposed / open-ended → 422 `PARENT_NOT_RENEWABLE`; Effective From not after the parent's → 422 `RENEWAL_STARTS_BEFORE_PARENT`; non-disposed renewal exists → 409 `RENEWAL_EXISTS`; period Cancelled/Voided → 422 `PERIOD_NOT_VALID`. Finalize blocker `RENEWAL_STARTS_BEFORE_PARENT`; warnings `GAP_AFTER_PREDECESSOR`, `RENEWAL_OVERLAPS_PREDECESSOR` (M-19 confirmation). Parent history gets one `renewal_created` event ("Renewal created") with `related_contract_id` = the renewal; the renewal gets `created`. Audit `contract.renew`.
+- **Cancel planned** `{ expected_revision, reason }` — contract-wide: Finalized, not Signed, Effective From after today (Draft → Discard; Signed → 409 `CONTRACT_STATE_CONFLICT`, PL-10; started → 422 `NOT_UPCOMING`); blocked while a non-disposed renewal child exists (409 `DEPENDENT_CONTRACTS_EXIST`, detail `related_contract_id`). History `cancelled` (business date = Effective From). Audit `contract.cancel_planned`.
+- **Corrections** `{ expected_revision, reason, contract_type_id?, contract_number?, effective_from?, effective_to?, is_open_ended?, signed_at? }` — Signed data, transcription errors (Finalized-unsigned → 409 `CONTRACT_STATE_CONFLICT`, detail `NOT_SIGNED`: return it to Draft instead). At least one field; unchanged values → 400; `signed_at` not in the future and never cleared; the database keeps lineage valid (a renewed parent stays finite and starts before its renewal). History `corrected` with the reason; audit `contract.correct` with old/new values.
+- **Void** `{ expected_revision, reason }` — erroneous Finalized/Signed records only, never early termination; stored values are kept; blocked while a non-disposed renewal child exists. History `voided`; audit `contract.void`.
 
 ## 4. Response representation — `ContractDetail`
 
@@ -161,7 +161,8 @@ The server is authoritative for document state, time state, allowed actions and 
 | `state.days_to_operational_end` | integer \| null | Relative to `as_of` |
 | `attention.expiring_soon` | boolean | (not exposed on the detail; Home uses `GET /contract-reminders`) Expiring within the window and no **Signed** renewal (C-115) |
 | `attention.awaiting_signature` | boolean | Finalized, not Signed |
-| `relationship.renewal_state` | `none` \| `draft` \| `finalized` \| `signed` | (2A-5) Document state of the non-disposed direct renewal |
+| `relationship.renewal_state` | `null` \| `draft` \| `finalized` \| `signed` | (2A-5) Document state of the non-disposed direct renewal (`relationship` also carries `parent_number` and, on the detail, `renewal_number`) |
+| `renewal_defaults` | `null` \| `{ contract_type_id, effective_from }` | (2A-5, detail only) Server prefill for Renew; `null` when Renew is not available |
 | `employment.employment_status` | `not_started` \| `active` \| `ended` | Core HR computation (context only; never gates contract actions) |
 
 ### 4.2 Review items (warnings / Needs Review)
@@ -187,7 +188,7 @@ The server is authoritative for document state, time state, allowed actions and 
   "warning_fingerprint": "w1:3f9a…  (null when there are no warnings)"
 }
 ```
-Blocker codes: `REQUIRED` (contract_type_id, contract_number, effective_from, term), `CONTRACT_TYPE_INACTIVE`, `EFFECTIVE_FROM_OUTSIDE_PERIOD`, `PERIOD_NOT_VALID`, `INVALID_TERM`, `INVALID_PARENT`. Warning codes: `OVERLAPPING_CONTRACT`, `GAP_AFTER_PREDECESSOR`, `CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD`, `ANOTHER_OPEN_DRAFT_FOR_PERIOD`. The Finalize action re-evaluates; this block is a preview.
+Blocker codes: `REQUIRED` (contract_type_id, contract_number, effective_from, term), `CONTRACT_TYPE_INACTIVE`, `EFFECTIVE_FROM_OUTSIDE_PERIOD`, `PERIOD_NOT_VALID`, `INVALID_TERM`, `RENEWAL_STARTS_BEFORE_PARENT` (2A-5). Warning codes: `OVERLAPPING_CONTRACT`, `GAP_AFTER_PREDECESSOR`, `RENEWAL_OVERLAPS_PREDECESSOR` (2A-5), `CONTRACT_ENDS_AFTER_EMPLOYMENT_PERIOD`, `ANOTHER_OPEN_DRAFT_FOR_PERIOD`. The Finalize action re-evaluates; this block is a preview.
 
 ### 4.4 Actions (per caller)
 
@@ -205,13 +206,14 @@ Blocker codes: `REQUIRED` (contract_type_id, contract_number, effective_from, te
 | `NOT_UPCOMING` | (2A-5) Cancel planned requires Effective From after today |
 | `ALREADY_SIGNED` | also: Cancel planned is not offered for Signed contracts (PL-10) |
 | `RENEWAL_EXISTS` | (2A-5) A non-disposed direct renewal already exists |
-| `PARENT_NOT_RENEWABLE` | (2A-5) Draft, disposed or open-ended parent |
+| `OPEN_ENDED` | (2A-5) Open-ended contracts are not renewed (the Renew request answers 422 `PARENT_NOT_RENEWABLE`) |
+| `NOT_SIGNED` | (2A-5) Correction applies to Signed contracts only |
 
 Capabilities are advisory: every action re-checks permission and state on the server.
 
 ### 4.5 `ContractSummary` (lists)
 
-`id`, `revision`, `employee`, `employment { id, employment_status, disposition, employee_type }`, `contract_type { id, code, name }`, `contract_number`, `effective_from`, `effective_to`, `is_open_ended`, `signed_at`, `relationship { type, parent_id, renewal_id }`, `state` (§4.1), `attention`, `review { needs_review, codes[] }`. No `actions`, `finalize_check`, audit or reasons.
+`id`, `revision`, `employee`, `employment { id, employment_status, disposition, employee_type }`, `contract_type { id, code, name }`, `contract_number`, `effective_from`, `effective_to`, `is_open_ended`, `signed_at`, `relationship { type, parent_id, parent_number, renewal_id, renewal_state }` (2A-5), `state` (§4.1), `attention`, `review { needs_review, codes[] }`. No `actions`, `finalize_check`, audit or reasons.
 
 ## 5. `GET /contracts` — list and filter (implemented in 2A-3)
 

@@ -8,7 +8,7 @@ One definition per signal, used by the Home section **and** the Contracts filter
 
 | Signal | Rule | Contracts filter |
 |---|---|---|
-| **Expiring soon** | Finalized or Signed; operational (not discarded/cancelled/voided, period not Cancelled/Voided); not open-ended; **own Effective To from today through today + N, both ends inclusive** (Asia/Ho_Chi_Minh business dates: T and T+N count, T+N+1 and T−1 do not); excluded if its employment period already ended before today, or if a finalized renewal replaced it (C-104; no renewals exist before 2A-5). Home: N = 30 (M-20). | `expiring_within=30\|60\|90` |
+| **Expiring soon** | Finalized or Signed; operational (not discarded/cancelled/voided, period not Cancelled/Voided); not open-ended; **own Effective To from today through today + N, both ends inclusive** (Asia/Ho_Chi_Minh business dates: T and T+N count, T+N+1 and T−1 do not); excluded if its employment period already ended before today, or if a finalized renewal replaced it (C-104; no renewals exist before 2A-5 — **refined by C-115 in 2A-5: only a Signed renewal suppresses it**). Home: N = 30 (M-20). | `expiring_within=30\|60\|90` |
 | **Awaiting signature** | Finalized, not Signed, operational. No deadline implied; an already-ended unsigned contract still counts (a true open item). A contract of a Cancelled/Voided period is shown under Needs review instead. | `awaiting_signature=true` |
 | **Needs review** | The 2A-2 Needs Review model, unchanged (overlap, gap, another open draft at Finalize-time warnings as review items, end after the period end, Effective From outside the period, period cancelled/voided). | `needs_review=true` |
 
