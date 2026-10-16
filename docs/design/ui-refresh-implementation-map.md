@@ -609,6 +609,10 @@ No duplicate-person warning or matching (D-UI-8): only the server's exact confli
 | Browser QA (synthetic data, HR Admin test identity) | A Personal; B Employment — Employee; C Employment — Service Contractor (Work Email hint differs, never required); D Assignment; E Review; F validation (Full Name, Department / Job Title pairing; server invalid Mobile → back to Personal, "Nothing was saved"); G success → Overview of **ES0032 "UI8 QA Pre-start (Synthetic)"** (Pre-start, Upcoming Assignment, Complete); H intentional no-assignment result **ES0033 "UI8 QA No Assignment (Synthetic)"** (Needs Attention, Add Initial Assignment). Exactly one person per save confirmed in `hrms_dev` (read-only check) |
 | Responsive / accessibility | 1440 / 1280 / ~900: four-step stepper, two-column fields; phone: two-column stepper, one-column fields, no horizontal scroll; labels associated, `aria-invalid` / `aria-describedby` on errors, focus management, state in text |
 
+### Extension — optional Contract Draft (Phase 2A slice 2A-6, 2026-10-16, C-117)
+
+With `contracts.manage` the wizard gains an optional **Contract (optional)** step before Review: a checkbox *Create a Contract Draft for this employee* (off by default) and, when on, the Phase 2A Draft fields (active Contract Type, Contract Number blank by default, Effective From defaulting to the Start Date, End of term chosen by HR, Summary). Review shows a separate *Contract Draft — Optional* section. Saving is still the same atomic Add Employee request; only after it succeeds is the Contract Draft created as a **second, independent request** (own Idempotency-Key, the returned Employment Period id). A failed Draft is a partial success with *Retry Contract Draft* (Contract request only). Without a Draft requested, or without `contracts.manage`, everything in this section above is unchanged. Details: `docs/design/phase2a-slice-2a-6-add-employee-contract.md`.
+
 ## 18. UI-9 — Workflow & action consolidation (implemented 2026-10-11)
 
 Scope: Employee Detail action placement, one workflow surface, and HR-facing wording in workflow forms. No workflow business logic, API, eligibility rule or permission changed.
