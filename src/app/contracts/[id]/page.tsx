@@ -16,6 +16,7 @@ import {
   dispositionCode,
   explainedReason,
   findingText,
+  historyDateText,
   historyTitle,
   periodText,
   placeActions,
@@ -272,7 +273,7 @@ export default function ContractDetailPage() {
                 <li key={`${h.recorded_at}-${i}`}>
                   <div className="contract-history-title">
                     <strong>{historyTitle(h)}</strong>
-                    {h.effective_date && <span className="muted"> · {formatDate(h.effective_date)}</span>}
+                    {historyDateText(h) && <span className="muted"> · {historyDateText(h)}</span>}
                   </div>
                   <div className="muted small">
                     {t("contracts.history.columns.recordedBy")}: {h.recorded_by?.display_name ?? "—"} · {t("contracts.history.columns.recordedAt")}:{" "}

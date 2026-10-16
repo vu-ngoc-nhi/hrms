@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { IconContract } from "@/components/ui/icons";
 import { formatDate, t } from "@/i18n";
 import { api } from "@/lib/client/api";
-import { ATTENTION_LINKS, endsInText, findingText, type ReminderItem, type Reminders } from "./contracts/contractModel";
+import { ATTENTION_LINKS, endsInText, findingText, viewAllLabelText, type ReminderItem, type Reminders } from "./contracts/contractModel";
 
 // Slice 2A-4 Home — Contract Attention: ONE section with three actionable signals (Expiring soon — next 30 days,
 // Awaiting signature, Needs review). Counts and lists come from GET /contract-reminders, computed by the same server
@@ -84,7 +84,7 @@ export function ContractAttention() {
                         </li>
                       ))}
                     </ul>
-                    <Link href={ATTENTION_LINKS[s.key]} className="home-panel-link" aria-label={t("home.contracts.viewAllLabel", { total: signal.total, title })}>
+                    <Link href={ATTENTION_LINKS[s.key]} className="home-panel-link" aria-label={viewAllLabelText(signal.total, title)}>
                       {t("home.contracts.viewAll")} →
                     </Link>
                   </>

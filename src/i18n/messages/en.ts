@@ -31,6 +31,7 @@ export const en = {
       reviewAction: "Check and correct the contract data.",
       viewAll: "View all",
       viewAllLabel: "View all {total} contracts: {title}",
+      viewAllLabelOne: "View all 1 contract: {title}",
       none: "Nothing to do.",
       endsToday: "Ends today",
       endsInOne: "Ends in 1 day",
@@ -849,6 +850,7 @@ export const en = {
     all: "All",
     clearFilters: "Clear filters",
     count: "{total} contracts · as of {date}",
+    countOne: "1 contract · as of {date}",
     emptyTitle: "No contracts yet.",
     emptyBody: "Contracts are created from an employee's Contracts tab.",
     noResultsTitle: "No contracts match these filters.",
@@ -937,6 +939,16 @@ export const en = {
       EFFECTIVE_FROM_OUTSIDE_PERIOD: "Effective From is outside the employment period (the period dates changed).",
       PERIOD_CANCELLED: "The employment period was cancelled. This contract no longer has operational effect.",
       PERIOD_VOIDED: "The employment period was voided as entered in error. This contract no longer has operational effect.",
+    },
+    // The same warnings with the server-provided facts (other contract, dates concerned).
+    warningDetail: {
+      OVERLAPPING_CONTRACT: "Overlaps with {other} {range}.",
+      RENEWAL_OVERLAPS_PREDECESSOR: "This renewal overlaps {other} {range}.",
+      GAP_AFTER_PREDECESSOR: "Coverage gap after {other} {range}.",
+      ANOTHER_OPEN_DRAFT_FOR_PERIOD: "Another draft contract ({other}) is open for the same employment period.",
+      range: "from {from} to {to}",
+      rangeOpen: "from {from} onwards",
+      unnumbered: "a contract without a number",
     },
     reason: {
       PERIOD_CANCELLED: "Not available because the employment period was cancelled.",
@@ -1070,6 +1082,7 @@ export const en = {
         voided: "Contract voided",
       },
       openRenewal: "Open the renewal",
+      dateLabel: { cancelled: "Planned start date", signed_confirmed: "Signed date" },
     },
     tab: {
       current: "Current",

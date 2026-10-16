@@ -515,3 +515,36 @@ describe("Permissions, idempotency and concurrency", () => {
     expect((await voidCall(id, { expected_revision: 1, reason: "x" }, "admin")).body.error).toBe("REVISION_CONFLICT");
   });
 });
+
+describe("Owner acceptance fix: warnings carry the authoritative facts (codes and fingerprint unchanged)", () => {
+  it("overlap names the other contract and the overlapping days; the confirmation fingerprint is still code + related id", async () => {
+    const e = await period("2026-01-01");
+    const a = await finalized(e, "2026-01-01", "2026-12-31");
+    const aNumber = (await get(a)).contract_number;
+    const b = await draft(e, "2026-06-01", "2027-06-30");
+    const r = await finalizeCall(b, { expected_revision: await rev(b) });
+    expect(r.body.error).toBe("FINALIZE_CONFIRMATION_REQUIRED");
+    expect(r.body.details).toEqual([
+      expect.objectContaining({ code: "OVERLAPPING_CONTRACT", related_contract_id: a, related_contract_number: aNumber, affected_from: "2026-06-01", affected_to: "2026-12-31" }),
+    ]);
+    const { createHash } = await import("node:crypto");
+    expect(r.body.warning_fingerprint).toBe(`w1:${createHash("sha256").update(`OVERLAPPING_CONTRACT|${a}`).digest("hex")}`);
+    await finalize(b);
+    expect((await get(b)).review.items).toEqual([expect.objectContaining({ code: "OVERLAPPING_CONTRACT", related_contract_number: aNumber, affected_from: "2026-06-01", affected_to: "2026-12-31" })]);
+  });
+
+  it("gap gives the uncovered days; a renewal overlap gives the overlapping days; both name the parent", async () => {
+    const e = await period("2026-01-01");
+    const parent = await finalized(e, "2026-03-01", "2026-06-30");
+    const parentNumber = (await get(parent)).contract_number;
+    const gap = await renewed(parent, { effective_from: "2026-07-15" });
+    expect((await get(gap)).finalize_check?.warnings).toEqual([
+      expect.objectContaining({ code: "GAP_AFTER_PREDECESSOR", related_contract_id: parent, related_contract_number: parentNumber, affected_from: "2026-07-01", affected_to: "2026-07-14" }),
+    ]);
+    await discard(gap, { expected_revision: await rev(gap) });
+    const overlap = await renewed(parent, { effective_from: "2026-06-01" });
+    expect((await get(overlap)).finalize_check?.warnings).toEqual([
+      expect.objectContaining({ code: "RENEWAL_OVERLAPS_PREDECESSOR", related_contract_number: parentNumber, affected_from: "2026-06-01", affected_to: "2026-06-30" }),
+    ]);
+  });
+});

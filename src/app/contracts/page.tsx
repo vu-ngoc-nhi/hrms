@@ -17,6 +17,7 @@ import {
   contractCapabilities,
   contractFiltersFromQuery,
   contractQueryFromFilters,
+  contractCountText,
   contractTitle,
   dispositionCode,
   DOCUMENT_STATES,
@@ -204,7 +205,7 @@ function ContractsList() {
 
       {result && (
         <p className="list-meta">
-          {t("contracts.count", { total: result.total, date: formatDate(result.as_of) })}
+          {contractCountText(result.total, formatDate(result.as_of))}
           {loading && <span className="muted"> · {t("contracts.loading")}</span>}
         </p>
       )}

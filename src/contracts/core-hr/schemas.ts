@@ -20,7 +20,15 @@ const page = <T extends z.ZodType>(item: T) =>
 // ---------------- Common ----------------
 export const ErrorDetailSchema = reg(
   "ErrorDetail",
-  z.object({ field: z.string().optional(), code: z.string(), message: z.string(), related_contract_id: z.uuid().optional() }),
+  z.object({
+    field: z.string().optional(),
+    code: z.string(),
+    message: z.string(),
+    related_contract_id: z.uuid().optional(),
+    related_contract_number: z.string().nullable().optional().describe("Contract warnings: the other contract's number (null while it has none)."),
+    affected_from: isoDate().optional().describe("Contract warnings: first business date concerned (e.g. first overlapping or uncovered day)."),
+    affected_to: isoDate().nullable().optional().describe("Contract warnings: last business date concerned; null = no end yet."),
+  }),
 );
 export const ErrorResponseSchema = reg(
   "ErrorResponse",
@@ -187,6 +195,9 @@ const findingSchema = z.object({
   message: z.string(),
   field: z.string().optional(),
   related_contract_id: z.uuid().optional(),
+  related_contract_number: z.string().nullable().optional().describe("The other contract's number (null while it has none)."),
+  affected_from: isoDate().optional().describe("First business date concerned (first overlapping or uncovered day)."),
+  affected_to: isoDate().nullable().optional().describe("Last business date concerned; null = no end yet."),
 });
 const actorSchema = z.object({ user_id: z.uuid(), display_name: z.string() }).nullable();
 const actionSchema = z.object({ allowed: z.boolean(), reasons: z.array(z.string()) });

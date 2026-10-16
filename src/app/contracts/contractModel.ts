@@ -5,7 +5,16 @@
 import { tMaybe, t, formatDate } from "@/i18n";
 
 // ---------------- Server shapes (subset used by the UI) ----------------
-export type Finding = { code: string; message: string; field?: string; related_contract_id?: string };
+export type Finding = {
+  code: string;
+  message: string;
+  field?: string;
+  related_contract_id?: string;
+  /** Server-provided presentation facts (owner acceptance fix); the UI formats them and derives no rule. */
+  related_contract_number?: string | null;
+  affected_from?: string;
+  affected_to?: string | null;
+};
 export type ActionView = { allowed: boolean; reasons: string[] };
 export type ContractState = {
   document_state: "draft" | "finalized" | "signed";
@@ -232,6 +241,13 @@ export function correctionBody(c: ContractDetail, f: CorrectionForm): Record<str
   return Object.keys(body).length ? { expected_revision: c.revision, reason: f.reason.trim(), ...body } : null;
 }
 
+/** "1 contract · as of …" / "N contracts · as of …" (the Contracts list count). */
+export const contractCountText = (total: number, date: string) => (total === 1 ? t("contracts.countOne", { date }) : t("contracts.count", { total, date }));
+
+/** Accessible name of a Home Contract Attention "View all" link, singular for one contract. */
+export const viewAllLabelText = (total: number, title: string) =>
+  total === 1 ? t("home.contracts.viewAllLabelOne", { title }) : t("home.contracts.viewAllLabel", { total, title });
+
 /** "Ends today" / "Ends in 1 day" / "Ends in N days" for an expiring contract. */
 export function endsInText(days: number | null): string {
   if (days === null) return "";
@@ -245,8 +261,22 @@ export const contractCapabilities = (can: (p: string) => boolean) => ({ read: ca
 // ---------------- Labels for server codes (codes are never shown to HR) ----------------
 export const contractTitle = (c: { contract_number: string | null }) => c.contract_number ?? t("contracts.draftContract");
 
-/** Plain-language warning / review item; falls back to the server message only if a code is not catalogued. */
-export const findingText = (f: Finding) => tMaybe(`contracts.warning.${f.code}`) ?? f.message;
+/**
+ * Plain-language warning / review item. When the server supplies the facts (the other contract, the dates concerned)
+ * the specific sentence names them, e.g. "Overlaps with ACC-B-001 from 01 Jun 2027 to 31 Oct 2027."; otherwise the
+ * general sentence for the code; the server message only if a code is not catalogued. Codes are never shown.
+ */
+export function findingText(f: Finding): string {
+  const other = f.related_contract_number ?? (f.related_contract_id ? t("contracts.warningDetail.unnumbered") : null);
+  if (other && f.affected_from) {
+    const from = formatDate(f.affected_from);
+    const range = f.affected_to ? t("contracts.warningDetail.range", { from, to: formatDate(f.affected_to) }) : t("contracts.warningDetail.rangeOpen", { from });
+    const specific = tMaybe(`contracts.warningDetail.${f.code}`, { other, range });
+    if (specific) return specific;
+  }
+  if (other && f.code === "ANOTHER_OPEN_DRAFT_FOR_PERIOD") return t("contracts.warningDetail.ANOTHER_OPEN_DRAFT_FOR_PERIOD", { other });
+  return tMaybe(`contracts.warning.${f.code}`) ?? f.message;
+}
 
 export function blockerText(f: Finding): string {
   if (f.code === "REQUIRED") return t("contracts.blocker.REQUIRED", { field: tMaybe(`contracts.blockerField.${f.field}`) ?? t("contracts.fields.contractNumber") });
@@ -254,6 +284,16 @@ export function blockerText(f: Finding): string {
 }
 
 export const historyTitle = (e: HistoryItem) => tMaybe(`contracts.history.event.${e.event_type}`) ?? e.event_type;
+
+/**
+ * The business date of a history entry, labelled where it could be mistaken for the action's own date: a cancelled
+ * planned contract carries its planned start (C-107 / C-115), never the date of the cancellation, which is "Recorded at".
+ */
+export function historyDateText(e: HistoryItem): string | null {
+  if (!e.effective_date) return null;
+  const label = tMaybe(`contracts.history.dateLabel.${e.event_type}`);
+  return label ? `${label}: ${formatDate(e.effective_date)}` : formatDate(e.effective_date);
+}
 
 export function termText(c: { effective_to: string | null; is_open_ended: boolean }): string {
   if (c.is_open_ended) return t("contracts.openEnded");

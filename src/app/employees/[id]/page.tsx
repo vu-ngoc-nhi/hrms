@@ -20,32 +20,35 @@ import { AssignmentTab } from "./AssignmentTab";
 import { ContractsTab } from "./ContractsTab";
 import { EmploymentTab } from "./EmploymentTab";
 import { headerActions, latestPeriod, overview, type ActionId, type Detail } from "./detailModel";
+import { DETAIL_TABS as TABS, tabFromQuery, tabHref } from "./tabQuery";
 
 // UI-3 Employee Detail shell: compact header with the primary assignment action and person-level More actions (UI-9),
 // tabs, and one workflow surface. Documents is not shown: it has no function yet (roadmap only). Contracts (Phase 2A,
 // C-108) appears only with contracts.read.
-const TABS: readonly DetailTab[] = ["overview", "personal", "employment", "assignment", "contracts", "history"];
 type TabId = DetailTab;
-
-function tabFromUrl(): TabId {
-  if (typeof window === "undefined") return "overview";
-  const v = new URLSearchParams(window.location.search).get("tab");
-  return (TABS as readonly string[]).includes(v ?? "") ? (v as TabId) : "overview";
-}
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<ApiCallError | null>(null);
   // UI-8: arriving from Add Employee (…?created=1) shows a success notice; the parameter is then dropped from the URL.
-  const created = useSearchParams().get("created") === "1";
+  const searchParams = useSearchParams();
+  const created = searchParams.get("created") === "1";
   const [notice, setNotice] = useState<string | null>(created ? t("wizard.created") : null);
   const [warning, setWarning] = useState<string | null>(null);
   const router = useRouter();
   useEffect(() => {
     if (created) router.replace(`/employees/${id}`, { scroll: false });
   }, [created, id, router]);
-  const [tab, setTab] = useState<TabId>(tabFromUrl);
+  // The tab comes from the router's search params (owner acceptance fix; C-114 pattern), and a later change of the
+  // address while this page stays mounted (an in-app link to another tab, Back / Forward) is adopted.
+  const urlTab = tabFromQuery(searchParams.get("tab"));
+  const [tab, setTab] = useState<TabId>(urlTab);
+  const [adoptedUrlTab, setAdoptedUrlTab] = useState<TabId>(urlTab);
+  if (urlTab !== adoptedUrlTab) {
+    setAdoptedUrlTab(urlTab);
+    setTab(urlTab);
+  }
   const [backHref] = useState(() => (typeof window === "undefined" ? "/employees" : rememberedListHref()));
   // UI-9: exactly one workflow (Drawer / Modal) at a time, opened from the header or a card.
   const [workflow, setWorkflow] = useState<OpenWorkflow | null>(null);
@@ -60,9 +63,10 @@ export default function EmployeeDetailPage() {
 
   // The selected tab is part of the address (shareable, survives reload); Overview is the bare URL.
   useEffect(() => {
-    const url = `${window.location.pathname}${tab === "overview" ? "" : `?tab=${tab}`}`;
+    if (created) return; // the ?created=1 clean-up above rewrites the address itself
+    const url = tabHref(window.location.pathname, tab);
     if (url !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", url);
-  }, [tab]);
+  }, [tab, created]);
 
   if (error) return <ErrorBox error={error} />;
   if (!d) return <p className="muted">{t("app.loading")}</p>;

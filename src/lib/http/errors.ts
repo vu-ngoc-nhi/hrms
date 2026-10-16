@@ -44,7 +44,16 @@ export type ErrorCode =
   | "RENEWAL_STARTS_BEFORE_PARENT"
   | "NOT_UPCOMING";
 
-export type ErrorDetail = { field?: string; code: string; message: string; related_contract_id?: string };
+export type ErrorDetail = {
+  field?: string;
+  code: string;
+  message: string;
+  related_contract_id?: string;
+  /** Contract warnings only: presentation facts (see contracts evaluation `Finding`). */
+  related_contract_number?: string | null;
+  affected_from?: string;
+  affected_to?: string | null;
+};
 
 export class ApiError extends Error {
   constructor(

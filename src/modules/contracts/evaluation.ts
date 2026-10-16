@@ -29,7 +29,20 @@ export type ContractFacts = {
 /** A contract together with its own period, as needed to compare it with others of the same person. */
 export type ContractInContext = { contract: ContractFacts; period: PeriodFacts };
 
-export type Finding = { code: string; message: string; field?: string; related_contract_id?: string };
+/**
+ * A blocker / warning / review item. `related_contract_number`, `affected_from` and `affected_to` are presentation
+ * facts computed here (owner acceptance fix) so the UI can name the other contract and the dates concerned without
+ * re-deriving any rule; they never take part in the M-19 warning fingerprint (code + related id only).
+ */
+export type Finding = {
+  code: string;
+  message: string;
+  field?: string;
+  related_contract_id?: string;
+  related_contract_number?: string | null;
+  affected_from?: string;
+  affected_to?: string | null;
+};
 
 export type TimeState = "upcoming" | "active" | "expired";
 export type TimeStateDetail = "closed_by_employment_end" | "replaced_by_renewal" | null;
@@ -155,19 +168,30 @@ function dataWarnings(x: ContractInContext, others: ContractInContext[]): Findin
       if (linked) continue; // the renewal pair has its own warnings (GAP / RENEWAL_OVERLAPS_PREDECESSOR, C-115)
       const r = operationalRange(o, others);
       if (r && overlaps(range, r)) {
-        out.push({ code: WARNING.OVERLAPPING_CONTRACT, message: "Overlaps another contract of this person.", related_contract_id: o.contract.id });
+        out.push({
+          code: WARNING.OVERLAPPING_CONTRACT,
+          message: "Overlaps another contract of this person.",
+          related_contract_id: o.contract.id,
+          related_contract_number: o.contract.contractNumber,
+          // The overlapping days of the two operational ranges (null end = no end yet).
+          affected_from: range.from > r.from ? range.from : r.from,
+          affected_to: minDate(range.end, r.end),
+        });
       }
     }
   }
   // C-115: against the parent's OWN Effective To (a renewable parent always has one). Both stay in Needs Review while
   // true — also after the renewal is Signed.
   if (c.relationshipType === "renewal" && c.parentContractId && c.effectiveFrom) {
-    const parentTo = others.find((o) => o.contract.id === c.parentContractId)?.contract.effectiveTo ?? null;
+    const parent = others.find((o) => o.contract.id === c.parentContractId)?.contract;
+    const parentTo = parent?.effectiveTo ?? null;
+    const related = { related_contract_id: c.parentContractId, related_contract_number: parent?.contractNumber ?? null };
     if (parentTo && c.effectiveFrom > addDays(parentTo, 1)) {
-      out.push({ code: WARNING.GAP_AFTER_PREDECESSOR, message: "There is a gap after the previous contract.", related_contract_id: c.parentContractId });
+      // Uncovered days: from the day after the parent's own Effective To to the day before this renewal starts.
+      out.push({ code: WARNING.GAP_AFTER_PREDECESSOR, message: "There is a gap after the previous contract.", ...related, affected_from: addDays(parentTo, 1), affected_to: addDays(c.effectiveFrom, -1) });
     }
     if (parentTo && c.effectiveFrom <= parentTo) {
-      out.push({ code: WARNING.RENEWAL_OVERLAPS_PREDECESSOR, message: "The renewal starts before the previous contract ends.", related_contract_id: c.parentContractId });
+      out.push({ code: WARNING.RENEWAL_OVERLAPS_PREDECESSOR, message: "The renewal starts before the previous contract ends.", ...related, affected_from: c.effectiveFrom, affected_to: parentTo });
     }
   }
   if (!c.isOpenEnded && c.effectiveTo && x.period.endDate !== null && c.effectiveTo > x.period.endDate) {
@@ -181,7 +205,12 @@ export function finalizeWarnings(x: ContractInContext, others: ContractInContext
   const out = dataWarnings(x, others);
   for (const o of others) {
     if (o.contract.id !== x.contract.id && o.contract.employmentId === x.contract.employmentId && o.contract.documentState === "draft" && isOperational(o)) {
-      out.push({ code: WARNING.ANOTHER_OPEN_DRAFT_FOR_PERIOD, message: "Another draft contract is open for this employment period.", related_contract_id: o.contract.id });
+      out.push({
+        code: WARNING.ANOTHER_OPEN_DRAFT_FOR_PERIOD,
+        message: "Another draft contract is open for this employment period.",
+        related_contract_id: o.contract.id,
+        related_contract_number: o.contract.contractNumber,
+      });
     }
   }
   return sortFindings(out);
