@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { POST as cancelPlannedRoute } from "@/app/api/v1/core-hr/contracts/[id]/cancel-planned/route";
@@ -365,6 +366,87 @@ describe("Correction of a Signed contract (contracts.correct)", () => {
     await renewed(parent, { effective_from: "2026-05-01" }); // overlapping renewal (a warning)
     expect((await correct(parent, { expected_revision: await rev(parent), reason: "x", is_open_ended: true, effective_to: null }, "admin")).body.error).toBe("PARENT_NOT_RENEWABLE");
     expect((await correct(parent, { expected_revision: await rev(parent), reason: "x", effective_from: "2026-05-01" }, "admin")).body.error).toBe("RENEWAL_STARTS_BEFORE_PARENT");
+  });
+});
+
+describe("Owner close-out checks for 2A-5", () => {
+  it("A → B (Finalized, NOT signed) → C is intentionally allowed (C-115: a renewable parent is Finalized or Signed)", async () => {
+    const e = await period("2026-01-01");
+    const a = await finalized(e, "2026-01-01", "2026-06-30");
+    const b = await renewed(a, { effective_from: "2026-07-01", effective_to: "2026-12-31" });
+    await finalize(b);
+    const bView = await get(b);
+    expect([bView.state.document_state, bView.signed_at]).toEqual(["finalized", null]); // B is unsigned
+    expect(bView.actions.renew).toEqual({ allowed: true, reasons: [] });
+    expect(bView.renewal_defaults?.effective_from).toBe("2027-01-01");
+    const c = await renewed(b);
+    expect((await get(c)).relationship).toMatchObject({ type: "renewal", parent_id: b });
+    expect((await get(b)).relationship).toMatchObject({ parent_id: a, renewal_id: c, renewal_state: "draft" });
+    // B unsigned is not A's confirmed successor: A keeps its own operational end.
+    expect((await get(a)).state.operational_end).toBe("2026-06-30");
+  });
+
+  it("Correction cannot change employment_id, parent_contract_id or relationship_type, nor otherwise rewrite lineage", async () => {
+    const e = await period("2026-01-01");
+    const other = await period("2026-01-01");
+    const a = await finalized(e, "2026-01-01", "2026-06-30");
+    const unrelated = await finalized(e, "2027-01-01", "2027-06-30");
+    const b = await renewed(a, { effective_from: "2026-07-01", effective_to: "2026-12-31" });
+    await finalize(b);
+    await sign(b);
+    const r0 = await rev(b);
+    for (const field of [{ employment_id: other }, { parent_contract_id: unrelated }, { parent_contract_id: null }, { relationship_type: null }, { relationship_type: "amendment" }]) {
+      const r = await correct(b, { expected_revision: r0, reason: "x", ...field }, "admin");
+      expect([r.status, r.body.error, r.body.details?.[0]?.code], JSON.stringify(field)).toEqual([400, "VALIDATION_ERROR", "FIELD_NOT_ALLOWED"]);
+    }
+    // A permitted correction keeps the lineage; moving the renewal's start onto / before the parent's start is refused.
+    expect((await correct(b, { expected_revision: r0, reason: "x", effective_from: "2026-01-01" }, "admin")).body.error).toBe("RENEWAL_STARTS_BEFORE_PARENT");
+    const ok = await correct(b, { expected_revision: r0, reason: "Start entered one day late (synthetic)", effective_from: "2026-06-30" }, "admin");
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    expect(ok.body).toMatchObject({ employment: { id: e }, relationship: { type: "renewal", parent_id: a } });
+    expect(ok.body.review.items.map((i: { code: string }) => i.code)).toContain("RENEWAL_OVERLAPS_PREDECESSOR"); // a warning, not a rewrite
+    const row = await db().contract.findUniqueOrThrow({ where: { id: b } });
+    expect([row.employmentId, row.parentContractId, row.relationshipType]).toEqual([e, a, "renewal"]);
+  });
+
+  it("inactive Contract Type (C-44): a correction may retain or reference an existing inactive type; new business data may not", async () => {
+    seq += 1;
+    const retired = (await app.query("INSERT INTO contract_type (code, name, is_active) VALUES ($1, 'Retired Type (synthetic)', true) RETURNING id", [`TEST_RETIRED_${seq}`])).rows[0].id;
+    const otherRetired = (await app.query("INSERT INTO contract_type (code, name, is_active) VALUES ($1, 'Other Retired Type (synthetic)', false) RETURNING id", [`TEST_RETIRED_B_${seq}`])).rows[0].id;
+    const e = await period("2026-01-01");
+    const created = await call(createRoute, {
+      path: PATH,
+      method: "POST",
+      user: "editor",
+      body: { employment_id: e, contract_type_id: retired, contract_number: nextNumber(), effective_from: "2026-01-01", effective_to: "2026-06-30" },
+      headers: { "idempotency-key": key("rn-retired") },
+    });
+    const id = created.body.id as string;
+    await finalize(id);
+    await sign(id);
+    await app.query("UPDATE contract_type SET is_active = false WHERE id = $1", [retired]);
+
+    // Retain: correcting another field keeps the (now inactive) type of the record.
+    const kept = await correct(id, { expected_revision: await rev(id), reason: "End date typo (synthetic)", effective_to: "2026-07-31" }, "admin");
+    expect(kept.status, JSON.stringify(kept.body)).toBe(201);
+    expect(kept.body.contract_type).toMatchObject({ id: retired, is_active: false });
+    // Reference: correcting to another EXISTING inactive type is accepted to record historical truth (C-44) …
+    const switched = await correct(id, { expected_revision: await rev(id), reason: "Signed under the other retired type (synthetic)", contract_type_id: otherRetired }, "admin");
+    expect(switched.status, JSON.stringify(switched.body)).toBe(201);
+    expect(switched.body.contract_type).toMatchObject({ id: otherRetired, is_active: false });
+    const audit = await db().auditEvent.findFirst({ where: { action: "contract.correct", entityId: id }, orderBy: { id: "desc" }, include: { fieldChanges: true } });
+    expect(audit?.fieldChanges.find((f) => f.field === "contract.contract_type_id")).toMatchObject({ oldValue: retired, newValue: otherRetired });
+    // … a non-existent type never is.
+    expect((await correct(id, { expected_revision: await rev(id), reason: "x", contract_type_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, "admin")).status).toBe(404);
+
+    // New business data keeps requiring an active type: no Renew prefill, an explicit inactive type is refused.
+    expect((await get(id)).renewal_defaults).toEqual({ contract_type_id: null, effective_from: "2026-08-01" });
+    expect((await renew(id, { contract_type_id: otherRetired })).body.error).toBe("CONTRACT_TYPE_INACTIVE");
+    const fresh = await call(createRoute, { path: PATH, method: "POST", user: "editor", body: { employment_id: e, contract_type_id: retired }, headers: { "idempotency-key": key("rn-retired-new") } });
+    expect(fresh.body.error).toBe("CONTRACT_TYPE_INACTIVE");
+    // The correction dialog does not offer inactive types as ordinary choices: only active types plus the record's current one.
+    const dialog = readFileSync("src/app/contracts/[id]/LifecycleDialogs.tsx", "utf8");
+    expect(dialog).toContain("types.filter((o) => o.is_active || o.id === contract.contract_type?.id)");
   });
 });
 
