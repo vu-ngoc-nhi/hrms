@@ -263,3 +263,23 @@ describe("Workforce charts (owner-approved Home refresh)", () => {
     expect(src).not.toMatch(/toFixed|%\)/);
   });
 });
+
+describe("Workforce charts — long labels and many categories (freeze-review validation)", () => {
+  it("labels are shown in full (they wrap); nothing is reachable only by mouse hover", () => {
+    const src = readFileSync("src/app/WorkforceCharts.tsx", "utf8");
+    expect(src).not.toMatch(/title=\{item\.label\}/);
+    const css = readFileSync("src/app/globals.css", "utf8");
+    const nameRule = css.match(/\.home-chart-name \{[^}]*\}/)?.[0] ?? "";
+    expect(nameRule).toContain("overflow-wrap: anywhere");
+    expect(nameRule).not.toMatch(/ellipsis|nowrap/);
+    expect(css).not.toMatch(/home-columns \.home-chart-name \{[^}]*line-clamp/);
+  });
+  it("an overflowing legend / column area is a keyboard-focusable, labelled scroll region with a visible hint", () => {
+    const src = readFileSync("src/app/WorkforceCharts.tsx", "utf8");
+    expect(src).toContain('{ role: "region", "aria-label": label, tabIndex: 0 }');
+    expect(src).toContain("home-chart-scroll-hint");
+    expect(en.home.chart.scrollDown).toBe("Scroll the list to see all {count} groups.");
+    expect(en.home.chart.scrollSideways).toBe("Scroll sideways to see all {count} groups.");
+    expect(readFileSync("src/app/globals.css", "utf8")).toMatch(/\.home-chart-legend-scroll:focus-visible, \.home-columns-scroll:focus-visible/);
+  });
+});

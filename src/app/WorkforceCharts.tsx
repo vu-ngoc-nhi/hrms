@@ -1,11 +1,39 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatDate, t } from "@/i18n";
 import { columnHeight, donutSegments, type ChartItem } from "./homeModel";
 
 // Owner-approved Home refresh: two Active-only workforce charts. Every count comes from the server's `workforce`
 // block (all people, same business date and projection as the Employee List); this file only draws them. Plain SVG /
 // CSS — no chart library. Percentages are not available yet: the legend shows the count and a "—" in their place.
+// Labels are always shown in full (they wrap; no hover-only truncation). A legend / column area that overflows is a
+// keyboard-focusable, labelled scroll region with a visible hint, so every category is reachable by touch and keyboard.
 type Chart = { total: number; asOf: string; items: ChartItem[] };
+
+/** A scroll area that, when its content overflows, becomes a focusable labelled region and shows a hint. */
+function ScrollRegion({ className, label, hint, children }: { className: string; label: string; hint: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div className="home-scroll-wrap">
+      <div ref={ref} className={className} {...(overflows ? { role: "region", "aria-label": label, tabIndex: 0 } : {})}>
+        {children}
+      </div>
+      {overflows && <p className="home-chart-scroll-hint">{hint}</p>}
+    </div>
+  );
+}
 
 function ChartHeader({ id, title, asOf }: { id: string; title: string; asOf: string }) {
   return (
@@ -19,11 +47,7 @@ function ChartHeader({ id, title, asOf }: { id: string; title: string; asOf: str
 }
 
 function ItemLabel({ item }: { item: ChartItem }) {
-  const text = (
-    <span className="home-chart-name" title={item.label}>
-      {item.label}
-    </span>
-  );
+  const text = <span className="home-chart-name">{item.label}</span>;
   return item.href ? (
     <Link href={item.href} aria-label={t("home.chart.itemLink", { label: item.label, count: item.count })}>
       {text}
@@ -64,6 +88,11 @@ export function DepartmentDonut({ chart }: { chart: Chart }) {
               <span>{t("home.chart.centerLabel")}</span>
             </span>
           </div>
+          <ScrollRegion
+            className="home-chart-legend-scroll"
+            label={t("home.chart.departmentLegend")}
+            hint={t("home.chart.scrollDown", { count: chart.items.length })}
+          >
           <ul className="home-chart-legend">
             {chart.items.map((i) => (
               <li key={i.key} className={i.unassigned ? "unassigned" : undefined}>
@@ -78,6 +107,7 @@ export function DepartmentDonut({ chart }: { chart: Chart }) {
               </li>
             ))}
           </ul>
+          </ScrollRegion>
         </div>
       )}
     </section>
@@ -92,7 +122,7 @@ export function EmployeeTypeColumns({ chart }: { chart: Chart }) {
       {chart.total === 0 ? (
         <p className="muted home-empty">{t("home.chart.empty")}</p>
       ) : (
-        <div className="home-columns-scroll">
+        <ScrollRegion className="home-columns-scroll" label={t("home.chart.typeColumns")} hint={t("home.chart.scrollSideways", { count: chart.items.length })}>
           <ol className="home-columns" aria-label={t("home.chart.typeSummary", { items: summary })} style={{ ["--columns" as string]: chart.items.length }}>
             {chart.items.map((i) => (
               <li key={i.key} className={i.unassigned ? "unassigned" : undefined}>
@@ -105,7 +135,7 @@ export function EmployeeTypeColumns({ chart }: { chart: Chart }) {
               </li>
             ))}
           </ol>
-        </div>
+        </ScrollRegion>
       )}
     </section>
   );
