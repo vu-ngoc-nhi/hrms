@@ -51,6 +51,6 @@ Breaking changes made on 2026-10-08 (pre-production):
 ## Planned (not in the trial spec)
 - **S4:** `PATCH /employees/{id}` with `expected_revision`; employments; employment events; effective-dated assignments; audit logs.
 - **Excel:** import templates, imports (upload, rows, confirm, errors.xlsx), exports.
-- **Phase 2A Contracts (Contract Type catalog, core lifecycle and the 2A-3 read APIs `listContracts` / `listEmployeeContracts` implemented; the rest is draft):** `docs/api/contracts-api-draft.md` — `/api/v1/core-hr/contracts`, `/api/v1/core-hr/contract-types`; design frozen in ADR-0005.
+- **Phase 2A Contracts (Contract Type catalog, core lifecycle, the 2A-3 read APIs `listContracts` / `listEmployeeContracts` and the 2A-4 `getContractReminders` implemented; the rest is draft):** `docs/api/contracts-api-draft.md` — `/api/v1/core-hr/contracts`, `/api/v1/core-hr/contract-types`; design frozen in ADR-0005.
 
 See `docs/core-hr-spec.md` §8–9.

@@ -1,6 +1,6 @@
 # ADR-0005 — Contract domain (Phase 2A Contract Management)
 
-- Status: **Accepted (2026-10-15)** — freezes C-104 … C-112 and M-15 … M-19 for implementation. Staged delivery (C-109): **2A-0** done; **2A-1 Contract foundation implemented** (migration `20261015000000_contract_foundation`, §16); **2A-2 core lifecycle implemented** (§17); **2A-3 contract screens implemented** (§18); each later slice needs an owner checkpoint. Amendment workflow and Phase 2B are **not** authorized.
+- Status: **Accepted (2026-10-15)** — freezes C-104 … C-113 and M-15 … M-20 for implementation. Staged delivery (C-109): **2A-0** done; **2A-1 Contract foundation implemented** (migration `20261015000000_contract_foundation`, §16); **2A-2 core lifecycle implemented** (§17); **2A-3 contract screens implemented** (§18); **2A-4 Contract Attention implemented** (§19); each later slice needs an owner checkpoint. Amendment workflow and Phase 2B are **not** authorized.
 - Sources: `docs/design/phase2-contract-decision-pack.md` (revision 4), `docs/decision-register.md`, API draft `docs/api/contracts-api-draft.md`.
 - Governing principles: C-84 (*Lightweight HR operations, strong Core HR integrity*), C-85 (permission-based access), ADR-0003 (identity), ADR-0004 (history vs audit).
 - Synthetic data only. Real contract data needs PL-11, PL-12, PL-13 and the Real Data Gate.
@@ -188,3 +188,7 @@ Clarification applied in 2A-1: the Effective-From-inside-period rule is enforced
 ## 18. Implementation record — slice 2A-3 (2026-10-16)
 
 Contract screens over the 2A-2 API: sidebar **Contracts**, `/contracts` (portfolio list, canonical URL filters), `/contracts/{id}` (routeable Contract Detail with lifecycle dialogs and Contract History), Employee Detail **Contracts** tab, Create/Edit Draft dialog. New read operations `listContracts` and `listEmployeeContracts` (`src/modules/contracts/read.ts`), evaluated through the same facts (`facts.ts`) and `evaluation.ts` as the detail. Document status and Time status are always labelled separately; disposed records show only their disposition. Record: `docs/design/phase2a-slice-2a-3-ux.md`.
+
+## 19. Implementation record — slice 2A-4 (2026-10-16)
+
+Attention predicates `expiresWithin` (own Effective To from today through today + N, both inclusive; Finalized/Signed operational, not open-ended, not ended with its period, not replaced by a finalized renewal) and `awaitingSignature` (Finalized, not Signed, operational) live in `evaluation.ts` beside the Needs Review model and back both `GET /contract-reminders` and the `expiring_within` / `awaiting_signature` / `needs_review` list filters. Home window fixed at 30 days (M-20). Record: `docs/design/phase2a-slice-2a-4-attention.md`.

@@ -1,6 +1,6 @@
 # Contract API — Phase 2A draft (not implemented)
 
-- Status: **Draft (2A-0, 2026-10-15); slice 2A-1 implemented the Contract Type catalog operations** (`listContractTypes`, `createContractType`, `updateContractType`, now in the generated OpenAPI contract) and the four `contracts.*` permissions. Every operation not marked ✅ is still a draft and enters the contract only in its slice. Finalize warnings follow **M-19** (PV-43, 2026-10-16): explicit confirmation with a server-issued warning fingerprint (§3, §4.3). **Slice 2A-2 implemented the core lifecycle** (create / read / edit / discard Draft, Finalize, Return to Draft, Confirm Signed, history — §2 rows marked ✅); design and decisions: `docs/design/phase2a-slice-2a-2-lifecycle.md`, C-111. In 2A-2 `ContractDetail` omits `attention` (added in 2A-4, PV-36) and `relationship` is `{ type, parent_id, renewal_id }`. **Slice 2A-3 implemented `listContracts` and `listEmployeeContracts`** (§5, §6) and the contract screens (`docs/design/phase2a-slice-2a-3-ux.md`).
+- Status: **Draft (2A-0, 2026-10-15); slice 2A-1 implemented the Contract Type catalog operations** (`listContractTypes`, `createContractType`, `updateContractType`, now in the generated OpenAPI contract) and the four `contracts.*` permissions. Every operation not marked ✅ is still a draft and enters the contract only in its slice. Finalize warnings follow **M-19** (PV-43, 2026-10-16): explicit confirmation with a server-issued warning fingerprint (§3, §4.3). **Slice 2A-2 implemented the core lifecycle** (create / read / edit / discard Draft, Finalize, Return to Draft, Confirm Signed, history — §2 rows marked ✅); design and decisions: `docs/design/phase2a-slice-2a-2-lifecycle.md`, C-111. In 2A-2 `ContractDetail` omits `attention` (added in 2A-4, PV-36) and `relationship` is `{ type, parent_id, renewal_id }`. **Slice 2A-3 implemented `listContracts` and `listEmployeeContracts`** (§5, §6) and the contract screens (`docs/design/phase2a-slice-2a-3-ux.md`). **Slice 2A-4 implemented `getContractReminders`** and the attention filters (§5, §7).
 - Frozen design: `docs/adr/0005-contract-domain.md`. Decisions: C-104 … C-109, M-15 … M-18 (`docs/decision-register.md`).
 - **Amendment is not specified as implementation-ready** (gated, C-109). Phase 2B generation is out of scope.
 
@@ -34,7 +34,7 @@ All Core HR conventions apply unchanged (`docs/api/core-hr-api.md`): JSON, snake
 | 2A-2 ✅ | listContractHistory | GET `/contracts/{id}/history` | contracts.read | Business history |
 | 2A-3 ✅ | listContracts | GET `/contracts` | contracts.read | Portfolio list/filter (§5) |
 | 2A-3 ✅ | listEmployeeContracts | GET `/employees/{id}/contracts` | contracts.read | Grouped for the Employee Contracts tab (§6) |
-| 2A-4 | getContractReminders | GET `/contract-reminders` | contracts.read | Home cards (§7) |
+| 2A-4 ✅ | getContractReminders | GET `/contract-reminders` | contracts.read | Home Contract Attention (§7) |
 | 2A-5 | createContractRenewal | POST `/contracts/{id}/renewals` | contracts.manage | Renewal Draft linked to `{id}` |
 | 2A-5 | createContractCancelPlanned | POST `/contracts/{id}/cancel-planned` | contracts.finalize | Upcoming Finalized/Signed → Cancelled |
 | 2A-5 | createContractCorrection | POST `/contracts/{id}/corrections` | contracts.correct | Correct Signed data |
@@ -222,7 +222,7 @@ As built (the smallest useful set the server provides authoritatively):
 | `sort` | `operational_end` (default; soonest end first, no end last) \| `effective_from` \| `contract_number` \| `employee_code` | Ties by number, then id |
 | `page`, `page_size` | | Standard |
 
-Response: `{ data: ContractSummary[], total, page, page_size, as_of }`. These names are also the URL parameters of the Contracts page (`/contracts?needs_review=true`, `?document_state=draft|finalized|signed`, `?time_state=upcoming|active|expired`, …), so Home cards deep-link with the same filter model. Not built (deferred until needed): `department_id`, `employee_type_id`, `employee_id`, `employment_id`, `contract_number` exact match, `relationship`, `awaiting_signature` and `expiring_within` (2A-4, PV-36). No export (D-UI-5). Scale note: computed states are evaluated in memory over the register (EmeSoft size); stored-field filters move to SQL if it ever grows to thousands of rows.
+Response: `{ data: ContractSummary[], total, page, page_size, as_of }`. These names are also the URL parameters of the Contracts page (`/contracts?needs_review=true`, `?document_state=draft|finalized|signed`, `?time_state=upcoming|active|expired`, …), so Home cards deep-link with the same filter model. Added in 2A-4: `expiring_within` (`30` \| `60` \| `90`; own Effective To from today through today + N, inclusive) and `awaiting_signature=true`. Not built (deferred until needed): `department_id`, `employee_type_id`, `employee_id`, `employment_id`, `contract_number` exact match, `relationship`. No export (D-UI-5). Scale note: computed states are evaluated in memory over the register (EmeSoft size); stored-field filters move to SQL if it ever grows to thousands of rows.
 
 ## 6. `GET /employees/{id}/contracts` — Employee Contracts tab (implemented in 2A-3)
 
@@ -245,19 +245,9 @@ Server-side grouping so the tab does not infer lifecycle rules:
 ```
 `current` may hold more than one contract (overlap is a warning, M-17). `create.periods` = the person's periods that are not Cancelled/Voided (Ended included, C-109); `is_default` marks the representative period (C-76). `create.reasons`: `PERMISSION_REQUIRED`, `NO_VALID_EMPLOYMENT_PERIOD`. The tab shows Current · Upcoming & drafts · Contract history (with `not_operational` as muted evidence).
 
-## 7. `GET /contract-reminders` — Home (2A-4, conceptual)
+## 7. `GET /contract-reminders` — Home Contract Attention (implemented in 2A-4)
 
-```json
-{
-  "as_of": "2026-10-15",
-  "window_days": 30,
-  "expiring_soon":     { "total": 4, "items": [ "≤ 10 ContractSummary" ] },
-  "drafts":            { "total": 2, "items": [] },
-  "awaiting_signature":{ "total": 1, "items": [] },
-  "needs_review":      { "total": 3, "items": [] }
-}
-```
-No query parameters; window fixed by PV-36; each card links to the canonical list filters (§5). Machine codes only; no reasons, audit or personal-group data.
+`contracts.read`; no query parameters (400); window fixed at 30 days (M-20). Response `{ as_of, window_days: 30, expiring_soon, awaiting_signature, needs_review }`, each `{ total, items[≤5] }`; item = `{ id, contract_number, employee, contract_type, effective_from, effective_to, document_state, days_to_end, review_reason }`. Totals equal `GET /contracts` with `expiring_within=30`, `awaiting_signature=true`, `needs_review=true` (same predicates). Expiring soon = own Effective To from today through today + 30, **both inclusive**, Finalized/Signed operational contracts only. Details and semantics: `docs/design/phase2a-slice-2a-4-attention.md`.
 
 ## 8. `GET /contracts/{id}/history` (2A-2)
 

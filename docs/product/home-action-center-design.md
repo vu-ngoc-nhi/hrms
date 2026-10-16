@@ -421,3 +421,8 @@ Approval clarifications are applied: there is no `employee_records`, and existin
 - **Healthy, no-upcoming and unavailable states:** `hrms_dev` holds incomplete records. These states were therefore rendered by overriding the dashboard **response in the browser only** (no data changed), and they are also covered by the unit tests.
 - **Limitation — pre-existing, not Home-specific:** at 375 px every signed-in page (Home, Employees, Detail, Organization) is wider than the viewport, because of the app-shell layout. This is tracked as a separate follow-up; Phase 1 is desktop / laptop first.
 
+
+
+## Addendum — Phase 2A Contract Attention (2026-10-16, C-113, M-20)
+
+Owner-approved Phase 2 extension of Home (C-108): one **Contract Attention** section below the panels above (which are unchanged), shown only with `contracts.read` and loaded from its own endpoint `GET /api/v1/core-hr/contract-reminders`. Three signals — Expiring soon (next 30 days, M-20), Awaiting signature, Needs review — each with an authoritative count, a one-line HR action, up to three contracts and *View all →* to the canonical Contracts filter. No charts, trends, KPI cards or renewal content. Record: `docs/design/phase2a-slice-2a-4-attention.md`.
