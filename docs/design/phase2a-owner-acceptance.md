@@ -1,6 +1,6 @@
 # Phase 2A Contract Management — owner acceptance (2026-10-16)
 
-- Status: **Accepted with minor fixes; the four fixes are implemented and verified (C-118). Awaiting the owner's freeze decision** — Phase 2A is not yet marked *Product/UI Frozen — Owner Accepted*. No business rule changed. Phase 2B not started.
+- Status: **Eme People — Contract Management Phase 2A — Product/UI Frozen — Owner Accepted** (2026-10-17, C-122). The owner accepted the minor fixes (C-118), the M-19 fingerprint fix (C-120) and, after explicit visual review, the current Home dashboard UI (C-119, C-121). This is a **product/UI milestone only**: it is not production readiness, release approval or deployment approval (see *Freeze and close-out* below). Phase 2B not started.
 
 ## Acceptance journey (synthetic data, local test identities, 1366 px and 390 px)
 
@@ -22,3 +22,29 @@ Unit `tests/unit/acceptance-minor-fixes.test.ts` (8) and integration additions i
 ## Non-blocking improvements recorded for later (not implemented)
 
 Correction history could show what changed (old → new is in the audit only); two "Renewal created" entries could name their renewal; Contracts list on phones scrolls the table horizontally (status columns off-screen); Create contract defaults to "Ends on a date" while Add Employee asks HR to choose; the partial-success error box shows a technical Request ID; the skipped optional wizard step shows ✓ (Phase 1 convention); Home *Expiring soon* guidance does not mention Renew.
+
+## Freeze and close-out (2026-10-17)
+
+**Owner visual acceptance — explicit.** The owner approved the current Home dashboard UI, including: the full-width layout beside the sidebar (C-121); the summary cards and the unavailable-data placeholders ("—"; Total Employees = Active people only; On Leave, ratios and trends unavailable); the Active-only workforce charts and department counts (C-119); and the Needs Attention, Upcoming and Contract Attention layout (balanced operational row with discoverable internal scrolling; Contract Attention unchanged in behaviour).
+
+**Final code verified at HEAD `fe23a62`** (working tree clean before close-out):
+
+| Check | Result |
+|---|---|
+| M-19 fix (C-120) present | `warningFingerprintFacts` and the `w2:` fingerprint in `src/modules/contracts/evaluation.ts`; tests `tests/unit/contract-fingerprint.test.ts`, `tests/integration/contract-renewal.test.ts` (implementation commit `d046ca9`) |
+| Full-width Home present | `.page:has(> .home) { max-width: none; margin: 0; }`; no `--home-max-width` token (commits `dbb40dd`, `fe23a62`) |
+| `npm test` (guarded `hrms_test`) | 67 files, 893/893 pass — run on the final source of `fe23a62` |
+| `npm run build` | pass — run on the final source of `fe23a62` |
+| `npm run typecheck`, `npm run lint` | pass — run after the last TypeScript change; later edits in `fe23a62` were CSS-only (not covered by either tool) and are covered by the test suite and build above |
+| Rendered layout | measured at 1366 / 1440 / 1920 / 2560 / 2880 and 390 CSS px (`docs/product/home-action-center-design.md` §L.4) |
+
+No check was re-run for the close-out: the close-out commit changes documentation only.
+
+**What the freeze means.** The Phase 2A Contract Management product and UI baseline — contract register and lifecycle (Draft, Finalize with M-19 confirmation, Return to Draft, Confirm Signed, Discard, Cancel planned, Correct, Void), renewal chains, Contracts screens, Employee Contracts tab, Add Employee with an optional Contract Draft, Home Contract Attention and the refreshed Home dashboard — is accepted as designed. Further Phase 2A product/UI changes need explicit owner approval (as with the Phase 1 freeze, C-101).
+
+**What it does not mean.** It is **not** *Production Ready*, not a release decision and not deployment approval. Real employee data and real contract files remain prohibited. Phase 2A runs only locally on synthetic data; no staging or production migration has been run. Open before any production use of contracts:
+
+- **Gate A** (Phase 1 pre-production readiness, `docs/production/gate-a-readiness-status.md`): still open; external execution is on hold until IT, Legal and HR inputs return.
+- **Pending Legal Review:** PL-11 (contract data processing: lawful basis, notice, retention), PL-12 (Vietnam-specific contract rules), PL-13 (signed contract documents: storage, e-signature, retention), PL-10 (withdrawing a signed agreement).
+- **Pending Validation:** PV-31 (real Contract Type catalog — only synthetic types exist), PV-38 (amendment content; the Amendment workflow stays gated).
+- **Phase 2A migrations** (`20261015000000_contract_foundation`, `20261016000000_contract_voided_parent_guard`, `20261017000000_contract_renewal_chains`) are applied only to the local `hrms_dev` / `hrms_test`; staging/production application needs the attended runbook and explicit approval.
