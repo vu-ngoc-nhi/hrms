@@ -75,6 +75,7 @@
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
   --shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.18);
+  --color-scroll-shadow: rgba(16, 24, 40, 0.14); /* Home list scroll cue (edge shadow) */
 
   /* ---- Sizing ---- */
   --control-height: 36px;
@@ -82,7 +83,6 @@
   --table-row-height: 44px;
   --sidebar-width: 236px;
   --content-max-width: 1240px;
-  --home-max-width: 1760px; /* Home only: a cap for genuinely wide screens (above ~2000 px); 1920 px and below fill the main area */
   --home-gutter-desktop: 32px;
   --home-ops-height: clamp(380px, 46vh, 440px); /* shared Needs Attention / Upcoming panel height (desktop) */
   --font-size-home-title: 28px;

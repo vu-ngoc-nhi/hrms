@@ -209,7 +209,7 @@ export default function HomePage() {
                       </li>
                     ))}
                   </ul>
-                  <ScrollRegion className="home-ops-scroll" label={t("home.needsListLabel")}>
+                  <ScrollRegion className="home-ops-scroll" label={t("home.needsListLabel")} hint={t("home.listScrollHint.needs", { count: needs.records.length })}>
                   <ul className="home-list">
                     {needs.records.map((r) => (
                       <li key={r.personId}>
@@ -246,7 +246,7 @@ export default function HomePage() {
                 <p className="muted home-empty">{t("home.upcoming.empty")}</p>
               ) : (
                 <>
-                  <ScrollRegion className="home-ops-scroll" label={t("home.upcomingListLabel")}>
+                  <ScrollRegion className="home-ops-scroll" label={t("home.upcomingListLabel")} hint={t("home.listScrollHint.upcoming", { count: upcoming.rows.length })}>
                   <ol className="home-timeline">
                     {upcoming.rows.map((u) => {
                       const dm = formatDayMonth(u.date);

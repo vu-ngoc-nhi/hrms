@@ -287,13 +287,21 @@ describe("Workforce charts — long labels and many categories (freeze-review va
   });
 });
 
-describe("Home layout — fits the workspace, balanced operational row (owner layout review, 2026-10-17)", () => {
+describe("Home layout — full width, balanced operational row (owner layout review, 2026-10-17)", () => {
   const css = readFileSync("src/app/globals.css", "utf8");
   const tokens = readFileSync("src/app/tokens.css", "utf8");
-  it("Home starts right after the sidebar: no centring corridor; the cap is only for genuinely wide screens", () => {
-    expect(css).toContain(".page:has(> .home) { max-width: var(--home-max-width); margin-left: 0; margin-right: auto; }");
-    expect(tokens).toMatch(/--home-max-width: 1760px;/);
-    expect(css).not.toMatch(/zoom:|transform: scale/);
+  it("Home is full width beside the sidebar at every width (owner decision 2026-10-17): no cap, equal page-padding gutters", () => {
+    expect(css).toContain(".page:has(> .home) { max-width: none; margin: 0; }");
+    expect(tokens).not.toMatch(/--home-max-width/);
+    expect(css).not.toMatch(/--home-max-width/);
+    expect(css).toContain(".page:has(> .home) { padding-left: var(--home-gutter-desktop); padding-right: var(--home-gutter-desktop); }");
+    expect(tokens).toMatch(/--home-gutter-desktop: 32px;/);
+    expect(css).not.toMatch(/zoom:|transform: scale|100vw\)?; \}\s*\/\* ?Home/);
+    // Other screens keep the app-wide cap.
+    expect(css).toContain(".page { max-width: var(--content-max-width); margin: 0 auto;");
+  });
+  it("on wide cards the department legend keeps a readable line length (no stretched name → count gap)", () => {
+    expect(css).toContain(".home-donut-layout > .home-scroll-wrap { flex: 0 1 560px; }");
   });
   it("Needs Attention and Upcoming share one capped height; headings stay put, the lists scroll inside", () => {
     expect(tokens).toMatch(/--home-ops-height: clamp\(380px, 46vh, 440px\);/);
@@ -304,10 +312,16 @@ describe("Home layout — fits the workspace, balanced operational row (owner la
   });
   it("the record lists are labelled scroll regions; 'Showing X of Y' stays outside the scroll area", () => {
     const page = readFileSync("src/app/page.tsx", "utf8");
-    expect(page).toContain('<ScrollRegion className="home-ops-scroll" label={t("home.needsListLabel")}>');
-    expect(page).toContain('<ScrollRegion className="home-ops-scroll" label={t("home.upcomingListLabel")}>');
+    expect(page).toContain('<ScrollRegion className="home-ops-scroll" label={t("home.needsListLabel")}');
+    expect(page).toContain('<ScrollRegion className="home-ops-scroll" label={t("home.upcomingListLabel")}');
     expect(en.home.needsListLabel).toBe("Records needing attention (scrollable list)");
     expect(en.home.upcomingListLabel).toBe("Upcoming changes (scrollable list)");
+    // A visible scroll cue that does not rely on the OS scrollbar: a hint line and edge shadows, only when it scrolls.
+    expect(page).toContain('hint={t("home.listScrollHint.needs", { count: needs.records.length })}');
+    expect(page).toContain('hint={t("home.listScrollHint.upcoming", { count: upcoming.rows.length })}');
+    expect(en.home.listScrollHint.needs).toBe("Scroll the list to see all {count} records shown.");
+    expect(en.home.listScrollHint.upcoming).toBe("Scroll the list to see all {count} changes shown.");
+    expect(css).toMatch(/\.home-ops-scroll\[role="region"\] \{\s*background:[^}]*local[^}]*scroll;/);
     const upcoming = page.slice(page.indexOf('label={t("home.upcomingListLabel")}'));
     expect(upcoming.indexOf("</ScrollRegion>")).toBeLessThan(upcoming.indexOf("home-overflow"));
   });

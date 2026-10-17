@@ -63,6 +63,10 @@ export const en = {
     unavailableNote: "— means the data is not available yet.",
     needsListLabel: "Records needing attention (scrollable list)",
     upcomingListLabel: "Upcoming changes (scrollable list)",
+    listScrollHint: {
+      needs: "Scroll the list to see all {count} records shown.",
+      upcoming: "Scroll the list to see all {count} changes shown.",
+    },
     statusLinksLabel: "Other Employment Statuses",
     statusLink: "{label} {count}",
     chart: {
