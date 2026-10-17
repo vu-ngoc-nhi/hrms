@@ -275,11 +275,40 @@ describe("Workforce charts — long labels and many categories (freeze-review va
     expect(css).not.toMatch(/home-columns \.home-chart-name \{[^}]*line-clamp/);
   });
   it("an overflowing legend / column area is a keyboard-focusable, labelled scroll region with a visible hint", () => {
-    const src = readFileSync("src/app/WorkforceCharts.tsx", "utf8");
+    const src = readFileSync("src/app/ScrollRegion.tsx", "utf8");
     expect(src).toContain('{ role: "region", "aria-label": label, tabIndex: 0 }');
     expect(src).toContain("home-chart-scroll-hint");
+    // Only an axis the CSS lets scroll counts, so phones (overflow visible) get no extra focus stop.
+    expect(src).toContain('const scrolls = (o: string) => o === "auto" || o === "scroll";');
+    expect(readFileSync("src/app/WorkforceCharts.tsx", "utf8")).toContain('import { ScrollRegion } from "./ScrollRegion";');
     expect(en.home.chart.scrollDown).toBe("Scroll the list to see all {count} groups.");
     expect(en.home.chart.scrollSideways).toBe("Scroll sideways to see all {count} groups.");
     expect(readFileSync("src/app/globals.css", "utf8")).toMatch(/\.home-chart-legend-scroll:focus-visible, \.home-columns-scroll:focus-visible/);
+  });
+});
+
+describe("Home layout — fits the workspace, balanced operational row (owner layout review, 2026-10-17)", () => {
+  const css = readFileSync("src/app/globals.css", "utf8");
+  const tokens = readFileSync("src/app/tokens.css", "utf8");
+  it("Home starts right after the sidebar: no centring corridor; the cap is only for genuinely wide screens", () => {
+    expect(css).toContain(".page:has(> .home) { max-width: var(--home-max-width); margin-left: 0; margin-right: auto; }");
+    expect(tokens).toMatch(/--home-max-width: 1760px;/);
+    expect(css).not.toMatch(/zoom:|transform: scale/);
+  });
+  it("Needs Attention and Upcoming share one capped height; headings stay put, the lists scroll inside", () => {
+    expect(tokens).toMatch(/--home-ops-height: clamp\(380px, 46vh, 440px\);/);
+    expect(css).toContain(".home-main { align-items: stretch; }");
+    expect(css).toMatch(/\.home-main > \.home-panel \{ display: flex; flex-direction: column; min-height: 0; max-height: var\(--home-ops-height\); \}/);
+    expect(css).toMatch(/\.home-ops-scroll \{[^}]*overflow-x: hidden; overflow-y: auto;/);
+    expect(css).toContain(".home-ops-scroll:focus-visible { outline: none; box-shadow: var(--focus-ring); }");
+  });
+  it("the record lists are labelled scroll regions; 'Showing X of Y' stays outside the scroll area", () => {
+    const page = readFileSync("src/app/page.tsx", "utf8");
+    expect(page).toContain('<ScrollRegion className="home-ops-scroll" label={t("home.needsListLabel")}>');
+    expect(page).toContain('<ScrollRegion className="home-ops-scroll" label={t("home.upcomingListLabel")}>');
+    expect(en.home.needsListLabel).toBe("Records needing attention (scrollable list)");
+    expect(en.home.upcomingListLabel).toBe("Upcoming changes (scrollable list)");
+    const upcoming = page.slice(page.indexOf('label={t("home.upcomingListLabel")}'));
+    expect(upcoming.indexOf("</ScrollRegion>")).toBeLessThan(upcoming.indexOf("home-overflow"));
   });
 });

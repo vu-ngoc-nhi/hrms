@@ -61,6 +61,8 @@ export const en = {
     notAvailable: "Not available yet",
     trendUnavailable: "Trend not available yet",
     unavailableNote: "— means the data is not available yet.",
+    needsListLabel: "Records needing attention (scrollable list)",
+    upcomingListLabel: "Upcoming changes (scrollable list)",
     statusLinksLabel: "Other Employment Statuses",
     statusLink: "{label} {count}",
     chart: {

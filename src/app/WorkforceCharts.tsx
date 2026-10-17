@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatDate, t } from "@/i18n";
 import { columnHeight, donutSegments, type ChartItem } from "./homeModel";
+import { ScrollRegion } from "./ScrollRegion";
 
 // Owner-approved Home refresh: two Active-only workforce charts. Every count comes from the server's `workforce`
 // block (all people, same business date and projection as the Employee List); this file only draws them. Plain SVG /
@@ -11,29 +11,6 @@ import { columnHeight, donutSegments, type ChartItem } from "./homeModel";
 // Labels are always shown in full (they wrap; no hover-only truncation). A legend / column area that overflows is a
 // keyboard-focusable, labelled scroll region with a visible hint, so every category is reachable by touch and keyboard.
 type Chart = { total: number; asOf: string; items: ChartItem[] };
-
-/** A scroll area that, when its content overflows, becomes a focusable labelled region and shows a hint. */
-function ScrollRegion({ className, label, hint, children }: { className: string; label: string; hint: string; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [overflows, setOverflows] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1);
-    check();
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return (
-    <div className="home-scroll-wrap">
-      <div ref={ref} className={className} {...(overflows ? { role: "region", "aria-label": label, tabIndex: 0 } : {})}>
-        {children}
-      </div>
-      {overflows && <p className="home-chart-scroll-hint">{hint}</p>}
-    </div>
-  );
-}
 
 function ChartHeader({ id, title, asOf }: { id: string; title: string; asOf: string }) {
   return (

@@ -82,8 +82,9 @@
   --table-row-height: 44px;
   --sidebar-width: 236px;
   --content-max-width: 1240px;
-  --home-max-width: 1600px; /* Home dashboard only (owner-approved sizing): uses the width beside the sidebar */
+  --home-max-width: 1760px; /* Home only: a cap for genuinely wide screens (above ~2000 px); 1920 px and below fill the main area */
   --home-gutter-desktop: 32px;
+  --home-ops-height: clamp(380px, 46vh, 440px); /* shared Needs Attention / Upcoming panel height (desktop) */
   --font-size-home-title: 28px;
   --font-size-home-title-xl: 30px;
   --font-size-home-heading: 18px;

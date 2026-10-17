@@ -556,7 +556,21 @@ a.home-stat:hover .home-stat-hint { color: var(--color-primary); }
 /* Home desktop sizing (owner request, 2026-10-16): Home alone may use up to --home-max-width beside the sidebar
    (every other screen keeps --content-max-width); type, KPI values and charts step up on desktop widths. No zoom or
    transforms — only widths, gaps and font sizes. Phones are unchanged. */
-.page:has(> .home) { max-width: var(--home-max-width); }
+/* Home starts right after the sidebar (no centring corridor); only genuinely wide viewports leave space, on the far right. */
+.page:has(> .home) { max-width: var(--home-max-width); margin-left: 0; margin-right: auto; }
+/* Operational row: Needs Attention and Upcoming share one capped height on two-column desktops; headings, chips and
+   "Showing X of Y" stay fixed, the record lists scroll inside (keyboard-focusable regions). No filler: a short row
+   simply takes the taller panel's height. Phones / one column keep natural flow. */
+@media (min-width: 1101px) {
+  .home-main { align-items: stretch; }
+  .home-main > .home-panel { display: flex; flex-direction: column; min-height: 0; max-height: var(--home-ops-height); }
+  .home-main > .home-panel .home-scroll-wrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  /* The rows bleed --space-2 sideways for their hover/focus background; the scroll box takes that bleed as padding so
+     nothing is clipped and there is no sideways scrolling. */
+  .home-ops-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 2px var(--space-2); margin: 0 calc(-1 * var(--space-2)); border-radius: var(--radius-sm); }
+  .home-ops-scroll:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+  .home-main .home-overflow { flex: none; }
+}
 @media (min-width: 1200px) {
   .page:has(> .home) { padding-left: var(--home-gutter-desktop); padding-right: var(--home-gutter-desktop); }
   .home-hero h1 { font-size: var(--font-size-home-title); }

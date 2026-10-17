@@ -9,6 +9,7 @@ import { formatDate, formatDayMonth, t } from "@/i18n";
 import { api, ApiCallError } from "@/lib/client/api";
 import { ContractAttention } from "./ContractAttention";
 import { departmentChart, employeeTypeChart, greeting, homeCapabilities, needsAttentionView, statusLinks, summaryCards, upcomingView, type Dashboard, type SummaryCard } from "./homeModel";
+import { ScrollRegion } from "./ScrollRegion";
 import { DepartmentDonut, EmployeeTypeColumns } from "./WorkforceCharts";
 
 // UI-1 Home / Action Center (PV-30), visual refresh (owner-approved post-freeze refinement, 2026-10-12): greeting,
@@ -208,6 +209,7 @@ export default function HomePage() {
                       </li>
                     ))}
                   </ul>
+                  <ScrollRegion className="home-ops-scroll" label={t("home.needsListLabel")}>
                   <ul className="home-list">
                     {needs.records.map((r) => (
                       <li key={r.personId}>
@@ -225,6 +227,7 @@ export default function HomePage() {
                       </li>
                     ))}
                   </ul>
+                  </ScrollRegion>
                 </>
               )}
             </section>
@@ -243,6 +246,7 @@ export default function HomePage() {
                 <p className="muted home-empty">{t("home.upcoming.empty")}</p>
               ) : (
                 <>
+                  <ScrollRegion className="home-ops-scroll" label={t("home.upcomingListLabel")}>
                   <ol className="home-timeline">
                     {upcoming.rows.map((u) => {
                       const dm = formatDayMonth(u.date);
@@ -264,6 +268,7 @@ export default function HomePage() {
                       );
                     })}
                   </ol>
+                  </ScrollRegion>
                   {upcoming.overflow && <p className="muted small home-overflow">{upcoming.overflow}</p>}
                 </>
               )}
