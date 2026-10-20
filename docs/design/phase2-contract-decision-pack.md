@@ -302,6 +302,8 @@ Finalized/Signed ──Generate (recorded) → contract_document → streamed do
 | Engine | Spike: DOCX template + converter sidecar vs HTML → headless Chromium | TECHNICAL DECISION (+ IT input if sidecar) |
 | Storage | None in 2B | APPROVED RECOMMENDATION |
 
+> **Note (2026-10-17):** the *Storage* and *streamed download* positions above are superseded by owner decision **C-123** (exact historical download), and "no employee self-service" (§13, §20) is narrowed by **C-124**. See `docs/design/phase2b-document-generation-decision-pack.md` §0.2. The original text is kept as the historical record.
+
 ## 12. Document-storage boundary (separately gated)
 
 Real signed-document storage remains **separately gated by Legal, identity, authorization and infrastructure readiness** (PL-13, PV-11, C-104). Future requirements: private object storage, no public URLs, short-lived principal-bound links; encryption at rest (application-level envelope encryption evaluated) and in transit; `contracts.documents.read` checked server-side per download; download audit; file validation (allow-list, size, magic bytes, no active content); malware quarantine; signed documents as immutable linked versions with SHA-256; append-only versions; retention and legal hold per PL-01/PL-11/PL-13 with deletion only through a privileged audited process; two-phase upload with orphan cleanup and DB ↔ storage reconciliation; inclusion in the restore rehearsal (M-14).
